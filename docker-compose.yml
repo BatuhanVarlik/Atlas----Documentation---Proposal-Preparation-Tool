@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: apv-hemisan-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hemisan
+      POSTGRES_PASSWORD: papvba
+      POSTGRES_DB: apv_hemisan_doctool
+    ports:
+      - "5433:5432"
+    volumes:
+      - apv_hemisan_data:/var/lib/postgresql/data
+
+volumes:
+  apv_hemisan_data:

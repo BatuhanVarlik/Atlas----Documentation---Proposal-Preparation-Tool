@@ -1,0 +1,86 @@
+Faz 1 tamamlandı. İşte yapılanlar:
+
+Oluşturulan Altyapı
+Veritabanı
+
+PostgreSQL 16 Docker container (port 5433, kullanıcı: hemisan / hemisan123)
+Tüm Prisma schema'sı migrate edildi (Department, User, Project, Module, ValveCluster, FillingLine, DischargeLine, Tank, AIReview, GeneratedDocument, DocumentTemplate, ModuleActivity)
+Seed çalıştı: 6 departman + 3 kullanıcı oluşturuldu
+Uygulama (http://localhost:3000)
+
+Next.js 15 + TypeScript strict + Tailwind v4 (@theme in globals.css)
+NextAuth.js v4 credentials provider — JWT session (/login sayfası hazır)
+lib/prisma.ts → PrismaPg adapter-pg singleton
+lib/auth.ts → NextAuth config
+Dashboard layout (sidebar + header) + oturum koruması (middleware)
+Kullanıcılar
+
+E-posta	Rol	Şifre
+admin@apvhemisan.local	Admin	Admin1234
+satis.mudur@apvhemisan.local	Müdür	Manager1234
+satis.muhendis@apvhemisan.local	Mühendis	Member1234
+
+
+Faz 2 tamamlandı.
+
+Özet:
+
+DB şifresi papvba olarak güncellendi (container, .env, .env.local, docker-compose.yml)
+Hesap motoru lib/calc/ altında 4 dosya:
+constants.ts — VELOCITY, LEAKAGE_CHAMBER_MM sabitleri
+standardTables.ts — DIN ve SMS boru çap tabloları
+pipeDiameter.ts — D = √(4Q/πV) formülü
+selectDN.ts — DN yuvarlama + drain/tank drain boyutları
+moduleCalculator.ts — Tüm modül için orchestrator
+
+Faz 3 tamamlandı. TypeScript hatasız, dev server çalışıyor.
+
+Oluşturulanlar
+API Route'ları
+
+GET/POST /api/projects — listeleme (role-based) + oluşturma
+GET/PUT/DELETE /api/projects/[id] — detay, güncelleme, silme
+GET/POST /api/modules — filtreli listeleme + oluşturma
+GET/PUT/DELETE /api/modules/[id] — detay, güncelleme, silme
+GET /api/departments — departman listesi
+Tüm route'larda Zod validasyonu + role-based auth kontrolü
+Sayfalar
+
+/projects — tablo + arama, oluştur/düzenle/sil modal
+/projects/[id] — proje detayı + modül listesi + yeni modül oluştur
+/modules — filtreli tablo (durum, standart, arama)
+/modules/[id] — modül başlığı düzenleme + hatlar/tanklar özeti
+Bileşenler
+
+StatusBadge — modül ve proje durum badge'leri
+Modal — portal tabanlı yeniden kullanılabilir modal
+
+Faz 4 tamamlandı. Yapılanlar:
+
+Yeni dosyalar:
+
+store/moduleBuilderStore.ts — Zustand store: fillingLines/dischargeLines draft state, canlı calculateModule() çağrısı
+app/api/modules/[id]/valve-cluster/filling-lines/route.ts — POST (hat ekle, valve cluster otomatik oluştur, status DRAFT→IN_PROGRESS)
+app/api/modules/[id]/valve-cluster/filling-lines/[lineId]/route.ts — PUT, DELETE
+app/api/modules/[id]/valve-cluster/discharge-lines/route.ts — POST
+app/api/modules/[id]/valve-cluster/discharge-lines/[lineId]/route.ts — PUT, DELETE
+components/module-builder/ValveClusterPanel.tsx — Sayı seç → İsimlendir → Onayla akışı, her hat tıklanınca form açılır
+components/module-builder/FillingLineForm.tsx — Kapasite girilince canlı çap gösterir, Kaydet/Sil
+components/module-builder/DischargeLineForm.tsx — Pompa, flow meter, PT, water inlet alanları + canlı hesap
+Güncellenen: ModuleDetailClient.tsx — Valve Cluster bölümü artık gerçek editör panelini gösteriyor.
+
+
+
+Faz 5 tamamlandı. Yapılanlar:
+
+Yeni API route'lar:
+
+app/api/modules/[id]/tanks/route.ts — POST: tank oluştur, Zod validasyon, status DRAFT→IN_PROGRESS
+app/api/modules/[id]/tanks/[tankId]/route.ts — PUT, DELETE
+Yeni bileşenler:
+
+components/module-builder/TankForm.tsx — Tüm tank alanları: sensörler, agitator (var → kW/RPM/Pozisyon açılır), CIP ball, outlet valve (var → tip → aktüatörlüyse alt tip), CIP dönüş pompası; sabit değerler (drain/CIP/check) liveCalc'tan okunur
+components/module-builder/TanksPanel.tsx — Sayı seç → isimlendir → onayla akışı, her tank tıklanınca form açılır
+Güncellenen:
+
+ModuleDetailClient.tsx — Tank interface tüm alanlarla genişletildi, TanksPanel entegre edildi

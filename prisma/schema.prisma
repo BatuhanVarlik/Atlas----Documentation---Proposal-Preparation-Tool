@@ -1,0 +1,299 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String?
+  createdAt DateTime @default(now())
+
+  users    User[]
+  projects Project[]
+}
+
+model User {
+  id           String  @id @default(cuid())
+  name         String
+  email        String  @unique
+  password     String
+  role         Role    @default(MEMBER)
+  departmentId String
+  avatar       String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  department      Department @relation(fields: [departmentId], references: [id])
+  createdProjects Project[]  @relation("ProjectCreator")
+  createdModules  Module[]   @relation("ModuleCreator")
+  reviewedModules Module[]   @relation("ModuleReviewer")
+}
+
+enum Role {
+  ADMIN
+  DEPARTMENT_MANAGER
+  MEMBER
+}
+
+model Project {
+  id           String        @id @default(cuid())
+  name         String
+  customerName String?
+  description  String?
+  code         String        @unique
+  status       ProjectStatus @default(ACTIVE)
+  departmentId String
+  creatorId    String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id])
+  creator    User       @relation("ProjectCreator", fields: [creatorId], references: [id])
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+model Module {
+  id           String       @id @default(cuid())
+  name         String
+  customerName String?
+  projectCode  String?
+  standard     Standard
+  productType  ProductType
+  status       ModuleStatus @default(DRAFT)
+
+  selectedDN            String?
+  selectedInnerDiameter Float?
+  selectedOuterDiameter Float?
+
+  creatorId  String
+  reviewerId String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  approvedAt DateTime?
+
+  creator      User                @relation("ModuleCreator", fields: [creatorId], references: [id])
+  reviewer     User?               @relation("ModuleReviewer", fields: [reviewerId], references: [id])
+  valveCluster ValveCluster?
+  tanks        Tank[]
+  aiReviews    AIReview[]
+  documents    GeneratedDocument[]
+  activities   ModuleActivity[]
+}
+
+enum Standard {
+  DIN
+  SMS
+}
+
+enum ProductType {
+  HYGIENIC
+  ULTRA_HYGIENIC
+}
+
+enum ModuleStatus {
+  DRAFT
+  IN_PROGRESS
+  REVIEW
+  APPROVED
+  DOCUMENT_GENERATED
+  ARCHIVED
+  CANCELLED
+}
+
+model ValveCluster {
+  id       String @id @default(cuid())
+  moduleId String @unique
+
+  module         Module          @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  fillingLines   FillingLine[]
+  dischargeLines DischargeLine[]
+}
+
+model FillingLine {
+  id             String  @id @default(cuid())
+  valveClusterId String
+  name           String
+  order          Int
+  capacity       Float
+  calculatedDiameter Float?
+  valveType        ValveType
+  valveControlUnit ControlUnitType @default(NONE)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  valveCluster ValveCluster @relation(fields: [valveClusterId], references: [id], onDelete: Cascade)
+}
+
+model DischargeLine {
+  id             String  @id @default(cuid())
+  valveClusterId String
+  name           String
+  order          Int
+  capacity       Float
+  pressure       Float
+  calculatedDiameter     Float?
+  valveType              ValveType
+  valveControlUnit       ControlUnitType @default(NONE)
+  pumpModel              String?
+  pumpKw                 Float?
+  pumpImpellerSize       Float?
+  hasPressureTransmitter Boolean         @default(false)
+  hasFlowMeter           Boolean         @default(false)
+  flowMeterDiameter      Float?
+  waterInletType         WaterInletType?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  valveCluster ValveCluster @relation(fields: [valveClusterId], references: [id], onDelete: Cascade)
+}
+
+enum ValveType {
+  SDE44
+  DE44
+  D44SL
+  DA44
+}
+
+enum ControlUnitType {
+  NONE
+  AS_I
+  DC
+}
+
+enum WaterInletType {
+  SW_CIP42
+  SD42
+}
+
+model Tank {
+  id       String @id @default(cuid())
+  moduleId String
+  name     String
+  order    Int
+  volume   Float
+
+  hasLSH Boolean @default(false)
+  hasLSM Boolean @default(false)
+  hasLSL Boolean @default(false)
+  hasTT  Boolean @default(false)
+  hasPT  Boolean @default(false)
+
+  samplingValve      SamplingValveType
+  hasProximitySwitch Boolean           @default(false)
+
+  hasAgitator      Boolean          @default(false)
+  agitatorMotorKw  Float?
+  agitatorRpm      Int?
+  agitatorPosition AgitatorPosition?
+
+  cipBall                CipBallType
+  hasCipInletForAgitator Boolean     @default(false)
+  hasCipInletForManhole  Boolean     @default(false)
+
+  hasTankOutletValve     Boolean                 @default(false)
+  tankOutletValveType    TankOutletValveType?
+  tankOutletValveSubType TankOutletValveSubType?
+
+  cipReturnPumpModel        String?
+  cipReturnPumpKw           Float?
+  cipReturnPumpImpellerSize Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+}
+
+enum SamplingValveType {
+  MANUAL
+  WITH_ACTUATOR
+}
+
+enum AgitatorPosition {
+  SIDE
+  TOP
+}
+
+enum CipBallType {
+  STATIC
+  ROTARY
+}
+
+enum TankOutletValveType {
+  MANUAL
+  WITH_ACTUATOR
+}
+
+enum TankOutletValveSubType {
+  BUTTERFLY
+  SINGLE_SEAT
+}
+
+model AIReview {
+  id          String         @id @default(cuid())
+  moduleId    String
+  prompt      String         @db.Text
+  response    String         @db.Text
+  suggestions Json
+  status      AIReviewStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+}
+
+enum AIReviewStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  PARTIAL
+}
+
+model GeneratedDocument {
+  id            String   @id @default(cuid())
+  moduleId      String
+  templateId    String
+  filename      String
+  filepath      String
+  size          Int
+  generatedById String
+  createdAt     DateTime @default(now())
+
+  module   Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  template DocumentTemplate @relation(fields: [templateId], references: [id])
+}
+
+model DocumentTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  filename     String
+  filepath     String
+  placeholders Json
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  documents GeneratedDocument[]
+}
+
+model ModuleActivity {
+  id        String   @id @default(cuid())
+  moduleId  String
+  userId    String
+  action    String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+}
