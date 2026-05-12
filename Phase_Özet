@@ -84,3 +84,7 @@ components/module-builder/TanksPanel.tsx — Sayı seç → isimlendir → onayl
 Güncellenen:
 
 ModuleDetailClient.tsx — Tank interface tüm alanlarla genişletildi, TanksPanel entegre edildi
+
+Pompa Modeli ve Çark Boyutu input'ları artık combo-box olarak çalışıyor — kullanıcı serbest metin yazabilir veya input'a tıklayıp/oka basıp dropdown listeden seçebilir. Liste sabitleri lib/constants/pumpOptions.ts içinde tutuluyor; hem toplu ekleme formunda (ValveClusterPanel.tsx) hem de hat detay formunda (DischargeLineForm.tsx) aynı kaynaktan besleniyor.
+
+Yeni pompa modeli veya impeller boyutu eklemen gerekirse o tek dosyayı güncellemen yeterli.
