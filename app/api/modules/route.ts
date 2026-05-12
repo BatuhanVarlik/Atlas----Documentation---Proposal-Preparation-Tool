@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       return apiError('Geçersiz veri', 400, parsed.error.flatten());
     }
 
-    const module = await prisma.module.create({
+    const moduleRecord = await prisma.module.create({
       data: {
         ...parsed.data,
         creatorId: user.id,
@@ -61,14 +61,14 @@ export async function POST(request: Request) {
 
     await prisma.moduleActivity.create({
       data: {
-        moduleId: module.id,
+        moduleId: moduleRecord.id,
         userId: user.id,
         action: 'created',
-        details: { name: module.name },
+        details: { name: moduleRecord.name },
       },
     });
 
-    return apiSuccess(module, 'Modül oluşturuldu', 201);
+    return apiSuccess(moduleRecord, 'Modül oluşturuldu', 201);
   } catch (e: unknown) {
     if (e instanceof Error && 'status' in e) {
       return apiError(e.message, (e as { status: number }).status);

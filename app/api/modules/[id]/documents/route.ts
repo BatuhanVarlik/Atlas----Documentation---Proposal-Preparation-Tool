@@ -8,9 +8,9 @@ export async function GET(_req: Request, { params }: Params) {
     const user = await requireAuth();
     const { id: moduleId } = await params;
 
-    const module = await prisma.module.findUnique({ where: { id: moduleId } });
-    if (!module) return apiError('Modül bulunamadı', 404);
-    if (user.role === 'MEMBER' && module.creatorId !== user.id) return apiError('Forbidden', 403);
+    const moduleRecord = await prisma.module.findUnique({ where: { id: moduleId } });
+    if (!moduleRecord) return apiError('Modül bulunamadı', 404);
+    if (user.role === 'MEMBER' && moduleRecord.creatorId !== user.id) return apiError('Forbidden', 403);
 
     const docs = await prisma.generatedDocument.findMany({
       where: { moduleId },

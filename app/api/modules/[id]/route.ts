@@ -9,7 +9,7 @@ export async function GET(_req: Request, { params }: Params) {
     const user = await requireAuth();
     const { id } = await params;
 
-    const module = await prisma.module.findUnique({
+    const moduleRecord = await prisma.module.findUnique({
       where: { id },
       include: {
         creator: { select: { id: true, name: true } },
@@ -26,13 +26,13 @@ export async function GET(_req: Request, { params }: Params) {
       },
     });
 
-    if (!module) return apiError('Modül bulunamadı', 404);
+    if (!moduleRecord) return apiError('Modül bulunamadı', 404);
 
-    if (user.role === 'MEMBER' && module.creatorId !== user.id) {
+    if (user.role === 'MEMBER' && moduleRecord.creatorId !== user.id) {
       return apiError('Forbidden', 403);
     }
 
-    return apiSuccess(module);
+    return apiSuccess(moduleRecord);
   } catch (e: unknown) {
     if (e instanceof Error && 'status' in e) {
       return apiError(e.message, (e as { status: number }).status);
@@ -59,7 +59,7 @@ export async function PUT(request: Request, { params }: Params) {
       return apiError('Forbidden', 403);
     }
 
-    const module = await prisma.module.update({
+    const moduleRecord = await prisma.module.update({
       where: { id },
       data: parsed.data,
       include: {
@@ -76,7 +76,7 @@ export async function PUT(request: Request, { params }: Params) {
       },
     });
 
-    return apiSuccess(module, 'Modül güncellendi');
+    return apiSuccess(moduleRecord, 'Modül güncellendi');
   } catch (e: unknown) {
     if (e instanceof Error && 'status' in e) {
       return apiError(e.message, (e as { status: number }).status);

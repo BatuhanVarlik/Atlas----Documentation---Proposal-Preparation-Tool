@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useModuleBuilder } from '@/store/moduleBuilderStore';
+import { PUMP_MODELS, PUMP_IMPELLER_SIZES } from '@/lib/constants/pumpOptions';
+import Combobox from '@/components/ui/Combobox';
 
 interface DischargeLine {
   id: string;
@@ -17,6 +19,7 @@ interface DischargeLine {
   hasFlowMeter: boolean;
   waterInletType: string | null;
   calculatedDiameter: number | null;
+  connectedTankCount: number;
 }
 
 interface Props {
@@ -48,6 +51,7 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
   const [hasPT, setHasPT] = useState(line.hasPressureTransmitter);
   const [hasFlowMeter, setHasFlowMeter] = useState(line.hasFlowMeter);
   const [waterInletType, setWaterInletType] = useState(line.waterInletType ?? '');
+  const [connectedTankCount, setConnectedTankCount] = useState(String(line.connectedTankCount ?? 1));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
@@ -86,6 +90,7 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
       const payload: Record<string, unknown> = {
         name: name.trim(), capacity: cap, pressure: pres,
         valveType, valveControlUnit,
+        connectedTankCount: parseInt(connectedTankCount) || 0,
         hasPressureTransmitter: hasPT,
         hasFlowMeter,
       };
@@ -143,7 +148,7 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Kapasite (L/h) *</label>
           <input
@@ -163,6 +168,17 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
             className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             step="0.1" min={0.1}
           />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Tank Sayısı</label>
+          <input
+            type="number"
+            value={connectedTankCount}
+            onChange={(e) => setConnectedTankCount(e.target.value)}
+            className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            min={0}
+          />
+          <p className="text-[10px] text-slate-400 mt-0.5">Bu hattaki vana</p>
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Hesaplanan Çap</label>
@@ -212,9 +228,11 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
       <div className="grid grid-cols-3 gap-3">
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Pompa Modeli</label>
-          <input value={pumpModel} onChange={(e) => setPumpModel(e.target.value)}
-            className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="örn: Alfa Laval LKH"
+          <Combobox
+            value={pumpModel}
+            onChange={setPumpModel}
+            options={PUMP_MODELS}
+            placeholder="Yazın veya listeden seçin"
           />
         </div>
         <div>
@@ -226,9 +244,13 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Çark Boyutu (mm)</label>
-          <input type="number" value={pumpImpellerSize} onChange={(e) => setPumpImpellerSize(e.target.value)}
-            className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          <Combobox
+            value={pumpImpellerSize}
+            onChange={setPumpImpellerSize}
+            options={PUMP_IMPELLER_SIZES}
+            type="number"
             min={0}
+            placeholder="Yazın veya seçin"
           />
         </div>
       </div>

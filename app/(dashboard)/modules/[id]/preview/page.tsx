@@ -29,7 +29,7 @@ export default async function ModulePreviewPage({ params }: Props) {
   const session = await getServerSession(authOptions);
   const user = session!.user;
 
-  const module = await prisma.module.findUnique({
+  const moduleData = await prisma.module.findUnique({
     where: { id },
     include: {
       creator: { select: { name: true } },
@@ -43,16 +43,18 @@ export default async function ModulePreviewPage({ params }: Props) {
     },
   });
 
-  if (!module) notFound();
-  if (user.role === 'MEMBER' && module.creatorId !== user.id) notFound();
+  if (!moduleData) notFound();
+  if (user.role === 'MEMBER' && moduleData.creatorId !== user.id) notFound();
 
-  const fl = module.valveCluster?.fillingLines ?? [];
-  const dl = module.valveCluster?.dischargeLines ?? [];
+  const fl = moduleData.valveCluster?.fillingLines ?? [];
+  const dl = moduleData.valveCluster?.dischargeLines ?? [];
   const hasLines = fl.length > 0 || dl.length > 0;
+  const flTotalValves = fl.reduce((sum, l) => sum + (l.connectedTankCount ?? 0), 0);
+  const dlTotalValves = dl.reduce((sum, l) => sum + (l.connectedTankCount ?? 0), 0);
 
   const calc = hasLines
     ? calculateModule({
-        standard: module.standard as 'DIN' | 'SMS',
+        standard: moduleData.standard as 'DIN' | 'SMS',
         fillingLines: fl.map((l) => ({ id: l.id, capacity: l.capacity })),
         dischargeLines: dl.map((l) => ({ id: l.id, capacity: l.capacity, hasFlowMeter: l.hasFlowMeter })),
       })
@@ -64,7 +66,7 @@ export default async function ModulePreviewPage({ params }: Props) {
       <div className="flex items-center gap-2 text-sm text-slate-500 mb-5">
         <Link href="/modules" className="hover:text-slate-900">Modüller</Link>
         <span>/</span>
-        <Link href={`/modules/${module.id}`} className="hover:text-slate-900">{module.name}</Link>
+        <Link href={`/modules/${moduleData.id}`} className="hover:text-slate-900">{moduleData.name}</Link>
         <span>/</span>
         <span className="text-slate-900 font-medium">Önizleme</span>
       </div>
@@ -73,7 +75,7 @@ export default async function ModulePreviewPage({ params }: Props) {
         <h1 className="text-xl font-bold text-slate-900">Modül Özeti</h1>
         <div className="flex gap-2">
           <Link
-            href={`/modules/${module.id}`}
+            href={`/modules/${moduleData.id}`}
             className="px-4 py-2 text-sm text-slate-600 border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors"
           >
             ← Düzenlemeye Dön
@@ -85,13 +87,13 @@ export default async function ModulePreviewPage({ params }: Props) {
       <section className="bg-white rounded-xl border border-slate-200 p-6 mb-4">
         <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">Modül Bilgileri</h2>
         <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
-          <Row label="Modül Adı" value={module.name} />
-          <Row label="Müşteri" value={module.customerName ?? '—'} />
-          <Row label="Proje Kodu" value={module.projectCode ?? '—'} mono />
-          <Row label="Standart" value={module.standard} />
-          <Row label="Ürün Tipi" value={PRODUCT_LABELS[module.productType] ?? module.productType} />
-          <Row label="Oluşturan" value={module.creator.name} />
-          <Row label="Tarih" value={formatDate(module.createdAt)} />
+          <Row label="Modül Adı" value={moduleData.name} />
+          <Row label="Müşteri" value={moduleData.customerName ?? '—'} />
+          <Row label="Proje Kodu" value={moduleData.projectCode ?? '—'} mono />
+          <Row label="Standart" value={moduleData.standard} />
+          <Row label="Ürün Tipi" value={PRODUCT_LABELS[moduleData.productType] ?? moduleData.productType} />
+          <Row label="Oluşturan" value={moduleData.creator.name} />
+          <Row label="Tarih" value={formatDate(moduleData.createdAt)} />
         </div>
       </section>
 
@@ -126,6 +128,8 @@ export default async function ModulePreviewPage({ params }: Props) {
                 <th className="text-left py-2 font-medium text-slate-600">Drain Valve</th>
                 <th className="text-left py-2 font-medium text-slate-600">Vana Tipi</th>
                 <th className="text-left py-2 font-medium text-slate-600">Kontrol</th>
+                <th className="text-left py-2 font-medium text-slate-600">Tank Sayısı</th>
+                <th className="text-left py-2 font-medium text-slate-600">Vana Sayısı</th>
                 <th className="text-left py-2 font-medium text-slate-600">Leakage Chamber</th>
               </tr>
             </thead>
@@ -139,9 +143,16 @@ export default async function ModulePreviewPage({ params }: Props) {
                   <td className="py-2.5 text-slate-600">{calc?.drainValveSize ?? '—'}</td>
                   <td className="py-2.5 text-slate-700">{line.valveType}</td>
                   <td className="py-2.5 text-slate-600">{CONTROL_UNIT_LABELS[line.valveControlUnit] ?? line.valveControlUnit}</td>
+                  <td className="py-2.5 text-slate-700">{line.connectedTankCount}</td>
+                  <td className="py-2.5 text-slate-800 font-semibold">{line.connectedTankCount}</td>
                   <td className="py-2.5 text-slate-500">25 mm (Sabit)</td>
                 </tr>
               ))}
+              <tr className="bg-slate-50">
+                <td colSpan={8} className="py-2 text-right text-xs font-medium text-slate-600">Toplam Vana:</td>
+                <td className="py-2 font-bold text-slate-900">{flTotalValves}</td>
+                <td></td>
+              </tr>
             </tbody>
           </table>
           <p className="mt-3 text-xs text-slate-400">CIP Return = {calc?.cipReturnSize ?? '—'} (boru ile aynı)</p>
@@ -170,6 +181,8 @@ export default async function ModulePreviewPage({ params }: Props) {
                     <Row label="Drain Valve" value={calc?.drainValveSize ?? '—'} />
                     <Row label="Vana Tipi" value={line.valveType} />
                     <Row label="Kontrol" value={CONTROL_UNIT_LABELS[line.valveControlUnit] ?? line.valveControlUnit} />
+                    <Row label="Tank Sayısı" value={String(line.connectedTankCount)} />
+                    <Row label="Vana Sayısı" value={String(line.connectedTankCount)} />
                     {line.pumpModel && <Row label="Pompa Modeli" value={line.pumpModel} />}
                     {line.pumpKw != null && <Row label="Pompa kW" value={`${line.pumpKw} kW`} />}
                     {line.pumpImpellerSize != null && <Row label="İmpeller" value={`${line.pumpImpellerSize} mm`} />}
@@ -184,17 +197,20 @@ export default async function ModulePreviewPage({ params }: Props) {
               );
             })}
           </div>
+          <p className="mt-4 text-sm font-semibold text-slate-700 text-right">
+            Toplam Vana: <span className="text-slate-900">{dlTotalValves}</span>
+          </p>
         </section>
       )}
 
       {/* Tanklar */}
-      {module.tanks.length > 0 && (
+      {moduleData.tanks.length > 0 && (
         <section className="bg-white rounded-xl border border-slate-200 p-6 mb-4">
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
-            Tanklar ({module.tanks.length})
+            Tanklar ({moduleData.tanks.length})
           </h2>
           <div className="space-y-4">
-            {module.tanks.map((tank, i) => {
+            {moduleData.tanks.map((tank, i) => {
               const sensorFlags: Array<[boolean, string]> = [
                 [tank.hasLSH, 'LSH'], [tank.hasLSM, 'LSM'], [tank.hasLSL, 'LSL'],
                 [tank.hasTT, 'TT'], [tank.hasPT, 'PT'],
@@ -247,7 +263,7 @@ export default async function ModulePreviewPage({ params }: Props) {
         </section>
       )}
 
-      {!hasLines && module.tanks.length === 0 && (
+      {!hasLines && moduleData.tanks.length === 0 && (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 text-sm">
           Henüz teknik veri girilmemiş. Valve Cluster ve Tank bilgilerini ekleyin.
         </div>

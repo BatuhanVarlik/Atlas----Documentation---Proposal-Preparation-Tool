@@ -11,7 +11,7 @@ export default async function ModuleDetailPage({ params }: Props) {
   const session = await getServerSession(authOptions);
   const user = session!.user;
 
-  const module = await prisma.module.findUnique({
+  const moduleData = await prisma.module.findUnique({
     where: { id },
     include: {
       creator: { select: { id: true, name: true } },
@@ -25,15 +25,15 @@ export default async function ModuleDetailPage({ params }: Props) {
     },
   });
 
-  if (!module) notFound();
+  if (!moduleData) notFound();
 
-  if (user.role === 'MEMBER' && module.creatorId !== user.id) {
+  if (user.role === 'MEMBER' && moduleData.creatorId !== user.id) {
     notFound();
   }
 
   return (
     <ModuleDetailClient
-      module={module}
+      module={moduleData}
       userRole={user.role}
       userId={user.id}
     />

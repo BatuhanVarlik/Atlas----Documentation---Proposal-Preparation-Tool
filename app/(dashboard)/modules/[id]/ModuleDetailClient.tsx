@@ -17,6 +17,7 @@ interface FillingLine {
   calculatedDiameter: number | null;
   valveType: string;
   valveControlUnit: string;
+  connectedTankCount: number;
 }
 
 interface DischargeLine {
@@ -34,6 +35,7 @@ interface DischargeLine {
   hasFlowMeter: boolean;
   hasPressureTransmitter: boolean;
   waterInletType: string | null;
+  connectedTankCount: number;
 }
 
 interface Tank {

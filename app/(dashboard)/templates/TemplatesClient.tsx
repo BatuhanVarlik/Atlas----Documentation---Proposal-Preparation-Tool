@@ -128,10 +128,10 @@ export default function TemplatesClient({ initialTemplates }: Props) {
 
       {templates.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-          <p className="text-slate-400 text-sm">Henüz şablon yok. "+ Şablon Yükle" ile başlayın.</p>
+          <p className="text-slate-400 text-sm">Henüz şablon yok. &quot;+ Şablon Yükle&quot; ile başlayın.</p>
           <p className="text-slate-400 text-xs mt-2">
             Word şablonunuzda <code className="bg-slate-100 px-1 rounded">{'{module.name}'}</code>,{' '}
-            <code className="bg-slate-100 px-1 rounded">{'{#fillingLines}...{/fillingLines}'}</code> gibi placeholder'lar kullanın.
+            <code className="bg-slate-100 px-1 rounded">{'{#fillingLines}...{/fillingLines}'}</code> gibi placeholder&apos;lar kullanın.
           </p>
         </div>
       ) : (

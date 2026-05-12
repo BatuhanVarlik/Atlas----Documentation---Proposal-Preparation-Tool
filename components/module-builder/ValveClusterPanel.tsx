@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useModuleBuilder, type FillingLineDraft, type DischargeLineDraft } from '@/store/moduleBuilderStore';
 import FillingLineForm from './FillingLineForm';
 import DischargeLineForm from './DischargeLineForm';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import { PUMP_MODELS, PUMP_IMPELLER_SIZES } from '@/lib/constants/pumpOptions';
+import Combobox from '@/components/ui/Combobox';
 
 interface FillingLine {
   id: string;
@@ -14,6 +17,7 @@ interface FillingLine {
   calculatedDiameter: number | null;
   valveType: string;
   valveControlUnit: string;
+  connectedTankCount: number;
 }
 
 interface DischargeLine {
@@ -31,6 +35,7 @@ interface DischargeLine {
   hasPressureTransmitter: boolean;
   hasFlowMeter: boolean;
   waterInletType: string | null;
+  connectedTankCount: number;
 }
 
 interface ValveCluster {
@@ -84,6 +89,10 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
   // Filling add flow
   const [fAddStep, setFAddStep] = useState<AddStep>(null);
   const [fCount, setFCount] = useState('1');
+  const [fValveType, setFValveType] = useState('SDE44');
+  const [fControlUnit, setFControlUnit] = useState('AS_I');
+  const [fCapacity, setFCapacity] = useState('10000');
+  const [fConnTanks, setFConnTanks] = useState('1');
   const [fNames, setFNames] = useState<string[]>([]);
   const [fAdding, setFAdding] = useState(false);
   const [fError, setFError] = useState('');
@@ -92,31 +101,64 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
   // Discharge add flow
   const [dAddStep, setDAddStep] = useState<AddStep>(null);
   const [dCount, setDCount] = useState('1');
+  const [dCapacity, setDCapacity] = useState('10000');
+  const [dPressure, setDPressure] = useState('2');
+  const [dValveType, setDValveType] = useState('SDE44');
+  const [dControlUnit, setDControlUnit] = useState('AS_I');
+  const [dConnTanks, setDConnTanks] = useState('1');
+  const [dPumpModel, setDPumpModel] = useState('');
+  const [dPumpKw, setDPumpKw] = useState('');
+  const [dPumpImpeller, setDPumpImpeller] = useState('');
+  const [dHasPT, setDHasPT] = useState(false);
+  const [dHasFM, setDHasFM] = useState(false);
+  const [dWaterInlet, setDWaterInlet] = useState<string>('');
   const [dNames, setDNames] = useState<string[]>([]);
   const [dAdding, setDAdding] = useState(false);
   const [dError, setDError] = useState('');
   const [activeDischarge, setActiveDischarge] = useState<string | null>(null);
 
+  // Silme onay modali
+  const [confirmDelete, setConfirmDelete] = useState<
+    { kind: 'filling' | 'discharge'; id: string; name: string } | null
+  >(null);
+  const [deleting, setDeleting] = useState(false);
+
   const fillingLines = valveCluster?.fillingLines ?? [];
   const dischargeLines = valveCluster?.dischargeLines ?? [];
+  const fTotalValves = fillingLines.reduce((sum, l) => sum + (l.connectedTankCount ?? 0), 0);
+  const dTotalValves = dischargeLines.reduce((sum, l) => sum + (l.connectedTankCount ?? 0), 0);
 
-  function startFCount() { setFAddStep('count'); setFCount('1'); setFError(''); }
+  function startFCount() {
+    setFAddStep('count');
+    setFCount('1');
+    setFValveType('SDE44');
+    setFControlUnit('AS_I');
+    setFCapacity('10000');
+    setFConnTanks('1');
+    setFError('');
+  }
   function confirmFCount() {
     const n = parseInt(fCount);
-    if (isNaN(n) || n < 1 || n > 20) { setFError('1–20 arası girin'); return; }
+    if (isNaN(n) || n < 1 || n > 20) { setFError('Adet 1–20 arası olmalı'); return; }
+    const cap = parseFloat(fCapacity);
+    if (isNaN(cap) || cap <= 0) { setFError('Kapasite pozitif bir sayı olmalı'); return; }
+    const tanks = parseInt(fConnTanks);
+    if (isNaN(tanks) || tanks < 0) { setFError('Tank sayısı 0 veya daha büyük olmalı'); return; }
     setFNames(Array.from({ length: n }, (_, i) => `Dolum Hattı ${fillingLines.length + i + 1}`));
     setFAddStep('name');
   }
 
   async function confirmFNames() {
     if (fNames.some((n) => !n.trim())) { setFError('Tüm hat adları dolu olmalı'); return; }
+    const cap = parseFloat(fCapacity);
+    const tanks = parseInt(fConnTanks);
     setFAdding(true); setFError('');
     try {
       for (const n of fNames) {
         const res = await fetch(`/api/modules/${moduleId}/valve-cluster/filling-lines`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: n.trim(), capacity: 10000, valveType: 'SDE44', valveControlUnit: 'NONE' }),
+          body: JSON.stringify({ name: n.trim(), capacity: cap, valveType: fValveType, valveControlUnit: fControlUnit, connectedTankCount: tanks }),
         });
         const json = await res.json();
         if (!json.success) { setFError(json.error ?? 'Hata'); return; }
@@ -128,23 +170,63 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
     }
   }
 
-  function startDCount() { setDAddStep('count'); setDCount('1'); setDError(''); }
+  function startDCount() {
+    setDAddStep('count');
+    setDCount('1');
+    setDCapacity('10000');
+    setDPressure('2');
+    setDValveType('SDE44');
+    setDControlUnit('AS_I');
+    setDConnTanks('1');
+    setDPumpModel('');
+    setDPumpKw('');
+    setDPumpImpeller('');
+    setDHasPT(false);
+    setDHasFM(false);
+    setDWaterInlet('');
+    setDError('');
+  }
   function confirmDCount() {
     const n = parseInt(dCount);
-    if (isNaN(n) || n < 1 || n > 20) { setDError('1–20 arası girin'); return; }
+    if (isNaN(n) || n < 1 || n > 20) { setDError('Adet 1–20 arası olmalı'); return; }
+    const cap = parseFloat(dCapacity);
+    if (isNaN(cap) || cap <= 0) { setDError('Kapasite pozitif bir sayı olmalı'); return; }
+    const pres = parseFloat(dPressure);
+    if (isNaN(pres) || pres < 0) { setDError('Basınç geçersiz'); return; }
+    const tanks = parseInt(dConnTanks);
+    if (isNaN(tanks) || tanks < 0) { setDError('Tank sayısı 0 veya daha büyük olmalı'); return; }
     setDNames(Array.from({ length: n }, (_, i) => `Boşaltım Hattı ${dischargeLines.length + i + 1}`));
     setDAddStep('name');
   }
 
   async function confirmDNames() {
     if (dNames.some((n) => !n.trim())) { setDError('Tüm hat adları dolu olmalı'); return; }
+    const cap = parseFloat(dCapacity);
+    const pres = parseFloat(dPressure);
+    const tanks = parseInt(dConnTanks);
+    const pumpKwNum = dPumpKw.trim() ? parseFloat(dPumpKw) : null;
+    const pumpImpNum = dPumpImpeller.trim() ? parseFloat(dPumpImpeller) : null;
     setDAdding(true); setDError('');
     try {
       for (const n of dNames) {
+        const payload: Record<string, unknown> = {
+          name: n.trim(),
+          capacity: cap,
+          pressure: pres,
+          valveType: dValveType,
+          valveControlUnit: dControlUnit,
+          connectedTankCount: tanks,
+          hasPressureTransmitter: dHasPT,
+          hasFlowMeter: dHasFM,
+        };
+        if (dPumpModel.trim()) payload.pumpModel = dPumpModel.trim();
+        if (pumpKwNum != null && !isNaN(pumpKwNum)) payload.pumpKw = pumpKwNum;
+        if (pumpImpNum != null && !isNaN(pumpImpNum)) payload.pumpImpellerSize = pumpImpNum;
+        if (dWaterInlet) payload.waterInletType = dWaterInlet;
         const res = await fetch(`/api/modules/${moduleId}/valve-cluster/discharge-lines`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: n.trim(), capacity: 10000, pressure: 2, valveType: 'SDE44', valveControlUnit: 'NONE' }),
+          body: JSON.stringify(payload),
         });
         const json = await res.json();
         if (!json.success) { setDError(json.error ?? 'Hata'); return; }
@@ -153,6 +235,41 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
       router.refresh();
     } finally {
       setDAdding(false);
+    }
+  }
+
+  function requestDeleteLastFilling() {
+    if (fillingLines.length === 0) return;
+    const last = [...fillingLines].sort((a, b) => b.order - a.order)[0];
+    setConfirmDelete({ kind: 'filling', id: last.id, name: last.name });
+  }
+
+  function requestDeleteLastDischarge() {
+    if (dischargeLines.length === 0) return;
+    const last = [...dischargeLines].sort((a, b) => b.order - a.order)[0];
+    setConfirmDelete({ kind: 'discharge', id: last.id, name: last.name });
+  }
+
+  async function performDelete() {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      const url = confirmDelete.kind === 'filling'
+        ? `/api/modules/${moduleId}/valve-cluster/filling-lines/${confirmDelete.id}`
+        : `/api/modules/${moduleId}/valve-cluster/discharge-lines/${confirmDelete.id}`;
+      const res = await fetch(url, { method: 'DELETE' });
+      const json = await res.json();
+      if (!json.success) {
+        if (confirmDelete.kind === 'filling') setFError(json.error ?? 'Silinemedi');
+        else setDError(json.error ?? 'Silinemedi');
+        return;
+      }
+      if (confirmDelete.kind === 'filling' && activeFilling === confirmDelete.id) setActiveFilling(null);
+      if (confirmDelete.kind === 'discharge' && activeDischarge === confirmDelete.id) setActiveDischarge(null);
+      setConfirmDelete(null);
+      router.refresh();
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -200,28 +317,83 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-xs text-amber-700">{calcError}</div>
       )}
 
+      <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-600">
+        Her hatta bağlı tank sayısı buradaki vana sayısını belirler — aşağıdaki <strong>Tanklar</strong> listesinden bağımsızdır.
+      </div>
+
       {/* Dolum Hatları */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-700">Dolum Hatları ({fillingLines.length})</h3>
+          <h3 className="text-sm font-semibold text-slate-700">
+            Dolum Hatları ({fillingLines.length})
+            {fillingLines.length > 0 && (
+              <span className="ml-2 text-xs font-normal text-slate-500">· Toplam Vana: {fTotalValves}</span>
+            )}
+          </h3>
           {fAddStep === null && (
-            <button onClick={startFCount}
-              className="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >+ Hat Ekle</button>
+            <div className="flex gap-2">
+              <button onClick={startFCount}
+                className="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >+ Hat Ekle</button>
+              <button onClick={requestDeleteLastFilling} disabled={fillingLines.length === 0}
+                className="text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >− Hat Sil</button>
+            </div>
           )}
         </div>
 
         {/* Add flow */}
         {fAddStep === 'count' && (
-          <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
-            <label className="block text-xs font-medium text-slate-600">Kaç dolum hattı eklenecek?</label>
+          <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
+            <p className="text-xs text-slate-500">Bu değerler eklenecek tüm dolum hatlarına uygulanır — sonradan her hat için ayrı düzenlenebilir.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Adet</label>
+                <input type="number" value={fCount} onChange={(e) => setFCount(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min={1} max={20}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Kapasite (L/h)</label>
+                <input type="number" value={fCapacity} onChange={(e) => setFCapacity(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min={1}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Hatta Bağlı Tank Sayısı</label>
+                <input type="number" value={fConnTanks} onChange={(e) => setFConnTanks(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min={0}
+                />
+                <p className="text-[10px] text-slate-400 mt-0.5">Vana sayısı = tank × hat</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Vana Tipi</label>
+                <select value={fValveType} onChange={(e) => setFValveType(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="SDE44">SDE44</option>
+                  <option value="DE44">DE44</option>
+                  <option value="D44SL">D44SL</option>
+                  <option value="DA44">DA44</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Kontrol Ünitesi</label>
+                <select value={fControlUnit} onChange={(e) => setFControlUnit(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="NONE">Yok</option>
+                  <option value="AS_I">AS-i</option>
+                  <option value="DC">DC</option>
+                </select>
+              </div>
+            </div>
             <div className="flex gap-2">
-              <input type="number" value={fCount} onChange={(e) => setFCount(e.target.value)}
-                className="w-24 px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                min={1} max={20}
-              />
               <button onClick={confirmFCount}
-                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">Onayla</button>
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">Devam</button>
               <button onClick={() => setFAddStep(null)}
                 className="px-3 py-1.5 text-xs border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50">İptal</button>
             </div>
@@ -251,7 +423,7 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
         )}
 
         {fillingLines.length === 0 && fAddStep === null ? (
-          <p className="text-xs text-slate-400">Henüz dolum hattı yok. "+ Hat Ekle" ile başlayın.</p>
+          <p className="text-xs text-slate-400">Henüz dolum hattı yok. &quot;+ Hat Ekle&quot; ile başlayın.</p>
         ) : (
           <ul className="space-y-1">
             {fillingLines.map((line) => (
@@ -265,7 +437,7 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
                   }`}
                 >
                   <span className="font-medium text-slate-700">{line.name}</span>
-                  <span className="text-slate-400 text-xs">{line.capacity.toLocaleString('tr-TR')} L/h · {line.valveType}</span>
+                  <span className="text-slate-400 text-xs">{line.capacity.toLocaleString('tr-TR')} L/h · {line.valveType} · {line.connectedTankCount} tank → {line.connectedTankCount} vana</span>
                 </button>
                 {activeFilling === line.id && (
                   <FillingLineForm
@@ -285,24 +457,142 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
       {/* Boşaltım Hatları */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-700">Boşaltım Hatları ({dischargeLines.length})</h3>
+          <h3 className="text-sm font-semibold text-slate-700">
+            Boşaltım Hatları ({dischargeLines.length})
+            {dischargeLines.length > 0 && (
+              <span className="ml-2 text-xs font-normal text-slate-500">· Toplam Vana: {dTotalValves}</span>
+            )}
+          </h3>
           {dAddStep === null && (
-            <button onClick={startDCount}
-              className="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >+ Hat Ekle</button>
+            <div className="flex gap-2">
+              <button onClick={startDCount}
+                className="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >+ Hat Ekle</button>
+              <button onClick={requestDeleteLastDischarge} disabled={dischargeLines.length === 0}
+                className="text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >− Hat Sil</button>
+            </div>
           )}
         </div>
 
         {dAddStep === 'count' && (
-          <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
-            <label className="block text-xs font-medium text-slate-600">Kaç boşaltım hattı eklenecek?</label>
+          <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
+            <p className="text-xs text-slate-500">Bu değerler eklenecek tüm boşaltım hatlarına uygulanır — sonradan her hat için ayrı düzenlenebilir.</p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Adet</label>
+                <input type="number" value={dCount} onChange={(e) => setDCount(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min={1} max={20}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Kapasite (L/h)</label>
+                <input type="number" value={dCapacity} onChange={(e) => setDCapacity(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min={1}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Basınç (Bar)</label>
+                <input type="number" step="0.1" value={dPressure} onChange={(e) => setDPressure(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Hatta Bağlı Tank Sayısı</label>
+                <input type="number" value={dConnTanks} onChange={(e) => setDConnTanks(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min={0}
+                />
+                <p className="text-[10px] text-slate-400 mt-0.5">Vana sayısı = tank × hat</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Vana Tipi</label>
+                <select value={dValveType} onChange={(e) => setDValveType(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="SDE44">SDE44</option>
+                  <option value="DE44">DE44</option>
+                  <option value="D44SL">D44SL</option>
+                  <option value="DA44">DA44</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Kontrol Ünitesi</label>
+                <select value={dControlUnit} onChange={(e) => setDControlUnit(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="NONE">Yok</option>
+                  <option value="AS_I">AS-i</option>
+                  <option value="DC">DC</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Water Inlet Tipi</label>
+                <select value={dWaterInlet} onChange={(e) => setDWaterInlet(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">— Seçilmedi —</option>
+                  <option value="SW_CIP42">SW CIP42</option>
+                  <option value="SD42">SD42</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-200">
+              <p className="text-xs font-medium text-slate-600 mb-2">Pompa Bilgileri</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Model</label>
+                  <Combobox
+                    value={dPumpModel}
+                    onChange={setDPumpModel}
+                    options={PUMP_MODELS}
+                    placeholder="Yazın veya listeden seçin"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">kW</label>
+                  <input type="number" step="0.1" value={dPumpKw} onChange={(e) => setDPumpKw(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min={0}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Impeller (mm)</label>
+                  <Combobox
+                    value={dPumpImpeller}
+                    onChange={setDPumpImpeller}
+                    options={PUMP_IMPELLER_SIZES}
+                    type="number"
+                    min={0}
+                    placeholder="Yazın veya seçin"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-2 border-t border-slate-200">
+              <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                <input type="checkbox" checked={dHasPT} onChange={(e) => setDHasPT(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                Basınç Transmitteri
+              </label>
+              <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                <input type="checkbox" checked={dHasFM} onChange={(e) => setDHasFM(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                Flowmeter
+              </label>
+            </div>
+
             <div className="flex gap-2">
-              <input type="number" value={dCount} onChange={(e) => setDCount(e.target.value)}
-                className="w-24 px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                min={1} max={20}
-              />
               <button onClick={confirmDCount}
-                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">Onayla</button>
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">Devam</button>
               <button onClick={() => setDAddStep(null)}
                 className="px-3 py-1.5 text-xs border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50">İptal</button>
             </div>
@@ -332,7 +622,7 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
         )}
 
         {dischargeLines.length === 0 && dAddStep === null ? (
-          <p className="text-xs text-slate-400">Henüz boşaltım hattı yok. "+ Hat Ekle" ile başlayın.</p>
+          <p className="text-xs text-slate-400">Henüz boşaltım hattı yok. &quot;+ Hat Ekle&quot; ile başlayın.</p>
         ) : (
           <ul className="space-y-1">
             {dischargeLines.map((line) => (
@@ -347,7 +637,7 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
                 >
                   <span className="font-medium text-slate-700">{line.name}</span>
                   <span className="text-slate-400 text-xs">
-                    {line.capacity.toLocaleString('tr-TR')} L/h · {line.pressure} Bar · {line.valveType}
+                    {line.capacity.toLocaleString('tr-TR')} L/h · {line.pressure} Bar · {line.valveType} · {line.connectedTankCount} tank → {line.connectedTankCount} vana
                   </span>
                 </button>
                 {activeDischarge === line.id && (
@@ -364,6 +654,22 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
           </ul>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title={confirmDelete?.kind === 'filling' ? 'Dolum Hattı Sil' : 'Boşaltım Hattı Sil'}
+        message={
+          confirmDelete && (
+            <>
+              <strong>{confirmDelete.name}</strong> silinecek. Bu işlem geri alınamaz.
+            </>
+          )
+        }
+        confirmLabel="Sil"
+        loading={deleting}
+        onConfirm={performDelete}
+        onCancel={() => { if (!deleting) setConfirmDelete(null); }}
+      />
     </div>
   );
 }

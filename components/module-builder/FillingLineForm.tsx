@@ -10,6 +10,7 @@ interface FillingLine {
   valveType: string;
   valveControlUnit: string;
   calculatedDiameter: number | null;
+  connectedTankCount: number;
 }
 
 interface Props {
@@ -32,6 +33,7 @@ export default function FillingLineForm({ moduleId, line, onSaved, onDeleted, on
   const [capacity, setCapacity] = useState(String(line.capacity));
   const [valveType, setValveType] = useState(line.valveType);
   const [valveControlUnit, setValveControlUnit] = useState(line.valveControlUnit);
+  const [connectedTankCount, setConnectedTankCount] = useState(String(line.connectedTankCount ?? 1));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
@@ -60,7 +62,7 @@ export default function FillingLineForm({ moduleId, line, onSaved, onDeleted, on
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name.trim(), capacity: cap, valveType, valveControlUnit }),
+          body: JSON.stringify({ name: name.trim(), capacity: cap, valveType, valveControlUnit, connectedTankCount: parseInt(connectedTankCount) || 0 }),
         }
       );
       const json = await res.json();
@@ -111,7 +113,7 @@ export default function FillingLineForm({ moduleId, line, onSaved, onDeleted, on
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Kapasite (L/h) *</label>
           <input
@@ -122,6 +124,17 @@ export default function FillingLineForm({ moduleId, line, onSaved, onDeleted, on
             placeholder="örn: 30000"
             min={1}
           />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Hatta Bağlı Tank Sayısı</label>
+          <input
+            type="number"
+            value={connectedTankCount}
+            onChange={(e) => setConnectedTankCount(e.target.value)}
+            className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            min={0}
+          />
+          <p className="text-[10px] text-slate-400 mt-0.5">Bu hattaki vana sayısı</p>
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Hesaplanan Çap</label>

@@ -8,7 +8,8 @@ const createSchema = z.object({
   name: z.string().min(1).max(255),
   capacity: z.number().positive().max(1_000_000),
   valveType: z.enum(['SDE44', 'DE44', 'D44SL', 'DA44']),
-  valveControlUnit: z.enum(['NONE', 'AS_I', 'DC']).default('NONE'),
+  valveControlUnit: z.enum(['NONE', 'AS_I', 'DC']).default('AS_I'),
+  connectedTankCount: z.number().int().min(0).max(1000).default(1),
 });
 
 export async function POST(req: Request, { params }: Params) {
@@ -19,9 +20,9 @@ export async function POST(req: Request, { params }: Params) {
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) return apiError('Geçersiz veri', 400, parsed.error.flatten());
 
-    const module = await prisma.module.findUnique({ where: { id: moduleId } });
-    if (!module) return apiError('Modül bulunamadı', 404);
-    if (user.role === 'MEMBER' && module.creatorId !== user.id) return apiError('Forbidden', 403);
+    const moduleRecord = await prisma.module.findUnique({ where: { id: moduleId } });
+    if (!moduleRecord) return apiError('Modül bulunamadı', 404);
+    if (user.role === 'MEMBER' && moduleRecord.creatorId !== user.id) return apiError('Forbidden', 403);
 
     // Valve cluster'ı bul veya oluştur
     let cluster = await prisma.valveCluster.findUnique({ where: { moduleId } });
@@ -40,7 +41,7 @@ export async function POST(req: Request, { params }: Params) {
     });
 
     // Status → IN_PROGRESS
-    if (module.status === 'DRAFT') {
+    if (moduleRecord.status === 'DRAFT') {
       await prisma.module.update({ where: { id: moduleId }, data: { status: 'IN_PROGRESS' } });
     }
 

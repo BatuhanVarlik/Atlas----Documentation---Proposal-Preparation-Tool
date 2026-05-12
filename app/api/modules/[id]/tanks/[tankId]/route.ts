@@ -37,9 +37,9 @@ export async function PUT(req: Request, { params }: Params) {
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) return apiError('Geçersiz veri', 400, parsed.error.flatten());
 
-    const module = await prisma.module.findUnique({ where: { id: moduleId } });
-    if (!module) return apiError('Modül bulunamadı', 404);
-    if (user.role === 'MEMBER' && module.creatorId !== user.id) return apiError('Forbidden', 403);
+    const moduleRecord = await prisma.module.findUnique({ where: { id: moduleId } });
+    if (!moduleRecord) return apiError('Modül bulunamadı', 404);
+    if (user.role === 'MEMBER' && moduleRecord.creatorId !== user.id) return apiError('Forbidden', 403);
 
     const tank = await prisma.tank.update({ where: { id: tankId }, data: parsed.data });
     return apiSuccess(tank, 'Tank güncellendi');
@@ -54,9 +54,9 @@ export async function DELETE(_req: Request, { params }: Params) {
     const user = await requireAuth();
     const { id: moduleId, tankId } = await params;
 
-    const module = await prisma.module.findUnique({ where: { id: moduleId } });
-    if (!module) return apiError('Modül bulunamadı', 404);
-    if (user.role === 'MEMBER' && module.creatorId !== user.id) return apiError('Forbidden', 403);
+    const moduleRecord = await prisma.module.findUnique({ where: { id: moduleId } });
+    if (!moduleRecord) return apiError('Modül bulunamadı', 404);
+    if (user.role === 'MEMBER' && moduleRecord.creatorId !== user.id) return apiError('Forbidden', 403);
 
     await prisma.tank.delete({ where: { id: tankId } });
     return apiSuccess(null, 'Tank silindi');
