@@ -47,6 +47,7 @@ export default function TanksPanel({ moduleId, tanks }: Props) {
   const [tankOutletValveSubType, setTankOutletValveSubType] = useState<'BUTTERFLY' | 'SINGLE_SEAT'>('BUTTERFLY');
 
   // CIP return pump
+  const [hasCipReturnPump, setHasCipReturnPump] = useState(false);
   const [cipReturnPumpModel, setCipReturnPumpModel] = useState('');
   const [cipReturnPumpKw, setCipReturnPumpKw] = useState('');
   const [cipReturnPumpImpellerSize, setCipReturnPumpImpellerSize] = useState('');
@@ -69,6 +70,7 @@ export default function TanksPanel({ moduleId, tanks }: Props) {
     setHasAgitator(false); setAgitatorMotorKw(''); setAgitatorRpm(''); setAgitatorPosition('SIDE');
     setHasCipInletForAgitator(false); setHasCipInletForManhole(false);
     setHasTankOutletValve(false); setTankOutletValveType('MANUAL'); setTankOutletValveSubType('BUTTERFLY');
+    setHasCipReturnPump(false);
     setCipReturnPumpModel(''); setCipReturnPumpKw(''); setCipReturnPumpImpellerSize('');
     setAddError('');
   }
@@ -136,9 +138,13 @@ export default function TanksPanel({ moduleId, tanks }: Props) {
             payload.tankOutletValveSubType = tankOutletValveSubType;
           }
         }
-        if (cipReturnPumpModel.trim()) payload.cipReturnPumpModel = cipReturnPumpModel.trim();
-        if (pumpKwNum != null && !isNaN(pumpKwNum)) payload.cipReturnPumpKw = pumpKwNum;
-        if (pumpImpNum != null && !isNaN(pumpImpNum)) payload.cipReturnPumpImpellerSize = pumpImpNum;
+        // Manifoldda pompa yoksa kullanıcı yeni pompa seçer ve gönderir.
+        // Pompa zaten varsa alanlar gönderilmez.
+        if (!hasCipReturnPump) {
+          if (cipReturnPumpModel.trim()) payload.cipReturnPumpModel = cipReturnPumpModel.trim();
+          if (pumpKwNum != null && !isNaN(pumpKwNum)) payload.cipReturnPumpKw = pumpKwNum;
+          if (pumpImpNum != null && !isNaN(pumpImpNum)) payload.cipReturnPumpImpellerSize = pumpImpNum;
+        }
 
         const res = await fetch(`/api/modules/${moduleId}/tanks`, {
           method: 'POST',
@@ -339,27 +345,48 @@ export default function TanksPanel({ moduleId, tanks }: Props) {
 
             {/* CIP Return Pump */}
             <div className="pt-2 border-t border-slate-200">
-              <p className="text-xs font-medium text-slate-600 mb-2">CIP Return Pompa</p>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Model</label>
-                  <input type="text" value={cipReturnPumpModel} onChange={(e) => setCipReturnPumpModel(e.target.value)}
-                    placeholder="Örn: KSB-20"
-                    className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">kW</label>
-                  <input type="number" step="0.1" value={cipReturnPumpKw} onChange={(e) => setCipReturnPumpKw(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    min={0} />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Impeller (mm)</label>
-                  <input type="number" step="0.1" value={cipReturnPumpImpellerSize} onChange={(e) => setCipReturnPumpImpellerSize(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    min={0} />
-                </div>
+              <p className="text-xs font-medium text-slate-600 mb-2">Mevcut Manifoldda CIP Return Pompası</p>
+              <div className="flex gap-2 mb-3">
+                {[
+                  { value: false, label: 'Yok' },
+                  { value: true, label: 'Var' },
+                ].map((opt) => (
+                  <button
+                    key={String(opt.value)}
+                    type="button"
+                    onClick={() => setHasCipReturnPump(opt.value)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                      hasCipReturnPump === opt.value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                        : 'border-slate-300 dark:border-white/15 text-slate-600 dark:text-slate-300 hover:border-slate-400'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
+              {!hasCipReturnPump && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Model</label>
+                    <input type="text" value={cipReturnPumpModel} onChange={(e) => setCipReturnPumpModel(e.target.value)}
+                      placeholder="Örn: KSB-20"
+                      className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">kW</label>
+                    <input type="number" step="0.1" value={cipReturnPumpKw} onChange={(e) => setCipReturnPumpKw(e.target.value)}
+                      className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      min={0} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Impeller (mm)</label>
+                    <input type="number" step="0.1" value={cipReturnPumpImpellerSize} onChange={(e) => setCipReturnPumpImpellerSize(e.target.value)}
+                      className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      min={0} />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 pt-2">

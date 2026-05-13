@@ -7,12 +7,11 @@ export default async function ModulesPage() {
   const session = await getServerSession(authOptions);
   const user = session!.user;
 
+  // ADMIN ve DEPARTMENT_MANAGER tüm modülleri görür; MEMBER yalnızca kendi oluşturduğu modülleri görür.
   const where =
-    user.role === 'ADMIN'
-      ? {}
-      : user.role === 'DEPARTMENT_MANAGER'
-        ? { creator: { departmentId: user.departmentId } }
-        : { creatorId: user.id };
+    user.role === 'MEMBER'
+      ? { creatorId: user.id }
+      : {};
 
   const modules = await prisma.module.findMany({
     where,

@@ -1,10 +1,26 @@
-export default function SettingsPage() {
-  return (
-    <div>
-      <h1 className="text-2xl font-bold text-slate-900 mb-6">Ayarlar</h1>
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <p className="text-slate-400 text-sm">Sistem ayarları yakında eklenecek.</p>
-      </div>
-    </div>
-  );
+import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import SettingsClient from './SettingsClient';
+
+export default async function SettingsPage() {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect('/login');
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      createdAt: true,
+      department: { select: { name: true, color: true } },
+    },
+  });
+
+  if (!user) redirect('/login');
+
+  return <SettingsClient user={user} />;
 }

@@ -66,12 +66,12 @@ export default function Combobox({
           if (e.key === 'Escape') setOpen(false);
           else if (e.key === 'ArrowDown' && !open) setOpen(true);
         }}
-        className={`w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
+        className={`w-full px-2.5 py-1.5 text-sm border border-slate-300 dark:border-white/15 bg-white dark:bg-primary dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
         autoComplete="off"
       />
       {open && filtered.length > 0 && (
         <ul
-          className="absolute left-0 right-0 top-full mt-1 z-30 bg-white border border-slate-200 rounded-lg shadow-lg overflow-y-auto"
+          className="absolute left-0 right-0 top-full mt-1 z-30 bg-white dark:bg-[#0a2147] border border-slate-200 dark:border-white/15 rounded-lg shadow-lg overflow-y-auto"
           style={{ maxHeight: `${VISIBLE_ROWS * ROW_PX}px` }}
         >
           {filtered.map((o) => {
@@ -81,8 +81,8 @@ export default function Combobox({
               <li
                 key={s}
                 onMouseDown={(e) => { e.preventDefault(); selectOption(o); }}
-                className={`px-2.5 text-sm cursor-pointer flex items-center hover:bg-blue-50 ${
-                  selected ? 'bg-blue-100 text-blue-700 font-medium' : 'text-slate-700'
+                className={`px-2.5 text-sm cursor-pointer flex items-center hover:bg-blue-50 dark:hover:bg-white/10 ${
+                  selected ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium' : 'text-slate-700 dark:text-slate-200'
                 }`}
                 style={{ height: `${ROW_PX}px` }}
               >

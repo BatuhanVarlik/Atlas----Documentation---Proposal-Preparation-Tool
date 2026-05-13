@@ -30,9 +30,11 @@ model User {
   createdAt    DateTime @default(now())
 
   department      Department @relation(fields: [departmentId], references: [id])
-  createdProjects Project[]  @relation("ProjectCreator")
-  createdModules  Module[]   @relation("ModuleCreator")
-  reviewedModules Module[]   @relation("ModuleReviewer")
+  createdProjects     Project[]              @relation("ProjectCreator")
+  createdModules      Module[]               @relation("ModuleCreator")
+  reviewedModules     Module[]               @relation("ModuleReviewer")
+  resetRequests       PasswordResetRequest[] @relation("ResetRequestUser")
+  resolvedResets      PasswordResetRequest[] @relation("ResetRequestResolver")
 }
 
 enum Role {
@@ -287,6 +289,26 @@ model DocumentTemplate {
   createdAt    DateTime @default(now())
 
   documents GeneratedDocument[]
+}
+
+model PasswordResetRequest {
+  id                 String                     @id @default(cuid())
+  userId             String
+  user               User                       @relation("ResetRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  hashedNewPassword  String
+  status             PasswordResetRequestStatus @default(PENDING)
+  requestedAt        DateTime                   @default(now())
+  resolvedAt         DateTime?
+  resolvedById       String?
+  resolvedBy         User?                      @relation("ResetRequestResolver", fields: [resolvedById], references: [id])
+
+  @@index([status, requestedAt])
+}
+
+enum PasswordResetRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 model ModuleActivity {

@@ -32,12 +32,12 @@ export default function ConfirmDialog({
 
   return (
     <Modal open={open} onClose={onCancel} title={title} size="sm">
-      <div className="text-sm text-slate-600">{message}</div>
+      <div className="text-sm text-slate-600 dark:text-slate-300">{message}</div>
       <div className="flex justify-end gap-2 mt-5">
         <button
           onClick={onCancel}
           disabled={loading}
-          className="px-3 py-1.5 text-xs border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-50"
+          className="px-3 py-1.5 text-xs border border-slate-300 dark:border-white/15 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-50"
         >
           {cancelLabel}
         </button>

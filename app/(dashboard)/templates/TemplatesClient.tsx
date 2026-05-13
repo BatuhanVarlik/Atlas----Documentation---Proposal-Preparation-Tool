@@ -85,7 +85,7 @@ export default function TemplatesClient({ initialTemplates }: Props) {
         </div>
         <button
           onClick={() => { setShowUpload(true); setUploadError(''); }}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+          className="px-4 py-2 bg-secondary hover:bg-secondary-container text-white text-sm font-medium rounded-lg transition-colors"
         >+ Şablon Yükle</button>
       </div>
 

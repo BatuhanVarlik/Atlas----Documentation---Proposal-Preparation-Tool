@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ModuleStatusBadge } from '@/components/ui/StatusBadge';
 import { formatDate } from '@/lib/utils';
 import Modal from '@/components/ui/Modal';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import ContextMenu, { type ContextMenuEntry } from '@/components/ui/ContextMenu';
 
 interface Module {
   id: string;
@@ -47,6 +48,28 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [standardFilter, setStandardFilter] = useState('');
+
+  // Context menu + delete state
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; module: Module } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Module | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/modules/${deleteTarget.id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!json.success) {
+        alert(json.error ?? 'Silinemedi');
+        return;
+      }
+      setDeleteTarget(null);
+      router.refresh();
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   // Create modal state
   const [showCreate, setShowCreate] = useState(false);
@@ -114,7 +137,7 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
         </div>
         <button
           onClick={() => { setShowCreate(true); resetCreateForm(); }}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors"
+          className="px-4 py-2 bg-secondary hover:bg-secondary-container text-white text-sm font-semibold rounded-lg transition-colors"
         >
           + Yeni Modül
         </button>
@@ -190,14 +213,16 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
             </thead>
             <tbody>
               {filtered.map((mod) => (
-                <tr key={mod.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                <tr
+                  key={mod.id}
+                  onClick={() => router.push(`/modules/${mod.id}`)}
+                  onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, module: mod }); }}
+                  className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
                   <td className="px-4 py-3">
-                    <Link
-                      href={`/modules/${mod.id}`}
-                      className="font-medium text-slate-900 hover:text-blue-600 transition-colors"
-                    >
+                    <span className="font-medium text-slate-900 hover:text-blue-600 transition-colors">
                       {mod.name}
-                    </Link>
+                    </span>
                     {mod.projectCode && (
                       <p className="text-xs text-slate-400 font-mono">{mod.projectCode}</p>
                     )}
@@ -287,6 +312,39 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
           </div>
         </div>
       </Modal>
+
+      {/* Sağ-tık context menüsü */}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={[
+            {
+              label: 'Modülü Sil',
+              variant: 'danger',
+              onClick: () => setDeleteTarget(ctxMenu.module),
+            } as ContextMenuEntry,
+          ]}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
+
+      {/* Silme onayı */}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Modülü Sil"
+        message={
+          deleteTarget && (
+            <>
+              <strong>{deleteTarget.name}</strong> modülü ve ilişkili tüm verileri (valve cluster, hatlar, tanklar) kalıcı olarak silinecek. Bu işlem geri alınamaz. Devam edilsin mi?
+            </>
+          )
+        }
+        confirmLabel="Sil"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => { if (!deleting) setDeleteTarget(null); }}
+      />
     </div>
   );
 }
