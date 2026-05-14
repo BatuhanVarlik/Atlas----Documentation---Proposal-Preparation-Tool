@@ -508,7 +508,7 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
             <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-xs text-slate-600">
               <p className="font-semibold text-slate-700 mb-1">Dolum Hatlarında Sabit Vana Grubu (+3 / hat)</p>
               <p>• Drain Vanası — <strong>SW41</strong></p>
-              <p>• Leakage Vanası — <strong>SV Vana</strong></p>
+              <p>• Leakage Vanası — <strong>ESV</strong></p>
               <p>• CIP Dönüş Vanası — <strong>{cipReturnValveType === 'SD41' ? 'SD41' : 'SW CIP41'}</strong></p>
             </div>
             <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-xs text-slate-600">
@@ -516,7 +516,7 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
                 Boşaltım Hatlarında Sabit Vana Grubu ({waterInletValveType ? '+3' : '+2'} / hat)
               </p>
               <p>• CIP Giriş Vanası — <strong>{cipReturnValveType === 'SD41' ? 'SD41' : 'SW CIP41'}</strong></p>
-              <p>• Leakage Vana — <strong>SV Vana</strong></p>
+              <p>• Leakage Vana — <strong>ESV</strong></p>
               {waterInletValveType && (
                 <p>• Su Giriş Vanası — <strong>{waterInletValveType === 'SD42' ? 'SD42' : 'SW CIP 42'}</strong></p>
               )}

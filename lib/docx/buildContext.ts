@@ -134,7 +134,7 @@ export function buildTemplateContext(module: ModuleForDoc) {
       tankCipInletValve: module.tankCipInletValveType ?? 'Yok',
       tankCipInletDiameter: module.tankCipInletDiameter ?? '—',
       drainValveFixed: 'SW41',
-      leakageValveFixed: 'SV Vana',
+      leakageValveFixed: 'ESV',
       createdDate: new Date(module.createdAt).toLocaleDateString('tr-TR'),
     },
     creator: { name: module.creator.name },
@@ -156,7 +156,7 @@ export function buildTemplateContext(module: ModuleForDoc) {
       drainValveSize: calc?.drainValveSize ?? '—',
       // Dolum hattı sabit vana grubu (3 adet):
       drainValveFixed: 'SW41',
-      leakageValveFixed: 'SV Vana',
+      leakageValveFixed: 'ESV',
       cipReturnValve: cipReturnValveLabel,
       fixedValveCount: FIXED_FILLING_VALVES,
     })),
@@ -180,7 +180,7 @@ export function buildTemplateContext(module: ModuleForDoc) {
         drainValveSize: calc?.drainValveSize ?? '—',
         // Boşaltım hattı sabit vana grubu (3 adet):
         cipInletValve: cipReturnValveLabel,
-        leakageValveFixed: 'SV Vana',
+        leakageValveFixed: 'ESV',
         waterInletValve: waterInletValveLabel,
         fixedValveCount: FIXED_DISCHARGE_VALVES,
       };

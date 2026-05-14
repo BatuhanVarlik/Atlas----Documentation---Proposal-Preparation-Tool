@@ -4,7 +4,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { calculateModule } from '@/lib/calc/moduleCalculator';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatNumberTR } from '@/lib/utils';
+import { buildValveLineItemsForModule, type ModulePricingContext } from '@/lib/pricing/moduleValves';
+import type { CatalogValveType, ControlUnit } from '@/lib/pricing/valveMatcher';
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -78,6 +80,25 @@ export default async function ModulePreviewPage({ params }: Props) {
       })
     : null;
 
+  // === Vana Fiyatlandırma ===
+  const valveItems = (moduleData.valveType && hasLines)
+    ? buildValveLineItemsForModule({
+        standard: moduleData.standard as 'DIN' | 'SMS',
+        valveType: moduleData.valveType as CatalogValveType,
+        controlUnit: (moduleData.valveControlUnit ?? 'AS_I') as ControlUnit,
+        cipReturnValveType: (moduleData.cipReturnValveType ?? 'SW_CIP41') as 'SWCIP41' | 'SD41',
+        waterInletValveType: moduleData.waterInletValveType as 'SWCIP42' | 'SD42' | null,
+        tankCipInlet: moduleData.tankCipInletValveType && moduleData.tankCipInletDiameter ? {
+          type: moduleData.tankCipInletValveType as 'SW43' | 'SW44',
+          diameter: moduleData.tankCipInletDiameter,
+        } : null,
+        fillingLines: fl.map((l) => ({ id: l.id, name: l.name, capacity: l.capacity, connectedTankCount: l.connectedTankCount })),
+        dischargeLines: dl.map((l) => ({ id: l.id, name: l.name, capacity: l.capacity, connectedTankCount: l.connectedTankCount })),
+      } as ModulePricingContext)
+    : [];
+  const valveTotalNet = valveItems.reduce((s, i) => s + i.totalNet, 0);
+  const valveMatchedCount = valveItems.filter((i) => i.matched).length;
+
   return (
     <div className="max-w-4xl">
       {/* Breadcrumb */}
@@ -102,8 +123,7 @@ export default async function ModulePreviewPage({ params }: Props) {
       </div>
 
       {/* Modül Bilgileri */}
-      <section className="bg-white rounded-xl border border-slate-200 p-6 mb-4">
-        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">Modül Bilgileri</h2>
+      <Collapsible title="Modül Bilgileri" subtitle={moduleData.name}>
         <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
           <Row label="Modül Adı" value={moduleData.name} />
           <Row label="Müşteri" value={moduleData.customerName ?? '—'} />
@@ -118,20 +138,17 @@ export default async function ModulePreviewPage({ params }: Props) {
           <Row label="Oluşturan" value={moduleData.creator.name} />
           <Row label="Tarih" value={formatDate(moduleData.createdAt)} />
         </div>
-      </section>
+      </Collapsible>
 
       {/* Sabit Vana Grubu (her hatta uygulanır) */}
       {hasLines && (
-        <section className="bg-amber-50 rounded-xl border border-amber-200 p-5 mb-4">
-          <h2 className="text-sm font-semibold text-amber-800 uppercase tracking-wide mb-3">
-            Hatlara Sabit Eklenen Vana Grupları
-          </h2>
+        <Collapsible variant="amber" title="Hatlara Sabit Eklenen Vana Grupları">
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="bg-white/60 rounded-lg p-3 border border-amber-200/60">
               <p className="text-xs font-semibold text-amber-800 mb-2">Dolum Hatları (+{FIXED_FILLING_VALVES} / hat)</p>
               <div className="space-y-1.5">
                 <div className="flex justify-between"><span className="text-amber-700">Drain Vanası</span><span className="font-semibold text-amber-900">SW41</span></div>
-                <div className="flex justify-between"><span className="text-amber-700">Leakage Vanası</span><span className="font-semibold text-amber-900">SV Vana</span></div>
+                <div className="flex justify-between"><span className="text-amber-700">Leakage Vanası</span><span className="font-semibold text-amber-900">ESV</span></div>
                 <div className="flex justify-between"><span className="text-amber-700">CIP Dönüş Vanası</span><span className="font-semibold text-amber-900">{cipReturnValveLabel}</span></div>
               </div>
             </div>
@@ -139,7 +156,7 @@ export default async function ModulePreviewPage({ params }: Props) {
               <p className="text-xs font-semibold text-amber-800 mb-2">Boşaltım Hatları (+{FIXED_DISCHARGE_VALVES} / hat)</p>
               <div className="space-y-1.5">
                 <div className="flex justify-between"><span className="text-amber-700">CIP Giriş Vanası</span><span className="font-semibold text-amber-900">{cipReturnValveLabel}</span></div>
-                <div className="flex justify-between"><span className="text-amber-700">Leakage Vana</span><span className="font-semibold text-amber-900">SV Vana</span></div>
+                <div className="flex justify-between"><span className="text-amber-700">Leakage Vana</span><span className="font-semibold text-amber-900">ESV</span></div>
                 {hasWaterInlet ? (
                   <div className="flex justify-between"><span className="text-amber-700">Su Giriş Vanası</span><span className="font-semibold text-amber-900">{waterInletValveLabel}</span></div>
                 ) : (
@@ -157,13 +174,12 @@ export default async function ModulePreviewPage({ params }: Props) {
               </div>
             </div>
           )}
-        </section>
+        </Collapsible>
       )}
 
       {/* Hesaplanan Değerler */}
       {calc && (
-        <section className="bg-blue-50 rounded-xl border border-blue-200 p-6 mb-4">
-          <h2 className="text-sm font-semibold text-blue-700 uppercase tracking-wide mb-4">Hesaplanan Boru Çapları</h2>
+        <Collapsible variant="blue" title="Hesaplanan Boru Çapları" subtitle={calc.selectedDN.dn}>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <CalcCard label="Seçilen DN" value={calc.selectedDN.dn} />
             <CalcCard label="İç Çap" value={`${calc.selectedDN.inner} mm`} />
@@ -172,15 +188,83 @@ export default async function ModulePreviewPage({ params }: Props) {
             <CalcCard label="CIP Return" value={calc.cipReturnSize} />
             <CalcCard label="Tank Drain Valve" value={calc.tankDrainValveSize} />
           </div>
-        </section>
+        </Collapsible>
+      )}
+
+      {/* Vana Fiyatlandırma */}
+      {valveItems.length > 0 && (
+        <Collapsible
+          title="Vana Fiyatlandırma"
+          subtitle={`${valveMatchedCount} / ${valveItems.length} eşleşti`}
+          badge={
+            <span className="text-base font-bold text-emerald-700 font-mono">
+              {formatNumberTR(valveTotalNet, { decimals: 2 })} EUR
+            </span>
+          }
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-y border-slate-200">
+                <tr>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600">Bağlam</th>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600">Vana</th>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600">Çap</th>
+                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-16">Adet</th>
+                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-32">Birim Liste</th>
+                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-16">İsk.</th>
+                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-32">Birim Net</th>
+                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-32">Toplam</th>
+                </tr>
+              </thead>
+              <tbody>
+                {valveItems.map((it, i) => (
+                  <tr key={i} className={`border-b border-slate-100 ${!it.matched ? 'bg-amber-50/40' : ''}`}>
+                    <td className="py-2 px-3 text-xs text-slate-500">{it.context}</td>
+                    <td className="py-2 px-3 text-slate-800">
+                      <div>{it.description}</div>
+                      {it.matchedItem && (
+                        <div className="text-[10px] text-slate-400 mt-0.5 font-mono">{it.matchedItem.eqNo} · {it.matchedItem.techSpec.slice(0, 60)}</div>
+                      )}
+                      {!it.matched && it.reason && (
+                        <div className="text-[10px] text-amber-600 mt-0.5">{it.reason}</div>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-slate-600 font-mono">{it.size}</td>
+                    <td className="py-2 px-3 text-right font-mono text-slate-700">{it.quantity}</td>
+                    <td className="py-2 px-3 text-right font-mono text-slate-600">
+                      {it.matched ? formatNumberTR(it.unitPrice, { decimals: 2 }) : '—'}
+                    </td>
+                    <td className="py-2 px-3 text-right text-xs text-slate-500">
+                      {it.matched ? `${(it.unitDiscount * 100).toFixed(0)}%` : '—'}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono text-slate-700">
+                      {it.matched ? formatNumberTR(it.unitNetPrice, { decimals: 2 }) : '—'}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-emerald-700">
+                      {it.matched ? formatNumberTR(it.totalNet, { decimals: 2 }) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-50 border-t-2 border-slate-300">
+                  <td colSpan={7} className="py-3 px-3 text-right text-sm font-semibold text-slate-700">Toplam (EUR)</td>
+                  <td className="py-3 px-3 text-right font-mono font-bold text-emerald-700 text-lg">
+                    {formatNumberTR(valveTotalNet, { decimals: 2 })}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="mt-3 text-[11px] text-slate-400">
+            Net birim fiyat = Liste × (1 − İskonto). Eşleşmeyen satırlar (sarı zemin) toplama dahil edilmez — katalogda doğrudan karşılığı bulunamadı.
+          </p>
+        </Collapsible>
       )}
 
       {/* Dolum Hatları */}
       {fl.length > 0 && (
-        <section className="bg-white rounded-xl border border-slate-200 p-6 mb-4">
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
-            Dolum Hatları ({fl.length})
-          </h2>
+        <Collapsible title="Dolum Hatları" subtitle={`${fl.length} adet`}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200">
@@ -219,17 +303,14 @@ export default async function ModulePreviewPage({ params }: Props) {
             </tbody>
           </table>
           <p className="mt-3 text-xs text-slate-400">
-            CIP Return Boru = {calc?.cipReturnSize ?? '—'} (boru ile aynı) · Her dolum hattına sabit: Drain <strong>SW41</strong> + Leakage <strong>SV Vana</strong> + CIP Dönüş <strong>{cipReturnValveLabel}</strong>
+            CIP Return Boru = {calc?.cipReturnSize ?? '—'} (boru ile aynı) · Her dolum hattına sabit: Drain <strong>SW41</strong> + Leakage <strong>ESV</strong> + CIP Dönüş <strong>{cipReturnValveLabel}</strong>
           </p>
-        </section>
+        </Collapsible>
       )}
 
       {/* Boşaltım Hatları */}
       {dl.length > 0 && (
-        <section className="bg-white rounded-xl border border-slate-200 p-6 mb-4">
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
-            Boşaltım Hatları ({dl.length})
-          </h2>
+        <Collapsible title="Boşaltım Hatları" subtitle={`${dl.length} adet`}>
           <div className="space-y-4">
             {dl.map((line, i) => {
               const fmResult = calc?.flowMeterResults.find((r) => r.lineId === line.id);
@@ -249,7 +330,7 @@ export default async function ModulePreviewPage({ params }: Props) {
                     <Row label="Tank Sayısı" value={String(line.connectedTankCount)} />
                     <Row label="Vana Sayısı" value={`${line.connectedTankCount + FIXED_DISCHARGE_VALVES} (${line.connectedTankCount}+${FIXED_DISCHARGE_VALVES} sabit)`} />
                     <Row label="CIP Giriş Vanası (Sabit)" value={cipReturnValveLabel} />
-                    <Row label="Leakage Vana (Sabit)" value="SV Vana" />
+                    <Row label="Leakage Vana (Sabit)" value="ESV" />
                     {hasWaterInlet && <Row label="Su Giriş Vanası (Sabit)" value={waterInletValveLabel} />}
                     {line.pumpModel && <Row label="Pompa Modeli" value={line.pumpModel} />}
                     {line.pumpKw != null && <Row label="Pompa kW" value={`${line.pumpKw} kW`} />}
@@ -265,21 +346,18 @@ export default async function ModulePreviewPage({ params }: Props) {
             })}
           </div>
           <p className="mt-4 text-xs text-slate-400">
-            Her boşaltım hattına sabit (+{FIXED_DISCHARGE_VALVES}): CIP Giriş <strong>{cipReturnValveLabel}</strong> + Leakage <strong>SV Vana</strong>
+            Her boşaltım hattına sabit (+{FIXED_DISCHARGE_VALVES}): CIP Giriş <strong>{cipReturnValveLabel}</strong> + Leakage <strong>ESV</strong>
             {hasWaterInlet && <> + Su Giriş <strong>{waterInletValveLabel}</strong></>}
           </p>
           <p className="mt-2 text-sm font-semibold text-slate-700 text-right">
             Toplam Vana: <span className="text-slate-900">{dlTotalValves}</span>
           </p>
-        </section>
+        </Collapsible>
       )}
 
       {/* Tanklar */}
       {moduleData.tanks.length > 0 && (
-        <section className="bg-white rounded-xl border border-slate-200 p-6 mb-4">
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
-            Tanklar ({moduleData.tanks.length})
-          </h2>
+        <Collapsible title="Tanklar" subtitle={`${moduleData.tanks.length} adet`}>
           <div className="space-y-4">
             {moduleData.tanks.map((tank, i) => {
               const sensorFlags: Array<[boolean, string]> = [
@@ -339,7 +417,7 @@ export default async function ModulePreviewPage({ params }: Props) {
               );
             })}
           </div>
-        </section>
+        </Collapsible>
       )}
 
       {!hasLines && moduleData.tanks.length === 0 && (
@@ -366,5 +444,42 @@ function CalcCard({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-blue-500 mb-1">{label}</p>
       <p className="font-semibold text-blue-800 font-mono">{value}</p>
     </div>
+  );
+}
+
+interface CollapsibleProps {
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+  variant?: 'white' | 'amber' | 'blue';
+  defaultOpen?: boolean;
+}
+
+function Collapsible({ title, subtitle, badge, children, variant = 'white', defaultOpen = false }: CollapsibleProps) {
+  const palettes = {
+    white: { bg: 'bg-white', border: 'border-slate-200', label: 'text-slate-500', chevron: 'text-slate-400' },
+    amber: { bg: 'bg-amber-50', border: 'border-amber-200', label: 'text-amber-800', chevron: 'text-amber-500' },
+    blue:  { bg: 'bg-blue-50',  border: 'border-blue-200',  label: 'text-blue-700',  chevron: 'text-blue-500' },
+  };
+  const p = palettes[variant];
+  return (
+    <details {...(defaultOpen ? { open: true } : {})} className={`group ${p.bg} rounded-xl border ${p.border} mb-4 overflow-hidden`}>
+      <summary className="cursor-pointer select-none px-6 py-4 flex items-center justify-between hover:bg-black/2 list-none">
+        <div>
+          <span className={`text-sm font-semibold uppercase tracking-wide ${p.label}`}>{title}</span>
+          {subtitle && <span className="ml-3 text-xs text-slate-400">{subtitle}</span>}
+        </div>
+        <div className="flex items-center gap-3">
+          {badge}
+          <svg className={`w-4 h-4 ${p.chevron} transition-transform group-open:rotate-180`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
+      </summary>
+      <div className="px-6 pb-6 pt-1">
+        {children}
+      </div>
+    </details>
   );
 }

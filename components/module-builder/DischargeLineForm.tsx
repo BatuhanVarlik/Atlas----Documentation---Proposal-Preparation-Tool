@@ -192,7 +192,7 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
       <div className="text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
         <p className="font-medium text-slate-600 mb-0.5">Bu boşaltım hattına sabit eklenen vana grubu:</p>
         <p>• CIP Giriş Vanası — modül başlığındaki <strong>CIP Giriş/Dönüş</strong> seçimi</p>
-        <p>• Leakage Vana — <strong>SV Vana</strong></p>
+        <p>• Leakage Vana — <strong>ESV</strong></p>
         <p>• Su Giriş Vanası — modül başlığında seçildiyse (Yok ise hesaba dahil edilmez)</p>
         <p className="mt-1 text-slate-400">Vana tipi ve kontrol ünitesi modül başlığından tüm hatlara birlikte ayarlanır.</p>
       </div>

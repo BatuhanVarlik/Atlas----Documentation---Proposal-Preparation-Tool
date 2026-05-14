@@ -147,7 +147,7 @@ export default function FillingLineForm({ moduleId, line, onSaved, onDeleted, on
       <div className="text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
         <p className="font-medium text-slate-600 mb-0.5">Bu dolum hattına sabit eklenen vana grubu (3 adet):</p>
         <p>• Drain Vanası — <strong>SW41</strong></p>
-        <p>• Leakage Vanası — <strong>SV Vana</strong></p>
+        <p>• Leakage Vanası — <strong>ESV</strong></p>
         <p>• CIP Dönüş Vanası — modül başlığındaki <strong>CIP Giriş/Dönüş</strong> seçimi</p>
         <p className="mt-1 text-slate-400">Vana tipi ve kontrol ünitesi modül başlığından tüm hatlara birlikte ayarlanır.</p>
       </div>
