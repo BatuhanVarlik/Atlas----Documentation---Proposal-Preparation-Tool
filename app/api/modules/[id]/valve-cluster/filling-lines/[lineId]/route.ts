@@ -7,7 +7,7 @@ type Params = { params: Promise<{ id: string; lineId: string }> };
 const updateSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   capacity: z.number().positive().max(1_000_000).optional(),
-  valveType: z.enum(['SDE44', 'DE44', 'D44SL', 'DA44']).optional(),
+  valveType: z.enum(['SDE44', 'D44', 'D44SL', 'DA44']).optional(),
   valveControlUnit: z.enum(['NONE', 'AS_I', 'DC']).optional(),
   connectedTankCount: z.number().int().min(0).max(1000).optional(),
 });

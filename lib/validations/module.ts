@@ -14,6 +14,12 @@ export const updateModuleSchema = z.object({
   projectCode: z.string().max(100).nullable().optional(),
   standard: z.enum(['DIN', 'SMS']).optional(),
   productType: z.enum(['HYGIENIC', 'ULTRA_HYGIENIC']).optional(),
+  valveType: z.enum(['SDE44', 'D44', 'D44SL', 'DA44']).nullable().optional(),
+  valveControlUnit: z.enum(['NONE', 'AS_I', 'DC']).nullable().optional(),
+  cipReturnValveType: z.enum(['SW_CIP41', 'SD41']).nullable().optional(),
+  waterInletValveType: z.enum(['SW_CIP42', 'SD42']).nullable().optional(),
+  tankCipInletValveType: z.enum(['SW43', 'SW44']).nullable().optional(),
+  tankCipInletDiameter: z.string().max(50).nullable().optional(),
   status: z
     .enum(['DRAFT', 'IN_PROGRESS', 'REVIEW', 'APPROVED', 'DOCUMENT_GENERATED', 'ARCHIVED', 'CANCELLED'])
     .optional(),

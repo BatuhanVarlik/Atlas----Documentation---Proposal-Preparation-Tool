@@ -79,6 +79,13 @@ model Module {
   selectedInnerDiameter Float?
   selectedOuterDiameter Float?
 
+  valveType              ValveType?
+  valveControlUnit       ControlUnitType?
+  cipReturnValveType     CipReturnValveType?
+  waterInletValveType    WaterInletType?
+  tankCipInletValveType  TankCipInletValveType?
+  tankCipInletDiameter   String?
+
   creatorId  String
   reviewerId String?
   createdAt  DateTime  @default(now())
@@ -165,7 +172,7 @@ model DischargeLine {
 
 enum ValveType {
   SDE44
-  DE44
+  D44
   D44SL
   DA44
 }
@@ -179,6 +186,16 @@ enum ControlUnitType {
 enum WaterInletType {
   SW_CIP42
   SD42
+}
+
+enum CipReturnValveType {
+  SW_CIP41
+  SD41
+}
+
+enum TankCipInletValveType {
+  SW43
+  SW44
 }
 
 model Tank {
@@ -210,6 +227,7 @@ model Tank {
   tankOutletValveType    TankOutletValveType?
   tankOutletValveSubType TankOutletValveSubType?
 
+  manifoldHasCipReturnPump  Boolean @default(false)
   cipReturnPumpModel        String?
   cipReturnPumpKw           Float?
   cipReturnPumpImpellerSize Float?
@@ -243,6 +261,10 @@ enum TankOutletValveType {
 enum TankOutletValveSubType {
   BUTTERFLY
   SINGLE_SEAT
+  SINGLE_SEAT_TANK
+  SW_CIP_TANK
+  SD_TANK
+  D_TANK
 }
 
 model AIReview {

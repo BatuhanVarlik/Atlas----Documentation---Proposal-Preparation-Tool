@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useModuleBuilder } from '@/store/moduleBuilderStore';
+import { formatIntegerInputTR, parseNumberTR, formatNumberTR } from '@/lib/utils';
 
 interface FillingLine {
   id: string;
@@ -21,18 +22,9 @@ interface Props {
   onClose: () => void;
 }
 
-const VALVE_TYPES = ['SDE44', 'DE44', 'D44SL', 'DA44'] as const;
-const CONTROL_UNITS = [
-  { value: 'NONE', label: 'Yok' },
-  { value: 'AS_I', label: 'AS-i' },
-  { value: 'DC', label: 'DC' },
-] as const;
-
 export default function FillingLineForm({ moduleId, line, onSaved, onDeleted, onClose }: Props) {
   const [name, setName] = useState(line.name);
-  const [capacity, setCapacity] = useState(String(line.capacity));
-  const [valveType, setValveType] = useState(line.valveType);
-  const [valveControlUnit, setValveControlUnit] = useState(line.valveControlUnit);
+  const [capacity, setCapacity] = useState(formatIntegerInputTR(String(line.capacity)));
   const [connectedTankCount, setConnectedTankCount] = useState(String(line.connectedTankCount ?? 1));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -41,12 +33,13 @@ export default function FillingLineForm({ moduleId, line, onSaved, onDeleted, on
   const updateLine = useModuleBuilder((s) => s.updateFillingLine);
   const liveCalc = useModuleBuilder((s) => s.liveCalc);
 
-  const cap = parseFloat(capacity);
-  const isValid = name.trim() && !isNaN(cap) && cap > 0 && valveType;
+  const cap = parseNumberTR(capacity);
+  const isValid = name.trim() && !isNaN(cap) && cap > 0;
 
   function handleCapacityChange(v: string) {
-    setCapacity(v);
-    const n = parseFloat(v);
+    const formatted = formatIntegerInputTR(v);
+    setCapacity(formatted);
+    const n = parseNumberTR(formatted);
     if (!isNaN(n) && n > 0) {
       updateLine(line.id, { capacity: n });
     }
@@ -62,12 +55,12 @@ export default function FillingLineForm({ moduleId, line, onSaved, onDeleted, on
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name.trim(), capacity: cap, valveType, valveControlUnit, connectedTankCount: parseInt(connectedTankCount) || 0 }),
+          body: JSON.stringify({ name: name.trim(), capacity: cap, connectedTankCount: parseInt(connectedTankCount, 10) || 0 }),
         }
       );
       const json = await res.json();
       if (!json.success) { setError(json.error ?? 'Hata'); return; }
-      updateLine(line.id, { name: name.trim(), capacity: cap, valveType, valveControlUnit });
+      updateLine(line.id, { name: name.trim(), capacity: cap });
       onSaved();
     } finally {
       setSaving(false);
@@ -117,12 +110,12 @@ export default function FillingLineForm({ moduleId, line, onSaved, onDeleted, on
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Kapasite (L/h) *</label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             value={capacity}
             onChange={(e) => handleCapacityChange(e.target.value)}
             className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="örn: 30000"
-            min={1}
+            placeholder="örn: 30.000"
           />
         </div>
         <div>
@@ -139,7 +132,7 @@ export default function FillingLineForm({ moduleId, line, onSaved, onDeleted, on
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Hesaplanan Çap</label>
           <div className="px-2.5 py-1.5 text-sm bg-slate-100 border border-slate-200 rounded-lg text-slate-600 font-mono">
-            {liveDiam ? `${liveDiam.toFixed(1)} mm` : '—'}
+            {liveDiam ? `${formatNumberTR(liveDiam, { decimals: 1 })} mm` : '—'}
           </div>
         </div>
       </div>
@@ -151,42 +144,12 @@ export default function FillingLineForm({ moduleId, line, onSaved, onDeleted, on
         </div>
       )}
 
-      <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1.5">Vana Tipi *</label>
-        <div className="flex gap-2 flex-wrap">
-          {VALVE_TYPES.map((v) => (
-            <button
-              key={v}
-              onClick={() => setValveType(v)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                valveType === v
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-slate-300 text-slate-600 hover:border-slate-400'
-              }`}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1.5">Kontrol Ünitesi</label>
-        <div className="flex gap-2">
-          {CONTROL_UNITS.map((c) => (
-            <button
-              key={c.value}
-              onClick={() => setValveControlUnit(c.value)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                valveControlUnit === c.value
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-slate-300 text-slate-600 hover:border-slate-400'
-              }`}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+      <div className="text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
+        <p className="font-medium text-slate-600 mb-0.5">Bu dolum hattına sabit eklenen vana grubu (3 adet):</p>
+        <p>• Drain Vanası — <strong>SW41</strong></p>
+        <p>• Leakage Vanası — <strong>SV Vana</strong></p>
+        <p>• CIP Dönüş Vanası — modül başlığındaki <strong>CIP Giriş/Dönüş</strong> seçimi</p>
+        <p className="mt-1 text-slate-400">Vana tipi ve kontrol ünitesi modül başlığından tüm hatlara birlikte ayarlanır.</p>
       </div>
 
       {error && (

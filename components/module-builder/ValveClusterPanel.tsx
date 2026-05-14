@@ -6,8 +6,9 @@ import { useModuleBuilder, type FillingLineDraft, type DischargeLineDraft } from
 import FillingLineForm from './FillingLineForm';
 import DischargeLineForm from './DischargeLineForm';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import { PUMP_MODELS, PUMP_IMPELLER_SIZES } from '@/lib/constants/pumpOptions';
+import { PUMP_MODELS, getImpellersForPump, pumpHasImpeller } from '@/lib/constants/pumpOptions';
 import Combobox from '@/components/ui/Combobox';
+import { formatIntegerInputTR, parseNumberTR, formatNumberTR } from '@/lib/utils';
 
 interface FillingLine {
   id: string;
@@ -48,6 +49,7 @@ interface Props {
   moduleId: string;
   standard: 'DIN' | 'SMS';
   valveCluster: ValveCluster | null;
+  hasWaterInlet: boolean;
 }
 
 type AddStep = 'count' | 'name' | null;
@@ -70,7 +72,7 @@ function toDischargeDraft(l: DischargeLine): DischargeLineDraft {
   };
 }
 
-export default function ValveClusterPanel({ moduleId, standard, valveCluster }: Props) {
+export default function ValveClusterPanel({ moduleId, standard, valveCluster, hasWaterInlet }: Props) {
   const router = useRouter();
   const init = useModuleBuilder((s) => s.init);
   const setFillingLines = useModuleBuilder((s) => s.setFillingLines);
@@ -89,9 +91,7 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
   // Filling add flow
   const [fAddStep, setFAddStep] = useState<AddStep>(null);
   const [fCount, setFCount] = useState('1');
-  const [fValveType, setFValveType] = useState('SDE44');
-  const [fControlUnit, setFControlUnit] = useState('AS_I');
-  const [fCapacity, setFCapacity] = useState('10000');
+  const [fCapacity, setFCapacity] = useState('10.000');
   const [fConnTanks, setFConnTanks] = useState('1');
   const [fNames, setFNames] = useState<string[]>([]);
   const [fAdding, setFAdding] = useState(false);
@@ -101,17 +101,14 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
   // Discharge add flow
   const [dAddStep, setDAddStep] = useState<AddStep>(null);
   const [dCount, setDCount] = useState('1');
-  const [dCapacity, setDCapacity] = useState('10000');
+  const [dCapacity, setDCapacity] = useState('10.000');
   const [dPressure, setDPressure] = useState('2');
-  const [dValveType, setDValveType] = useState('SDE44');
-  const [dControlUnit, setDControlUnit] = useState('AS_I');
   const [dConnTanks, setDConnTanks] = useState('1');
   const [dPumpModel, setDPumpModel] = useState('');
   const [dPumpKw, setDPumpKw] = useState('');
   const [dPumpImpeller, setDPumpImpeller] = useState('');
   const [dHasPT, setDHasPT] = useState(false);
   const [dHasFM, setDHasFM] = useState(false);
-  const [dWaterInlet, setDWaterInlet] = useState<string>('');
   const [dNames, setDNames] = useState<string[]>([]);
   const [dAdding, setDAdding] = useState(false);
   const [dError, setDError] = useState('');
@@ -125,22 +122,25 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
 
   const fillingLines = valveCluster?.fillingLines ?? [];
   const dischargeLines = valveCluster?.dischargeLines ?? [];
-  const fTotalValves = fillingLines.reduce((sum, l) => sum + (l.connectedTankCount ?? 0), 0);
-  const dTotalValves = dischargeLines.reduce((sum, l) => sum + (l.connectedTankCount ?? 0), 0);
+  // Sabit vana grubu:
+  // Dolum hatları: Drain SW41 + Leakage SV + CIP Dönüş → her zaman 3
+  // Boşaltım hatları: CIP Giriş + Leakage SV (+ Su Giriş varsa) → 2 ya da 3
+  const FIXED_FILLING_VALVES = 3;
+  const FIXED_DISCHARGE_VALVES = hasWaterInlet ? 3 : 2;
+  const fTotalValves = fillingLines.reduce((sum, l) => sum + (l.connectedTankCount ?? 0) + FIXED_FILLING_VALVES, 0);
+  const dTotalValves = dischargeLines.reduce((sum, l) => sum + (l.connectedTankCount ?? 0) + FIXED_DISCHARGE_VALVES, 0);
 
   function startFCount() {
     setFAddStep('count');
     setFCount('1');
-    setFValveType('SDE44');
-    setFControlUnit('AS_I');
-    setFCapacity('10000');
+    setFCapacity('10.000');
     setFConnTanks('1');
     setFError('');
   }
   function confirmFCount() {
     const n = parseInt(fCount);
     if (isNaN(n) || n < 1 || n > 20) { setFError('Adet 1–20 arası olmalı'); return; }
-    const cap = parseFloat(fCapacity);
+    const cap = parseNumberTR(fCapacity);
     if (isNaN(cap) || cap <= 0) { setFError('Kapasite pozitif bir sayı olmalı'); return; }
     const tanks = parseInt(fConnTanks);
     if (isNaN(tanks) || tanks < 0) { setFError('Tank sayısı 0 veya daha büyük olmalı'); return; }
@@ -150,7 +150,7 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
 
   async function confirmFNames() {
     if (fNames.some((n) => !n.trim())) { setFError('Tüm hat adları dolu olmalı'); return; }
-    const cap = parseFloat(fCapacity);
+    const cap = parseNumberTR(fCapacity);
     const tanks = parseInt(fConnTanks);
     setFAdding(true); setFError('');
     try {
@@ -158,7 +158,7 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
         const res = await fetch(`/api/modules/${moduleId}/valve-cluster/filling-lines`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: n.trim(), capacity: cap, valveType: fValveType, valveControlUnit: fControlUnit, connectedTankCount: tanks }),
+          body: JSON.stringify({ name: n.trim(), capacity: cap, connectedTankCount: tanks }),
         });
         const json = await res.json();
         if (!json.success) { setFError(json.error ?? 'Hata'); return; }
@@ -173,23 +173,20 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
   function startDCount() {
     setDAddStep('count');
     setDCount('1');
-    setDCapacity('10000');
+    setDCapacity('10.000');
     setDPressure('2');
-    setDValveType('SDE44');
-    setDControlUnit('AS_I');
     setDConnTanks('1');
     setDPumpModel('');
     setDPumpKw('');
     setDPumpImpeller('');
     setDHasPT(false);
     setDHasFM(false);
-    setDWaterInlet('');
     setDError('');
   }
   function confirmDCount() {
     const n = parseInt(dCount);
     if (isNaN(n) || n < 1 || n > 20) { setDError('Adet 1–20 arası olmalı'); return; }
-    const cap = parseFloat(dCapacity);
+    const cap = parseNumberTR(dCapacity);
     if (isNaN(cap) || cap <= 0) { setDError('Kapasite pozitif bir sayı olmalı'); return; }
     const pres = parseFloat(dPressure);
     if (isNaN(pres) || pres < 0) { setDError('Basınç geçersiz'); return; }
@@ -201,7 +198,7 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
 
   async function confirmDNames() {
     if (dNames.some((n) => !n.trim())) { setDError('Tüm hat adları dolu olmalı'); return; }
-    const cap = parseFloat(dCapacity);
+    const cap = parseNumberTR(dCapacity);
     const pres = parseFloat(dPressure);
     const tanks = parseInt(dConnTanks);
     const pumpKwNum = dPumpKw.trim() ? parseFloat(dPumpKw) : null;
@@ -213,8 +210,6 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
           name: n.trim(),
           capacity: cap,
           pressure: pres,
-          valveType: dValveType,
-          valveControlUnit: dControlUnit,
           connectedTankCount: tanks,
           hasPressureTransmitter: dHasPT,
           hasFlowMeter: dHasFM,
@@ -222,7 +217,6 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
         if (dPumpModel.trim()) payload.pumpModel = dPumpModel.trim();
         if (pumpKwNum != null && !isNaN(pumpKwNum)) payload.pumpKw = pumpKwNum;
         if (pumpImpNum != null && !isNaN(pumpImpNum)) payload.pumpImpellerSize = pumpImpNum;
-        if (dWaterInlet) payload.waterInletType = dWaterInlet;
         const res = await fetch(`/api/modules/${moduleId}/valve-cluster/discharge-lines`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -356,9 +350,10 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Kapasite (L/h)</label>
-                <input type="number" value={fCapacity} onChange={(e) => setFCapacity(e.target.value)}
+                <input type="text" inputMode="numeric" value={fCapacity}
+                  onChange={(e) => setFCapacity(formatIntegerInputTR(e.target.value))}
                   className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  min={1}
+                  placeholder="örn: 30.000"
                 />
               </div>
               <div>
@@ -367,28 +362,7 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
                   className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   min={0}
                 />
-                <p className="text-[10px] text-slate-400 mt-0.5">Vana sayısı = tank × hat</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Vana Tipi</label>
-                <select value={fValveType} onChange={(e) => setFValveType(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="SDE44">SDE44</option>
-                  <option value="DE44">DE44</option>
-                  <option value="D44SL">D44SL</option>
-                  <option value="DA44">DA44</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Kontrol Ünitesi</label>
-                <select value={fControlUnit} onChange={(e) => setFControlUnit(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="NONE">Yok</option>
-                  <option value="AS_I">AS-i</option>
-                  <option value="DC">DC</option>
-                </select>
+                <p className="text-[10px] text-slate-400 mt-0.5">Her dolum hattına + 3 sabit vana (Drain SW41, Leakage SV, CIP Dönüş)</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -437,7 +411,7 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
                   }`}
                 >
                   <span className="font-medium text-slate-700">{line.name}</span>
-                  <span className="text-slate-400 text-xs">{line.capacity.toLocaleString('tr-TR')} L/h · {line.valveType} · {line.connectedTankCount} tank → {line.connectedTankCount} vana</span>
+                  <span className="text-slate-400 text-xs">{line.capacity.toLocaleString('tr-TR')} L/h · {line.valveType} · {line.connectedTankCount} tank + {FIXED_FILLING_VALVES} sabit → {line.connectedTankCount + FIXED_FILLING_VALVES} vana</span>
                 </button>
                 {activeFilling === line.id && (
                   <FillingLineForm
@@ -489,9 +463,10 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Kapasite (L/h)</label>
-                <input type="number" value={dCapacity} onChange={(e) => setDCapacity(e.target.value)}
+                <input type="text" inputMode="numeric" value={dCapacity}
+                  onChange={(e) => setDCapacity(formatIntegerInputTR(e.target.value))}
                   className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  min={1}
+                  placeholder="örn: 30.000"
                 />
               </div>
               <div>
@@ -507,72 +482,59 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
                   className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   min={0}
                 />
-                <p className="text-[10px] text-slate-400 mt-0.5">Vana sayısı = tank × hat</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Vana Tipi</label>
-                <select value={dValveType} onChange={(e) => setDValveType(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="SDE44">SDE44</option>
-                  <option value="DE44">DE44</option>
-                  <option value="D44SL">D44SL</option>
-                  <option value="DA44">DA44</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Kontrol Ünitesi</label>
-                <select value={dControlUnit} onChange={(e) => setDControlUnit(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="NONE">Yok</option>
-                  <option value="AS_I">AS-i</option>
-                  <option value="DC">DC</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Water Inlet Tipi</label>
-                <select value={dWaterInlet} onChange={(e) => setDWaterInlet(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">— Seçilmedi —</option>
-                  <option value="SW_CIP42">SW CIP42</option>
-                  <option value="SD42">SD42</option>
-                </select>
+                <p className="text-[10px] text-slate-400 mt-0.5">Her boşaltım hattına + {FIXED_DISCHARGE_VALVES} sabit vana ({hasWaterInlet ? 'CIP Giriş, Leakage SV, Su Giriş' : 'CIP Giriş, Leakage SV — Su Girişi seçilmedi'})</p>
               </div>
             </div>
 
             <div className="pt-2 border-t border-slate-200">
               <p className="text-xs font-medium text-slate-600 mb-2">Pompa Bilgileri</p>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Model</label>
-                  <Combobox
-                    value={dPumpModel}
-                    onChange={setDPumpModel}
-                    options={PUMP_MODELS}
-                    placeholder="Yazın veya listeden seçin"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">kW</label>
-                  <input type="number" step="0.1" value={dPumpKw} onChange={(e) => setDPumpKw(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    min={0}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Impeller (mm)</label>
-                  <Combobox
-                    value={dPumpImpeller}
-                    onChange={setDPumpImpeller}
-                    options={PUMP_IMPELLER_SIZES}
-                    type="number"
-                    min={0}
-                    placeholder="Yazın veya seçin"
-                  />
-                </div>
-              </div>
+              {(() => {
+                const dImpellerOptions = getImpellersForPump(dPumpModel);
+                const dHasImp = pumpHasImpeller(dPumpModel);
+                return (
+                  <div className={`grid gap-3 ${dHasImp ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Model</label>
+                      <Combobox
+                        value={dPumpModel}
+                        onChange={(v) => {
+                          setDPumpModel(v);
+                          if (!pumpHasImpeller(v)) {
+                            if (dPumpImpeller) setDPumpImpeller('');
+                          } else if (dPumpImpeller) {
+                            const opts = getImpellersForPump(v);
+                            if (opts.length > 0 && !opts.includes(Number(dPumpImpeller))) {
+                              setDPumpImpeller('');
+                            }
+                          }
+                        }}
+                        options={PUMP_MODELS}
+                        placeholder="Yazın veya listeden seçin"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">kW</label>
+                      <input type="number" step="0.1" value={dPumpKw} onChange={(e) => setDPumpKw(e.target.value)}
+                        className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        min={0}
+                      />
+                    </div>
+                    {dHasImp && (
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Impeller (mm)</label>
+                        <Combobox
+                          value={dPumpImpeller}
+                          onChange={setDPumpImpeller}
+                          options={dImpellerOptions}
+                          type="number"
+                          min={0}
+                          placeholder={dImpellerOptions.length > 0 ? 'Yazın veya seçin' : 'Pompa seçin'}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex gap-4 pt-2 border-t border-slate-200">
@@ -637,7 +599,7 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster }: 
                 >
                   <span className="font-medium text-slate-700">{line.name}</span>
                   <span className="text-slate-400 text-xs">
-                    {line.capacity.toLocaleString('tr-TR')} L/h · {line.pressure} Bar · {line.valveType} · {line.connectedTankCount} tank → {line.connectedTankCount} vana
+                    {line.capacity.toLocaleString('tr-TR')} L/h · {line.pressure} Bar · {line.valveType} · {line.connectedTankCount} tank + {FIXED_DISCHARGE_VALVES} sabit → {line.connectedTankCount + FIXED_DISCHARGE_VALVES} vana
                   </span>
                 </button>
                 {activeDischarge === line.id && (

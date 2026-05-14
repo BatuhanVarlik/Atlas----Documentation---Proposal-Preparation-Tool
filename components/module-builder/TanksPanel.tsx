@@ -44,7 +44,9 @@ export default function TanksPanel({ moduleId, tanks }: Props) {
   // Tank outlet valve
   const [hasTankOutletValve, setHasTankOutletValve] = useState(false);
   const [tankOutletValveType, setTankOutletValveType] = useState<'MANUAL' | 'WITH_ACTUATOR'>('MANUAL');
-  const [tankOutletValveSubType, setTankOutletValveSubType] = useState<'BUTTERFLY' | 'SINGLE_SEAT'>('BUTTERFLY');
+  const [tankOutletValveSubType, setTankOutletValveSubType] = useState<
+    'BUTTERFLY' | 'SINGLE_SEAT' | 'SINGLE_SEAT_TANK' | 'SW_CIP_TANK' | 'SD_TANK' | 'D_TANK'
+  >('BUTTERFLY');
 
   // CIP return pump
   const [hasCipReturnPump, setHasCipReturnPump] = useState(false);
@@ -126,6 +128,7 @@ export default function TanksPanel({ moduleId, tanks }: Props) {
           hasCipInletForAgitator,
           hasCipInletForManhole,
           hasTankOutletValve,
+          manifoldHasCipReturnPump: hasCipReturnPump,
         };
         if (hasAgitator) {
           if (kwNum != null && !isNaN(kwNum)) payload.agitatorMotorKw = kwNum;
@@ -134,9 +137,9 @@ export default function TanksPanel({ moduleId, tanks }: Props) {
         }
         if (hasTankOutletValve) {
           payload.tankOutletValveType = tankOutletValveType;
-          if (tankOutletValveType === 'WITH_ACTUATOR') {
-            payload.tankOutletValveSubType = tankOutletValveSubType;
-          }
+          // Manuel → her zaman Kelebek; Aktüatörlü → kullanıcı seçimi
+          payload.tankOutletValveSubType =
+            tankOutletValveType === 'MANUAL' ? 'BUTTERFLY' : tankOutletValveSubType;
         }
         // Manifoldda pompa yoksa kullanıcı yeni pompa seçer ve gönderir.
         // Pompa zaten varsa alanlar gönderilmez.
@@ -331,15 +334,22 @@ export default function TanksPanel({ moduleId, tanks }: Props) {
                   {tankOutletValveType === 'WITH_ACTUATOR' && (
                     <div>
                       <label className="block text-xs text-slate-500 mb-1">Alt Tip</label>
-                      <select value={tankOutletValveSubType} onChange={(e) => setTankOutletValveSubType(e.target.value as 'BUTTERFLY' | 'SINGLE_SEAT')}
+                      <select value={tankOutletValveSubType} onChange={(e) => setTankOutletValveSubType(e.target.value as typeof tankOutletValveSubType)}
                         className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="BUTTERFLY">Kelebek</option>
-                        <option value="SINGLE_SEAT">Tek Oturmalı</option>
+                        <option value="SINGLE_SEAT">Single Seat</option>
+                        <option value="SINGLE_SEAT_TANK">Single Seat Tank</option>
+                        <option value="SW_CIP_TANK">SW CIP Tank</option>
+                        <option value="SD_TANK">SD Tank</option>
+                        <option value="D_TANK">D Tank</option>
                       </select>
                     </div>
                   )}
                 </div>
+              )}
+              {hasTankOutletValve && tankOutletValveType === 'MANUAL' && (
+                <p className="text-[11px] text-slate-400 mt-1">Manuel vana otomatik olarak Kelebek tipindedir.</p>
               )}
             </div>
 

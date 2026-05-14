@@ -25,6 +25,7 @@ export interface TankData {
   hasTankOutletValve: boolean;
   tankOutletValveType: string | null;
   tankOutletValveSubType: string | null;
+  manifoldHasCipReturnPump: boolean;
   cipReturnPumpModel: string | null;
   cipReturnPumpKw: number | null;
   cipReturnPumpImpellerSize: number | null;
@@ -89,7 +90,9 @@ export default function TankForm({ moduleId, tank, onSaved, onDeleted, onClose }
     hasCipInletForManhole: tank.hasCipInletForManhole,
     hasTankOutletValve: tank.hasTankOutletValve,
     tankOutletValveType: (tank.tankOutletValveType ?? 'MANUAL') as 'MANUAL' | 'WITH_ACTUATOR',
-    tankOutletValveSubType: (tank.tankOutletValveSubType ?? 'BUTTERFLY') as 'BUTTERFLY' | 'SINGLE_SEAT',
+    tankOutletValveSubType: (tank.tankOutletValveSubType ?? 'BUTTERFLY') as
+      | 'BUTTERFLY' | 'SINGLE_SEAT' | 'SINGLE_SEAT_TANK' | 'SW_CIP_TANK' | 'SD_TANK' | 'D_TANK',
+    manifoldHasCipReturnPump: tank.manifoldHasCipReturnPump ?? false,
     cipReturnPumpModel: tank.cipReturnPumpModel ?? '',
     cipReturnPumpKw: tank.cipReturnPumpKw != null ? String(tank.cipReturnPumpKw) : '',
     cipReturnPumpImpellerSize: tank.cipReturnPumpImpellerSize != null ? String(tank.cipReturnPumpImpellerSize) : '',
@@ -124,13 +127,23 @@ export default function TankForm({ moduleId, tank, onSaved, onDeleted, onClose }
     }
     if (s.hasTankOutletValve) {
       payload.tankOutletValveType = s.tankOutletValveType;
-      payload.tankOutletValveSubType = s.tankOutletValveType === 'WITH_ACTUATOR' ? s.tankOutletValveSubType : null;
+      // Manuel → her zaman Kelebek; Aktüatörlü → kullanıcı seçimi
+      payload.tankOutletValveSubType =
+        s.tankOutletValveType === 'MANUAL' ? 'BUTTERFLY' : s.tankOutletValveSubType;
     } else {
       payload.tankOutletValveType = null; payload.tankOutletValveSubType = null;
     }
-    if (s.cipReturnPumpModel.trim()) payload.cipReturnPumpModel = s.cipReturnPumpModel.trim();
-    if (s.cipReturnPumpKw) payload.cipReturnPumpKw = parseFloat(s.cipReturnPumpKw);
-    if (s.cipReturnPumpImpellerSize) payload.cipReturnPumpImpellerSize = parseFloat(s.cipReturnPumpImpellerSize);
+    payload.manifoldHasCipReturnPump = s.manifoldHasCipReturnPump;
+    if (s.manifoldHasCipReturnPump) {
+      // Manifoldda pompa var → tank için ayrı pompa kaydı yok
+      payload.cipReturnPumpModel = null;
+      payload.cipReturnPumpKw = null;
+      payload.cipReturnPumpImpellerSize = null;
+    } else {
+      payload.cipReturnPumpModel = s.cipReturnPumpModel.trim() || null;
+      payload.cipReturnPumpKw = s.cipReturnPumpKw ? parseFloat(s.cipReturnPumpKw) : null;
+      payload.cipReturnPumpImpellerSize = s.cipReturnPumpImpellerSize ? parseFloat(s.cipReturnPumpImpellerSize) : null;
+    }
 
     try {
       const res = await fetch(`/api/modules/${moduleId}/tanks/${tank.id}`, {
@@ -277,11 +290,21 @@ export default function TankForm({ moduleId, tank, onSaved, onDeleted, onClose }
             </div>
           )}
         </div>
+        {s.hasTankOutletValve && s.tankOutletValveType === 'MANUAL' && (
+          <p className="text-[11px] text-slate-400">Manuel vana otomatik olarak Kelebek tipindedir.</p>
+        )}
         {s.hasTankOutletValve && s.tankOutletValveType === 'WITH_ACTUATOR' && (
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Alt Tip</label>
             <OptionGroup
-              options={[{ value: 'BUTTERFLY', label: 'Kelebek' }, { value: 'SINGLE_SEAT', label: 'Tek Koltuklu' }]}
+              options={[
+                { value: 'BUTTERFLY', label: 'Kelebek' },
+                { value: 'SINGLE_SEAT', label: 'Single Seat' },
+                { value: 'SINGLE_SEAT_TANK', label: 'Single Seat Tank' },
+                { value: 'SW_CIP_TANK', label: 'SW CIP Tank' },
+                { value: 'SD_TANK', label: 'SD Tank' },
+                { value: 'D_TANK', label: 'D Tank' },
+              ]}
               value={s.tankOutletValveSubType} onChange={(v) => setS((p) => ({ ...p, tankOutletValveSubType: v }))}
             />
           </div>
@@ -289,19 +312,34 @@ export default function TankForm({ moduleId, tank, onSaved, onDeleted, onClose }
       </div>
 
       {/* CIP Return Pump */}
-      <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1.5">CIP Dönüş Pompası</label>
-        <div className="grid grid-cols-3 gap-2">
-          <input value={s.cipReturnPumpModel} onChange={(e) => setS((p) => ({ ...p, cipReturnPumpModel: e.target.value }))}
-            className="col-span-1 px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Model" />
-          <input type="number" value={s.cipReturnPumpKw} onChange={(e) => setS((p) => ({ ...p, cipReturnPumpKw: e.target.value }))}
-            className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="kW" step="0.1" min={0} />
-          <input type="number" value={s.cipReturnPumpImpellerSize} onChange={(e) => setS((p) => ({ ...p, cipReturnPumpImpellerSize: e.target.value }))}
-            className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Çark (mm)" min={0} />
+      <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-3 items-center">
+          <label className="text-xs font-medium text-slate-600">Manifoldda CIP Dönüş Pompası</label>
+          <Toggle
+            value={s.manifoldHasCipReturnPump}
+            onChange={(v) => setS((p) => ({ ...p, manifoldHasCipReturnPump: v }))}
+          />
         </div>
+        {s.manifoldHasCipReturnPump ? (
+          <p className="text-[11px] text-slate-400 italic">
+            Manifoldda CIP Dönüş Pompası mevcut — bu tank için ayrı pompa bilgisi girilmez.
+          </p>
+        ) : (
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1.5">CIP Dönüş Pompası (Tanka Özel)</label>
+            <div className="grid grid-cols-3 gap-2">
+              <input value={s.cipReturnPumpModel} onChange={(e) => setS((p) => ({ ...p, cipReturnPumpModel: e.target.value }))}
+                className="col-span-1 px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Model" />
+              <input type="number" value={s.cipReturnPumpKw} onChange={(e) => setS((p) => ({ ...p, cipReturnPumpKw: e.target.value }))}
+                className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="kW" step="0.1" min={0} />
+              <input type="number" value={s.cipReturnPumpImpellerSize} onChange={(e) => setS((p) => ({ ...p, cipReturnPumpImpellerSize: e.target.value }))}
+                className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Çark (mm)" min={0} />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sabit değerler */}

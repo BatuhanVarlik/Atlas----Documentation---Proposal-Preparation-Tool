@@ -60,6 +60,7 @@ interface Tank {
   hasTankOutletValve: boolean;
   tankOutletValveType: string | null;
   tankOutletValveSubType: string | null;
+  manifoldHasCipReturnPump: boolean;
   cipReturnPumpModel: string | null;
   cipReturnPumpKw: number | null;
   cipReturnPumpImpellerSize: number | null;
@@ -72,6 +73,12 @@ interface Module {
   projectCode: string | null;
   standard: string;
   productType: string;
+  valveType: string | null;
+  valveControlUnit: string | null;
+  cipReturnValveType: string | null;
+  waterInletValveType: string | null;
+  tankCipInletValveType: string | null;
+  tankCipInletDiameter: string | null;
   status: 'DRAFT' | 'IN_PROGRESS' | 'REVIEW' | 'APPROVED' | 'DOCUMENT_GENERATED' | 'ARCHIVED' | 'CANCELLED';
   selectedDN: string | null;
   createdAt: Date | string;
@@ -114,6 +121,43 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
   const [projectCode, setProjectCode] = useState(module.projectCode ?? '');
   const [standard, setStandard] = useState(module.standard);
   const [productType, setProductType] = useState(module.productType);
+  const initialValveType =
+    module.valveType ?? (module.productType === 'ULTRA_HYGIENIC' ? 'DA44' : 'SDE44');
+  const initialControlUnit = module.valveControlUnit ?? 'AS_I';
+  const initialCipReturnValveType = module.cipReturnValveType ?? 'SW_CIP41';
+  const initialWaterInletValveType = module.waterInletValveType ?? '';
+  const initialTankCipInletValveType = module.tankCipInletValveType ?? '';
+  const initialTankCipInletDiameter = module.tankCipInletDiameter ?? '';
+  const [valveType, setValveType] = useState<string>(initialValveType);
+  const [valveControlUnit, setValveControlUnit] = useState<string>(initialControlUnit);
+  const [cipReturnValveType, setCipReturnValveType] = useState<string>(initialCipReturnValveType);
+  const [waterInletValveType, setWaterInletValveType] = useState<string>(initialWaterInletValveType);
+  const [tankCipInletValveType, setTankCipInletValveType] = useState<string>(initialTankCipInletValveType);
+  const [tankCipInletDiameter, setTankCipInletDiameter] = useState<string>(initialTankCipInletDiameter);
+  const hasTankCipInlet = tankCipInletValveType !== '';
+
+  const SMS_DIAMETERS = ['1"', '1,5"', '2"', '2,5"', '3"', '4"'] as const;
+  const DIN_DIAMETERS = ['DN25', 'DN40', 'DN50', 'DN65', 'DN80', 'DN100'] as const;
+  const tankCipDiameterOptions = standard === 'SMS' ? SMS_DIAMETERS : DIN_DIAMETERS;
+
+  // Standart değişince mevcut çap uyumsuzsa temizle
+  useEffect(() => {
+    if (tankCipInletDiameter && !(tankCipDiameterOptions as readonly string[]).includes(tankCipInletDiameter)) {
+      setTankCipInletDiameter('');
+    }
+  }, [standard, tankCipInletDiameter, tankCipDiameterOptions]);
+
+  const availableValves: readonly string[] =
+    productType === 'ULTRA_HYGIENIC' ? ['DA44'] : ['SDE44', 'D44', 'D44SL'];
+
+  // Ürün tipi değişirse seçili vana uyumsuzsa otomatik sıfırla
+  useEffect(() => {
+    if (productType === 'ULTRA_HYGIENIC' && valveType !== 'DA44') {
+      setValveType('DA44');
+    } else if (productType === 'HYGIENIC' && valveType === 'DA44') {
+      setValveType('SDE44');
+    }
+  }, [productType, valveType]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -165,7 +209,13 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
     customerName !== (module.customerName ?? '') ||
     projectCode !== (module.projectCode ?? '') ||
     standard !== module.standard ||
-    productType !== module.productType;
+    productType !== module.productType ||
+    valveType !== initialValveType ||
+    valveControlUnit !== initialControlUnit ||
+    cipReturnValveType !== initialCipReturnValveType ||
+    waterInletValveType !== initialWaterInletValveType ||
+    tankCipInletValveType !== initialTankCipInletValveType ||
+    tankCipInletDiameter !== initialTankCipInletDiameter;
 
   async function handleSave() {
     setSaving(true);
@@ -180,6 +230,12 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
           projectCode: projectCode || null,
           standard,
           productType,
+          valveType,
+          valveControlUnit,
+          cipReturnValveType,
+          waterInletValveType: waterInletValveType || null,
+          tankCipInletValveType: tankCipInletValveType || null,
+          tankCipInletDiameter: hasTankCipInlet ? (tankCipInletDiameter || null) : null,
         }),
       });
       const json = await res.json();
@@ -290,6 +346,189 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Vana Tipi
+                <span className="ml-2 text-xs font-normal text-slate-400">Tüm hatlara uygulanır</span>
+              </label>
+              <div className="flex gap-2 flex-wrap">
+                {availableValves.map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setValveType(v)}
+                    className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      valveType === v
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-slate-300 text-slate-600 hover:border-slate-400'
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Kontrol Ünitesi
+                <span className="ml-2 text-xs font-normal text-slate-400">Tüm hatlara uygulanır</span>
+              </label>
+              <div className="flex gap-2">
+                {([
+                  { value: 'NONE', label: 'Yok' },
+                  { value: 'AS_I', label: 'AS-i' },
+                  { value: 'DC', label: 'DC' },
+                ] as const).map((c) => (
+                  <button
+                    key={c.value}
+                    onClick={() => setValveControlUnit(c.value)}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      valveControlUnit === c.value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-slate-300 text-slate-600 hover:border-slate-400'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                CIP Giriş/Dönüş Vana Tipi
+                <span className="ml-2 text-xs font-normal text-slate-400">Her hatta sabit olarak eklenir</span>
+              </label>
+              <div className="flex gap-2">
+                {([
+                  { value: 'SW_CIP41', label: 'SW CIP41' },
+                  { value: 'SD41', label: 'SD41' },
+                ] as const).map((c) => (
+                  <button
+                    key={c.value}
+                    onClick={() => setCipReturnValveType(c.value)}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      cipReturnValveType === c.value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-slate-300 text-slate-600 hover:border-slate-400'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Su Giriş Vanası Tipi
+                <span className="ml-2 text-xs font-normal text-slate-400">Boşaltım hatlarına sabit eklenir</span>
+              </label>
+              <div className="flex gap-2">
+                {([
+                  { value: '', label: 'Yok' },
+                  { value: 'SW_CIP42', label: 'SW CIP 42' },
+                  { value: 'SD42', label: 'SD42' },
+                ] as const).map((c) => (
+                  <button
+                    key={c.value || 'none'}
+                    onClick={() => setWaterInletValveType(c.value)}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      waterInletValveType === c.value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-slate-300 text-slate-600 hover:border-slate-400'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Tank CIP Inlet Vanası */}
+          <div className="border border-slate-200 rounded-lg p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Tank CIP Inlet Vanası</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setTankCipInletValveType(''); setTankCipInletDiameter(''); }}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      !hasTankCipInlet ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-600 hover:border-slate-400'
+                    }`}
+                  >Yok</button>
+                  <button
+                    onClick={() => { if (!hasTankCipInlet) setTankCipInletValveType('SW43'); }}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      hasTankCipInlet ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-600 hover:border-slate-400'
+                    }`}
+                  >Var</button>
+                </div>
+              </div>
+              {hasTankCipInlet && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Vana Tipi</label>
+                  <div className="flex gap-2">
+                    {(['SW43', 'SW44'] as const).map((v) => (
+                      <button
+                        key={v}
+                        onClick={() => setTankCipInletValveType(v)}
+                        className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                          tankCipInletValveType === v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-600 hover:border-slate-400'
+                        }`}
+                      >{v}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            {hasTankCipInlet && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Çap
+                  <span className="ml-2 text-xs font-normal text-slate-400">{standard} standardı için seçenekler</span>
+                </label>
+                <select
+                  value={tankCipInletDiameter}
+                  onChange={(e) => setTankCipInletDiameter(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">— Çap seçin —</option>
+                  {tankCipDiameterOptions.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-xs text-slate-600">
+              <p className="font-semibold text-slate-700 mb-1">Dolum Hatlarında Sabit Vana Grubu (+3 / hat)</p>
+              <p>• Drain Vanası — <strong>SW41</strong></p>
+              <p>• Leakage Vanası — <strong>SV Vana</strong></p>
+              <p>• CIP Dönüş Vanası — <strong>{cipReturnValveType === 'SD41' ? 'SD41' : 'SW CIP41'}</strong></p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-xs text-slate-600">
+              <p className="font-semibold text-slate-700 mb-1">
+                Boşaltım Hatlarında Sabit Vana Grubu ({waterInletValveType ? '+3' : '+2'} / hat)
+              </p>
+              <p>• CIP Giriş Vanası — <strong>{cipReturnValveType === 'SD41' ? 'SD41' : 'SW CIP41'}</strong></p>
+              <p>• Leakage Vana — <strong>SV Vana</strong></p>
+              {waterInletValveType && (
+                <p>• Su Giriş Vanası — <strong>{waterInletValveType === 'SD42' ? 'SD42' : 'SW CIP 42'}</strong></p>
+              )}
+              {!waterInletValveType && (
+                <p className="text-slate-400 italic">Su Giriş Vanası seçilmediği için hesaba dahil edilmez.</p>
+              )}
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Vana sayısı hesabı: (hatta bağlı tank) + dolum hatlarında 3, boşaltım hatlarında {waterInletValveType ? '3' : '2'} sabit.
+          </p>
+
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
@@ -333,6 +572,7 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
           moduleId={module.id}
           standard={module.standard as 'DIN' | 'SMS'}
           valveCluster={module.valveCluster ?? null}
+          hasWaterInlet={!!waterInletValveType}
         />
       </div>
 

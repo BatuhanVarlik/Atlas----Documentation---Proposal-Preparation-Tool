@@ -64,8 +64,26 @@ export async function PUT(request: Request, { params }: Params) {
       data: parsed.data,
       include: {
         creator: { select: { id: true, name: true } },
+        valveCluster: true,
       },
     });
+
+    // Module-level valveType / valveControlUnit değiştiyse tüm hatlara yay
+    if (moduleRecord.valveCluster && (parsed.data.valveType || parsed.data.valveControlUnit)) {
+      const lineUpdate: { valveType?: NonNullable<typeof parsed.data.valveType>; valveControlUnit?: NonNullable<typeof parsed.data.valveControlUnit> } = {};
+      if (parsed.data.valveType) lineUpdate.valveType = parsed.data.valveType;
+      if (parsed.data.valveControlUnit) lineUpdate.valveControlUnit = parsed.data.valveControlUnit;
+      await prisma.$transaction([
+        prisma.fillingLine.updateMany({
+          where: { valveClusterId: moduleRecord.valveCluster.id },
+          data: lineUpdate,
+        }),
+        prisma.dischargeLine.updateMany({
+          where: { valveClusterId: moduleRecord.valveCluster.id },
+          data: lineUpdate,
+        }),
+      ]);
+    }
 
     await prisma.moduleActivity.create({
       data: {

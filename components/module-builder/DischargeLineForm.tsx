@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useModuleBuilder } from '@/store/moduleBuilderStore';
-import { PUMP_MODELS, PUMP_IMPELLER_SIZES } from '@/lib/constants/pumpOptions';
+import { PUMP_MODELS, getImpellersForPump, pumpHasImpeller } from '@/lib/constants/pumpOptions';
 import Combobox from '@/components/ui/Combobox';
+import { formatIntegerInputTR, parseNumberTR, formatNumberTR } from '@/lib/utils';
 
 interface DischargeLine {
   id: string;
@@ -30,19 +31,10 @@ interface Props {
   onClose: () => void;
 }
 
-const VALVE_TYPES = ['SDE44', 'DE44', 'D44SL', 'DA44'] as const;
-const CONTROL_UNITS = [
-  { value: 'NONE', label: 'Yok' },
-  { value: 'AS_I', label: 'AS-i' },
-  { value: 'DC', label: 'DC' },
-] as const;
-
 export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, onClose }: Props) {
   const [name, setName] = useState(line.name);
-  const [capacity, setCapacity] = useState(String(line.capacity));
+  const [capacity, setCapacity] = useState(formatIntegerInputTR(String(line.capacity)));
   const [pressure, setPressure] = useState(String(line.pressure));
-  const [valveType, setValveType] = useState(line.valveType);
-  const [valveControlUnit, setValveControlUnit] = useState(line.valveControlUnit);
   const [pumpModel, setPumpModel] = useState(line.pumpModel ?? '');
   const [pumpKw, setPumpKw] = useState(line.pumpKw != null ? String(line.pumpKw) : '');
   const [pumpImpellerSize, setPumpImpellerSize] = useState(
@@ -50,7 +42,6 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
   );
   const [hasPT, setHasPT] = useState(line.hasPressureTransmitter);
   const [hasFlowMeter, setHasFlowMeter] = useState(line.hasFlowMeter);
-  const [waterInletType, setWaterInletType] = useState(line.waterInletType ?? '');
   const [connectedTankCount, setConnectedTankCount] = useState(String(line.connectedTankCount ?? 1));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -65,13 +56,14 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
     : null;
   const liveFlowMeter = liveCalc?.flowMeterResults.find((r) => r.lineId === line.id);
 
-  const cap = parseFloat(capacity);
+  const cap = parseNumberTR(capacity);
   const pres = parseFloat(pressure);
-  const isValid = name.trim() && !isNaN(cap) && cap > 0 && !isNaN(pres) && pres > 0 && valveType;
+  const isValid = name.trim() && !isNaN(cap) && cap > 0 && !isNaN(pres) && pres > 0;
 
   function handleCapacityChange(v: string) {
-    setCapacity(v);
-    const n = parseFloat(v);
+    const formatted = formatIntegerInputTR(v);
+    setCapacity(formatted);
+    const n = parseNumberTR(formatted);
     if (!isNaN(n) && n > 0) {
       updateLine(line.id, { capacity: n });
     }
@@ -89,7 +81,6 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
     try {
       const payload: Record<string, unknown> = {
         name: name.trim(), capacity: cap, pressure: pres,
-        valveType, valveControlUnit,
         connectedTankCount: parseInt(connectedTankCount) || 0,
         hasPressureTransmitter: hasPT,
         hasFlowMeter,
@@ -97,7 +88,6 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
       if (pumpModel.trim()) payload.pumpModel = pumpModel.trim();
       if (pumpKw) payload.pumpKw = parseFloat(pumpKw);
       if (pumpImpellerSize) payload.pumpImpellerSize = parseFloat(pumpImpellerSize);
-      if (waterInletType) payload.waterInletType = waterInletType;
 
       const res = await fetch(
         `/api/modules/${moduleId}/valve-cluster/discharge-lines/${line.id}`,
@@ -152,11 +142,12 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Kapasite (L/h) *</label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             value={capacity}
             onChange={(e) => handleCapacityChange(e.target.value)}
             className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            min={1}
+            placeholder="örn: 30.000"
           />
         </div>
         <div>
@@ -183,7 +174,7 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Hesaplanan Çap</label>
           <div className="px-2.5 py-1.5 text-sm bg-slate-100 border border-slate-200 rounded-lg text-slate-600 font-mono">
-            {liveDiam ? `${liveDiam.toFixed(1)} mm` : '—'}
+            {liveDiam ? `${formatNumberTR(liveDiam, { decimals: 1 })} mm` : '—'}
           </div>
         </div>
       </div>
@@ -198,62 +189,63 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
         </div>
       )}
 
-      <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1.5">Vana Tipi *</label>
-        <div className="flex gap-2 flex-wrap">
-          {VALVE_TYPES.map((v) => (
-            <button key={v} onClick={() => setValveType(v)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                valveType === v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-600 hover:border-slate-400'
-              }`}
-            >{v}</button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1.5">Kontrol Ünitesi</label>
-        <div className="flex gap-2">
-          {CONTROL_UNITS.map((c) => (
-            <button key={c.value} onClick={() => setValveControlUnit(c.value)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                valveControlUnit === c.value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-600 hover:border-slate-400'
-              }`}
-            >{c.label}</button>
-          ))}
-        </div>
+      <div className="text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
+        <p className="font-medium text-slate-600 mb-0.5">Bu boşaltım hattına sabit eklenen vana grubu:</p>
+        <p>• CIP Giriş Vanası — modül başlığındaki <strong>CIP Giriş/Dönüş</strong> seçimi</p>
+        <p>• Leakage Vana — <strong>SV Vana</strong></p>
+        <p>• Su Giriş Vanası — modül başlığında seçildiyse (Yok ise hesaba dahil edilmez)</p>
+        <p className="mt-1 text-slate-400">Vana tipi ve kontrol ünitesi modül başlığından tüm hatlara birlikte ayarlanır.</p>
       </div>
 
       {/* Pompa */}
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Pompa Modeli</label>
-          <Combobox
-            value={pumpModel}
-            onChange={setPumpModel}
-            options={PUMP_MODELS}
-            placeholder="Yazın veya listeden seçin"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Pompa kW</label>
-          <input type="number" value={pumpKw} onChange={(e) => setPumpKw(e.target.value)}
-            className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            step="0.1" min={0}
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Çark Boyutu (mm)</label>
-          <Combobox
-            value={pumpImpellerSize}
-            onChange={setPumpImpellerSize}
-            options={PUMP_IMPELLER_SIZES}
-            type="number"
-            min={0}
-            placeholder="Yazın veya seçin"
-          />
-        </div>
-      </div>
+      {(() => {
+        const impellerOptions = getImpellersForPump(pumpModel);
+        const hasImpeller = pumpHasImpeller(pumpModel);
+        return (
+          <div className={`grid gap-3 ${hasImpeller ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Pompa Modeli</label>
+              <Combobox
+                value={pumpModel}
+                onChange={(v) => {
+                  setPumpModel(v);
+                  // Yeni pompada mevcut çark uygun değilse veya çarksız bir pompaya geçildiyse temizle
+                  if (!pumpHasImpeller(v)) {
+                    if (pumpImpellerSize) setPumpImpellerSize('');
+                  } else if (pumpImpellerSize) {
+                    const opts = getImpellersForPump(v);
+                    if (opts.length > 0 && !opts.includes(Number(pumpImpellerSize))) {
+                      setPumpImpellerSize('');
+                    }
+                  }
+                }}
+                options={PUMP_MODELS}
+                placeholder="Yazın veya listeden seçin"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Pompa kW</label>
+              <input type="number" value={pumpKw} onChange={(e) => setPumpKw(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                step="0.1" min={0}
+              />
+            </div>
+            {hasImpeller && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Çark Boyutu (mm)</label>
+                <Combobox
+                  value={pumpImpellerSize}
+                  onChange={setPumpImpellerSize}
+                  options={impellerOptions}
+                  type="number"
+                  min={0}
+                  placeholder={impellerOptions.length > 0 ? 'Yazın veya seçin' : 'Pompa seçin'}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Opsiyonlar */}
       <div className="grid grid-cols-2 gap-3">
@@ -280,19 +272,6 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
               >{v ? 'Var' : 'Yok'}</button>
             ))}
           </div>
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1.5">Su Girişi Tipi</label>
-        <div className="flex gap-2">
-          {['', 'SW_CIP42', 'SD42'].map((v) => (
-            <button key={v} onClick={() => setWaterInletType(v)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                waterInletType === v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-600 hover:border-slate-400'
-              }`}
-            >{v || 'Yok'}</button>
-          ))}
         </div>
       </div>
 

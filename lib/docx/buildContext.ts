@@ -44,6 +44,7 @@ interface Tank {
   hasTankOutletValve: boolean;
   tankOutletValveType: string | null;
   tankOutletValveSubType: string | null;
+  manifoldHasCipReturnPump: boolean;
   cipReturnPumpModel: string | null;
   cipReturnPumpKw: number | null;
   cipReturnPumpImpellerSize: number | null;
@@ -56,6 +57,12 @@ export interface ModuleForDoc {
   projectCode: string | null;
   standard: string;
   productType: string;
+  valveType: string | null;
+  valveControlUnit: string | null;
+  cipReturnValveType: string | null;
+  waterInletValveType: string | null;
+  tankCipInletValveType: string | null;
+  tankCipInletDiameter: string | null;
   status: string;
   createdAt: Date | string;
   creator: { name: string };
@@ -82,10 +89,18 @@ const WATER_INLET_LABEL: Record<string, string> = {
   SD42: 'SD 42',
 };
 
+const CIP_RETURN_VALVE_LABEL: Record<string, string> = {
+  SW_CIP41: 'SW CIP41',
+  SD41: 'SD41',
+};
+
+const FIXED_FILLING_VALVES = 3;
+
 export function buildTemplateContext(module: ModuleForDoc) {
   const fl = module.valveCluster?.fillingLines ?? [];
   const dl = module.valveCluster?.dischargeLines ?? [];
   const hasLines = fl.length > 0 || dl.length > 0;
+  const FIXED_DISCHARGE_VALVES = module.waterInletValveType ? 3 : 2;
 
   const calc = hasLines
     ? calculateModule({
@@ -95,6 +110,13 @@ export function buildTemplateContext(module: ModuleForDoc) {
       })
     : null;
 
+  const cipReturnValveLabel = module.cipReturnValveType
+    ? (CIP_RETURN_VALVE_LABEL[module.cipReturnValveType] ?? module.cipReturnValveType)
+    : '—';
+  const waterInletValveLabel = module.waterInletValveType
+    ? (WATER_INLET_LABEL[module.waterInletValveType] ?? module.waterInletValveType)
+    : 'Yok';
+
   return {
     module: {
       name: module.name,
@@ -102,6 +124,17 @@ export function buildTemplateContext(module: ModuleForDoc) {
       projectCode: module.projectCode ?? '',
       standard: module.standard,
       productTypeLabel: PRODUCT_LABEL[module.productType] ?? module.productType,
+      valveType: module.valveType ?? '—',
+      controlUnit: module.valveControlUnit
+        ? (CONTROL_UNIT_LABEL[module.valveControlUnit] ?? module.valveControlUnit)
+        : '—',
+      cipReturnValve: cipReturnValveLabel,
+      cipInletValve: cipReturnValveLabel,
+      waterInletValve: waterInletValveLabel,
+      tankCipInletValve: module.tankCipInletValveType ?? 'Yok',
+      tankCipInletDiameter: module.tankCipInletDiameter ?? '—',
+      drainValveFixed: 'SW41',
+      leakageValveFixed: 'SV Vana',
       createdDate: new Date(module.createdAt).toLocaleDateString('tr-TR'),
     },
     creator: { name: module.creator.name },
@@ -121,6 +154,11 @@ export function buildTemplateContext(module: ModuleForDoc) {
       controlUnit: CONTROL_UNIT_LABEL[line.valveControlUnit] ?? line.valveControlUnit,
       selectedDN: calc?.selectedDN.dn ?? '—',
       drainValveSize: calc?.drainValveSize ?? '—',
+      // Dolum hattı sabit vana grubu (3 adet):
+      drainValveFixed: 'SW41',
+      leakageValveFixed: 'SV Vana',
+      cipReturnValve: cipReturnValveLabel,
+      fixedValveCount: FIXED_FILLING_VALVES,
     })),
     dischargeLines: dl.map((line, i) => {
       const fmResult = calc?.flowMeterResults.find((r) => r.lineId === line.id);
@@ -137,9 +175,14 @@ export function buildTemplateContext(module: ModuleForDoc) {
         hasPT: line.hasPressureTransmitter ? 'Var' : 'Yok',
         hasFlowMeter: line.hasFlowMeter ? 'Var' : 'Yok',
         flowMeterDN: fmResult?.selectedDN.dn ?? '—',
-        waterInletType: line.waterInletType ? (WATER_INLET_LABEL[line.waterInletType] ?? line.waterInletType) : '',
+        waterInletType: waterInletValveLabel,
         selectedDN: calc?.selectedDN.dn ?? '—',
         drainValveSize: calc?.drainValveSize ?? '—',
+        // Boşaltım hattı sabit vana grubu (3 adet):
+        cipInletValve: cipReturnValveLabel,
+        leakageValveFixed: 'SV Vana',
+        waterInletValve: waterInletValveLabel,
+        fixedValveCount: FIXED_DISCHARGE_VALVES,
       };
     }),
     tanks: module.tanks.map((tank, i) => {
@@ -149,13 +192,21 @@ export function buildTemplateContext(module: ModuleForDoc) {
       ];
       const sensors = sensorFlags.filter(([v]) => v).map(([, label]) => label).join(', ') || 'Yok';
 
+      const subTypeLabels: Record<string, string> = {
+        BUTTERFLY: 'Kelebek',
+        SINGLE_SEAT: 'Single Seat',
+        SINGLE_SEAT_TANK: 'Single Seat Tank',
+        SW_CIP_TANK: 'SW CIP Tank',
+        SD_TANK: 'SD Tank',
+        D_TANK: 'D Tank',
+      };
       let outletValveLabel = 'Yok';
       if (tank.hasTankOutletValve) {
         if (tank.tankOutletValveType === 'WITH_ACTUATOR') {
-          const sub = tank.tankOutletValveSubType === 'BUTTERFLY' ? 'Kelebek' : 'Tek Koltuklu';
+          const sub = subTypeLabels[tank.tankOutletValveSubType ?? 'BUTTERFLY'] ?? 'Kelebek';
           outletValveLabel = `Aktüatörlü — ${sub}`;
         } else {
-          outletValveLabel = 'Manuel';
+          outletValveLabel = 'Manuel — Kelebek';
         }
       }
 

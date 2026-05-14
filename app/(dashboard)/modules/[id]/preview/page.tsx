@@ -24,6 +24,13 @@ const WATER_INLET_LABELS: Record<string, string> = {
   SD42: 'SD 42',
 };
 
+const CIP_RETURN_VALVE_LABELS: Record<string, string> = {
+  SW_CIP41: 'SW CIP41',
+  SD41: 'SD41',
+};
+
+const FIXED_FILLING_VALVES = 3;
+
 export default async function ModulePreviewPage({ params }: Props) {
   const { id } = await params;
   const session = await getServerSession(authOptions);
@@ -49,8 +56,19 @@ export default async function ModulePreviewPage({ params }: Props) {
   const fl = moduleData.valveCluster?.fillingLines ?? [];
   const dl = moduleData.valveCluster?.dischargeLines ?? [];
   const hasLines = fl.length > 0 || dl.length > 0;
-  const flTotalValves = fl.reduce((sum, l) => sum + (l.connectedTankCount ?? 0), 0);
-  const dlTotalValves = dl.reduce((sum, l) => sum + (l.connectedTankCount ?? 0), 0);
+  const hasWaterInlet = !!moduleData.waterInletValveType;
+  const FIXED_DISCHARGE_VALVES = hasWaterInlet ? 3 : 2;
+  const flTotalValves = fl.reduce((sum, l) => sum + (l.connectedTankCount ?? 0) + FIXED_FILLING_VALVES, 0);
+  const dlTotalValves = dl.reduce((sum, l) => sum + (l.connectedTankCount ?? 0) + FIXED_DISCHARGE_VALVES, 0);
+  const cipReturnValveLabel = moduleData.cipReturnValveType
+    ? (CIP_RETURN_VALVE_LABELS[moduleData.cipReturnValveType] ?? moduleData.cipReturnValveType)
+    : '—';
+  const waterInletValveLabel = moduleData.waterInletValveType
+    ? (WATER_INLET_LABELS[moduleData.waterInletValveType] ?? moduleData.waterInletValveType)
+    : 'Yok';
+  const tankCipInletLabel = moduleData.tankCipInletValveType
+    ? `${moduleData.tankCipInletValveType}${moduleData.tankCipInletDiameter ? ` — ${moduleData.tankCipInletDiameter}` : ''}`
+    : 'Yok';
 
   const calc = hasLines
     ? calculateModule({
@@ -92,10 +110,55 @@ export default async function ModulePreviewPage({ params }: Props) {
           <Row label="Proje Kodu" value={moduleData.projectCode ?? '—'} mono />
           <Row label="Standart" value={moduleData.standard} />
           <Row label="Ürün Tipi" value={PRODUCT_LABELS[moduleData.productType] ?? moduleData.productType} />
+          <Row label="Vana Tipi" value={moduleData.valveType ?? '—'} />
+          <Row label="Kontrol Ünitesi" value={moduleData.valveControlUnit ? (CONTROL_UNIT_LABELS[moduleData.valveControlUnit] ?? moduleData.valveControlUnit) : '—'} />
+          <Row label="CIP Giriş/Dönüş Vana Tipi" value={cipReturnValveLabel} />
+          <Row label="Su Giriş Vanası Tipi" value={waterInletValveLabel} />
+          <Row label="Tank CIP Inlet Vanası" value={tankCipInletLabel} />
           <Row label="Oluşturan" value={moduleData.creator.name} />
           <Row label="Tarih" value={formatDate(moduleData.createdAt)} />
         </div>
       </section>
+
+      {/* Sabit Vana Grubu (her hatta uygulanır) */}
+      {hasLines && (
+        <section className="bg-amber-50 rounded-xl border border-amber-200 p-5 mb-4">
+          <h2 className="text-sm font-semibold text-amber-800 uppercase tracking-wide mb-3">
+            Hatlara Sabit Eklenen Vana Grupları
+          </h2>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="bg-white/60 rounded-lg p-3 border border-amber-200/60">
+              <p className="text-xs font-semibold text-amber-800 mb-2">Dolum Hatları (+{FIXED_FILLING_VALVES} / hat)</p>
+              <div className="space-y-1.5">
+                <div className="flex justify-between"><span className="text-amber-700">Drain Vanası</span><span className="font-semibold text-amber-900">SW41</span></div>
+                <div className="flex justify-between"><span className="text-amber-700">Leakage Vanası</span><span className="font-semibold text-amber-900">SV Vana</span></div>
+                <div className="flex justify-between"><span className="text-amber-700">CIP Dönüş Vanası</span><span className="font-semibold text-amber-900">{cipReturnValveLabel}</span></div>
+              </div>
+            </div>
+            <div className="bg-white/60 rounded-lg p-3 border border-amber-200/60">
+              <p className="text-xs font-semibold text-amber-800 mb-2">Boşaltım Hatları (+{FIXED_DISCHARGE_VALVES} / hat)</p>
+              <div className="space-y-1.5">
+                <div className="flex justify-between"><span className="text-amber-700">CIP Giriş Vanası</span><span className="font-semibold text-amber-900">{cipReturnValveLabel}</span></div>
+                <div className="flex justify-between"><span className="text-amber-700">Leakage Vana</span><span className="font-semibold text-amber-900">SV Vana</span></div>
+                {hasWaterInlet ? (
+                  <div className="flex justify-between"><span className="text-amber-700">Su Giriş Vanası</span><span className="font-semibold text-amber-900">{waterInletValveLabel}</span></div>
+                ) : (
+                  <p className="text-[11px] text-amber-700/70 italic">Su Giriş Vanası seçilmediği için hesaba dahil edilmez.</p>
+                )}
+              </div>
+            </div>
+          </div>
+          {moduleData.tankCipInletValveType && (
+            <div className="mt-3 bg-white/60 rounded-lg p-3 border border-amber-200/60 text-sm">
+              <p className="text-xs font-semibold text-amber-800 mb-1">Tank CIP Inlet Vanası</p>
+              <div className="flex gap-4 text-amber-900">
+                <span><strong>{moduleData.tankCipInletValveType}</strong></span>
+                {moduleData.tankCipInletDiameter && <span>Çap: <strong>{moduleData.tankCipInletDiameter}</strong></span>}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Hesaplanan Değerler */}
       {calc && (
@@ -144,7 +207,7 @@ export default async function ModulePreviewPage({ params }: Props) {
                   <td className="py-2.5 text-slate-700">{line.valveType}</td>
                   <td className="py-2.5 text-slate-600">{CONTROL_UNIT_LABELS[line.valveControlUnit] ?? line.valveControlUnit}</td>
                   <td className="py-2.5 text-slate-700">{line.connectedTankCount}</td>
-                  <td className="py-2.5 text-slate-800 font-semibold">{line.connectedTankCount}</td>
+                  <td className="py-2.5 text-slate-800 font-semibold">{line.connectedTankCount + FIXED_FILLING_VALVES} <span className="text-[10px] text-slate-400 font-normal">({line.connectedTankCount}+{FIXED_FILLING_VALVES})</span></td>
                   <td className="py-2.5 text-slate-500">25 mm (Sabit)</td>
                 </tr>
               ))}
@@ -155,7 +218,9 @@ export default async function ModulePreviewPage({ params }: Props) {
               </tr>
             </tbody>
           </table>
-          <p className="mt-3 text-xs text-slate-400">CIP Return = {calc?.cipReturnSize ?? '—'} (boru ile aynı)</p>
+          <p className="mt-3 text-xs text-slate-400">
+            CIP Return Boru = {calc?.cipReturnSize ?? '—'} (boru ile aynı) · Her dolum hattına sabit: Drain <strong>SW41</strong> + Leakage <strong>SV Vana</strong> + CIP Dönüş <strong>{cipReturnValveLabel}</strong>
+          </p>
         </section>
       )}
 
@@ -182,14 +247,16 @@ export default async function ModulePreviewPage({ params }: Props) {
                     <Row label="Vana Tipi" value={line.valveType} />
                     <Row label="Kontrol" value={CONTROL_UNIT_LABELS[line.valveControlUnit] ?? line.valveControlUnit} />
                     <Row label="Tank Sayısı" value={String(line.connectedTankCount)} />
-                    <Row label="Vana Sayısı" value={String(line.connectedTankCount)} />
+                    <Row label="Vana Sayısı" value={`${line.connectedTankCount + FIXED_DISCHARGE_VALVES} (${line.connectedTankCount}+${FIXED_DISCHARGE_VALVES} sabit)`} />
+                    <Row label="CIP Giriş Vanası (Sabit)" value={cipReturnValveLabel} />
+                    <Row label="Leakage Vana (Sabit)" value="SV Vana" />
+                    {hasWaterInlet && <Row label="Su Giriş Vanası (Sabit)" value={waterInletValveLabel} />}
                     {line.pumpModel && <Row label="Pompa Modeli" value={line.pumpModel} />}
                     {line.pumpKw != null && <Row label="Pompa kW" value={`${line.pumpKw} kW`} />}
                     {line.pumpImpellerSize != null && <Row label="İmpeller" value={`${line.pumpImpellerSize} mm`} />}
                     <Row label="Pressure Transmitter" value={line.hasPressureTransmitter ? 'Var' : 'Yok'} />
                     <Row label="Flow Meter" value={line.hasFlowMeter ? 'Var' : 'Yok'} />
                     {line.hasFlowMeter && <Row label="Flow Meter DN" value={fmResult?.selectedDN.dn ?? '—'} mono />}
-                    {line.waterInletType && <Row label="Water Inlet" value={WATER_INLET_LABELS[line.waterInletType] ?? line.waterInletType} />}
                     <Row label="CIP Inlet Valve" value={calc?.selectedDN.dn ?? '—'} />
                     <Row label="Leakage Chamber" value="25 mm (Sabit)" />
                   </div>
@@ -197,7 +264,11 @@ export default async function ModulePreviewPage({ params }: Props) {
               );
             })}
           </div>
-          <p className="mt-4 text-sm font-semibold text-slate-700 text-right">
+          <p className="mt-4 text-xs text-slate-400">
+            Her boşaltım hattına sabit (+{FIXED_DISCHARGE_VALVES}): CIP Giriş <strong>{cipReturnValveLabel}</strong> + Leakage <strong>SV Vana</strong>
+            {hasWaterInlet && <> + Su Giriş <strong>{waterInletValveLabel}</strong></>}
+          </p>
+          <p className="mt-2 text-sm font-semibold text-slate-700 text-right">
             Toplam Vana: <span className="text-slate-900">{dlTotalValves}</span>
           </p>
         </section>
@@ -217,13 +288,21 @@ export default async function ModulePreviewPage({ params }: Props) {
               ];
               const sensors = sensorFlags.filter(([v]) => v).map(([, label]) => label).join(', ') || 'Yok';
 
+              const subTypeLabels: Record<string, string> = {
+                BUTTERFLY: 'Kelebek',
+                SINGLE_SEAT: 'Single Seat',
+                SINGLE_SEAT_TANK: 'Single Seat Tank',
+                SW_CIP_TANK: 'SW CIP Tank',
+                SD_TANK: 'SD Tank',
+                D_TANK: 'D Tank',
+              };
               let outletValveLabel = 'Yok';
               if (tank.hasTankOutletValve) {
                 if (tank.tankOutletValveType === 'WITH_ACTUATOR') {
-                  const sub = tank.tankOutletValveSubType === 'BUTTERFLY' ? 'Kelebek' : 'Tek Koltuklu';
+                  const sub = subTypeLabels[tank.tankOutletValveSubType ?? 'BUTTERFLY'] ?? 'Kelebek';
                   outletValveLabel = `Aktüatörlü — ${sub}`;
                 } else {
-                  outletValveLabel = 'Manuel';
+                  outletValveLabel = 'Manuel — Kelebek';
                 }
               }
 
