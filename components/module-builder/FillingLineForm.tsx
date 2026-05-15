@@ -137,19 +137,27 @@ export default function FillingLineForm({ moduleId, line, onSaved, onDeleted, on
         </div>
       </div>
 
-      {liveCalc && (
-        <div className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 font-mono">
-          Seçilen Boru: <strong>{liveCalc.selectedDN.dn}</strong> (iç: {liveCalc.selectedDN.inner} mm) ·
-          Drain: {liveCalc.drainValveSize} · CIP: {liveCalc.cipReturnSize} · Leakage: {liveCalc.leakageChamberMm} mm (sabit)
+      <div className="text-xs text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 space-y-1">
+        <p className="font-medium text-slate-600">Bu dolum hattına sabit eklenen vana grubu (3 adet):</p>
+        <div className="flex items-center justify-between gap-3">
+          <span>• Drain Vanası — <strong>SW41</strong></span>
+          <span className="text-blue-700 font-mono text-[11px]">
+            Çap: {liveCalc?.drainValveSize ?? '—'}
+          </span>
         </div>
-      )}
-
-      <div className="text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
-        <p className="font-medium text-slate-600 mb-0.5">Bu dolum hattına sabit eklenen vana grubu (3 adet):</p>
-        <p>• Drain Vanası — <strong>SW41</strong></p>
-        <p>• Leakage Vanası — <strong>ESV</strong></p>
-        <p>• CIP Dönüş Vanası — modül başlığındaki <strong>CIP Giriş/Dönüş</strong> seçimi</p>
-        <p className="mt-1 text-slate-400">Vana tipi ve kontrol ünitesi modül başlığından tüm hatlara birlikte ayarlanır.</p>
+        <div className="flex items-center justify-between gap-3">
+          <span>• Leakage Vanası — <strong>ESV</strong></span>
+          <span className="text-blue-700 font-mono text-[11px]">
+            Çap: {liveCalc ? `${liveCalc.leakageChamberMm} mm` : '—'} (sabit)
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span>• CIP Dönüş Vanası <span className="text-slate-400">(modül başlığından)</span></span>
+          <span className="text-blue-700 font-mono text-[11px]">
+            Çap: {liveCalc?.cipReturnSize ?? '—'}
+          </span>
+        </div>
+        <p className="text-slate-400 pt-1">Vana tipi ve kontrol ünitesi modül başlığından tüm hatlara birlikte ayarlanır.</p>
       </div>
 
       {error && (

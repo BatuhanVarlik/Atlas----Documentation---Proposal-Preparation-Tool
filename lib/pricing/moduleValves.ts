@@ -34,6 +34,12 @@ export interface ModulePricingContext {
     type: 'SW43' | 'SW44';
     diameter: string;                     // örn: "DN50" or '2"' (zaten bu formatta)
   } | null;
+  /** Tank CIP Dönüş — manifoldda yoksa her hatta tank başına SW41 + Drain + Check valve */
+  tankCipReturn?: {
+    manifoldExists: boolean;
+    lineCount: number;
+    tankCount: number;
+  } | null;
   fillingLines: Array<{ id: string; name: string; capacity: number; connectedTankCount: number }>;
   dischargeLines: Array<{ id: string; name: string; capacity: number; connectedTankCount: number }>;
 }
@@ -43,15 +49,18 @@ function normalizeValveType(v: string): string {
   return v.replace(/_/g, '');
 }
 
-// Tank CIP Inlet diameter ham string ("DN50" veya '2"') → ValveMatchInput.size formatına çevir
+// Tank CIP Inlet diameter ham string ("DN50" veya '2,5"') → ValveMatchInput.size formatına çevir
 function tankCipInletSizeAsCatalog(diameter: string, standard: 'DIN' | 'SMS'): string {
   // DIN: zaten "DN50" formunda — direkt geçer
   if (standard === 'DIN') return diameter;
-  // SMS: '2"' formundan '51 SMS (2")' formuna çevirelim
-  const m = diameter.match(/^(\d+(?:,\d+)?)"$/);
+  // SMS: '2"' veya '2,5"' formundan '51 SMS (2")' / '63 SMS (2"1/2)' formuna çevir
+  // Yarım inç değerleri (1,5" → 1"1/2, 2,5" → 2"1/2) sizeToToken'ın anladığı format.
+  const m = diameter.match(/^(\d+)(?:,5)?"$/);
   if (m) {
-    const inch = m[1].replace(',', '.');
-    return `xxx SMS (${inch}")`; // sizeToken sadece parantez içindeki kısmı kullanıyor
+    const whole = m[1];
+    const isHalf = diameter.includes(',5');
+    if (isHalf) return `xxx SMS (${whole}"1/2)`;
+    return `xxx SMS (${whole}")`;
   }
   return diameter;
 }
@@ -211,6 +220,37 @@ export function buildValveLineItemsForModule(ctx: ModulePricingContext): ValveLi
       quantity: 1,
       controlUnit: ctx.controlUnit,
     });
+  }
+
+  // === MODÜL — TANK CIP DÖNÜŞ HATLARI ===
+  // Manifoldda CIP dönüş yoksa: her hatta tank başına SW41 + Drain + Check Valve
+  if (
+    ctx.tankCipReturn &&
+    !ctx.tankCipReturn.manifoldExists &&
+    ctx.tankCipReturn.tankCount > 0 &&
+    ctx.tankCipReturn.lineCount > 0 &&
+    selectedSize
+  ) {
+    const totalQty = ctx.tankCipReturn.lineCount * ctx.tankCipReturn.tankCount;
+    const label = `Tank CIP Dönüş (${ctx.tankCipReturn.lineCount} hat × ${ctx.tankCipReturn.tankCount} tank)`;
+    push({
+      description: 'CIP Dönüş Vanası — SW41',
+      context: label,
+      valveType: 'SW41',
+      size: selectedSize,
+      quantity: totalQty,
+      controlUnit: ctx.controlUnit,
+    });
+    if (drainSize) {
+      push({
+        description: 'Drain Vanası — SW41',
+        context: label,
+        valveType: 'SW41',
+        size: drainSize,
+        quantity: totalQty,
+        controlUnit: ctx.controlUnit,
+      });
+    }
   }
 
   return items;

@@ -20,6 +20,11 @@ export const updateModuleSchema = z.object({
   waterInletValveType: z.enum(['SW_CIP42', 'SD42']).nullable().optional(),
   tankCipInletValveType: z.enum(['SW43', 'SW44']).nullable().optional(),
   tankCipInletDiameter: z.string().max(50).nullable().optional(),
+  tankCipReturnManifoldExists: z.boolean().optional(),
+  tankCipReturnLineCount: z.number().int().min(1).max(2).optional(),
+  tankCipReturnPumpModel: z.string().max(255).nullable().optional(),
+  tankCipReturnPumpKw: z.number().positive().nullable().optional(),
+  tankCipReturnPumpImpellerSize: z.number().positive().nullable().optional(),
   status: z
     .enum(['DRAFT', 'IN_PROGRESS', 'REVIEW', 'APPROVED', 'DOCUMENT_GENERATED', 'ARCHIVED', 'CANCELLED'])
     .optional(),

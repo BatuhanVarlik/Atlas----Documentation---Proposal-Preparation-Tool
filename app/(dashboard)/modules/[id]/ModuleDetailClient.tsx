@@ -7,7 +7,10 @@ import { ModuleStatusBadge } from '@/components/ui/StatusBadge';
 import { formatDate } from '@/lib/utils';
 import ValveClusterPanel from '@/components/module-builder/ValveClusterPanel';
 import TanksPanel from '@/components/module-builder/TanksPanel';
+import TankCipReturnPanel from '@/components/module-builder/TankCipReturnPanel';
+import RevisionPanel from '@/components/module-builder/RevisionPanel';
 import Modal from '@/components/ui/Modal';
+import { useModuleBuilder } from '@/store/moduleBuilderStore';
 
 interface FillingLine {
   id: string;
@@ -79,6 +82,11 @@ interface Module {
   waterInletValveType: string | null;
   tankCipInletValveType: string | null;
   tankCipInletDiameter: string | null;
+  tankCipReturnManifoldExists: boolean;
+  tankCipReturnLineCount: number;
+  tankCipReturnPumpModel: string | null;
+  tankCipReturnPumpKw: number | null;
+  tankCipReturnPumpImpellerSize: number | null;
   status: 'DRAFT' | 'IN_PROGRESS' | 'REVIEW' | 'APPROVED' | 'DOCUMENT_GENERATED' | 'ARCHIVED' | 'CANCELLED';
   selectedDN: string | null;
   createdAt: Date | string;
@@ -116,6 +124,11 @@ interface GeneratedDoc {
 
 export default function ModuleDetailClient({ module, userRole, userId }: Props) {
   const router = useRouter();
+  const liveCalc = useModuleBuilder((s) => s.liveCalc);
+  const pipeSize = liveCalc?.selectedDN.dn ?? module.selectedDN ?? '—';
+  const drainSize = liveCalc?.drainValveSize ?? '—';
+  const cipSize = liveCalc?.cipReturnSize ?? module.selectedDN ?? '—';
+  const leakageSize = liveCalc ? `${liveCalc.leakageChamberMm} mm` : '25 mm';
   const [name, setName] = useState(module.name);
   const [customerName, setCustomerName] = useState(module.customerName ?? '');
   const [projectCode, setProjectCode] = useState(module.projectCode ?? '');
@@ -367,6 +380,9 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
                   </button>
                 ))}
               </div>
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                Seçilen çap: <span className="font-mono text-slate-700">{pipeSize}</span>
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -505,20 +521,38 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-xs text-slate-600">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-xs text-slate-600 space-y-1">
               <p className="font-semibold text-slate-700 mb-1">Dolum Hatlarında Sabit Vana Grubu (+3 / hat)</p>
-              <p>• Drain Vanası — <strong>SW41</strong></p>
-              <p>• Leakage Vanası — <strong>ESV</strong></p>
-              <p>• CIP Dönüş Vanası — <strong>{cipReturnValveType === 'SD41' ? 'SD41' : 'SW CIP41'}</strong></p>
+              <p className="flex items-center justify-between gap-2">
+                <span>• Drain Vanası — <strong>SW41</strong></span>
+                <span className="text-blue-700 font-mono text-[11px]">Çap: {drainSize}</span>
+              </p>
+              <p className="flex items-center justify-between gap-2">
+                <span>• Leakage Vanası — <strong>ESV</strong></span>
+                <span className="text-blue-700 font-mono text-[11px]">Çap: {leakageSize} (sabit)</span>
+              </p>
+              <p className="flex items-center justify-between gap-2">
+                <span>• CIP Dönüş Vanası — <strong>{cipReturnValveType === 'SD41' ? 'SD41' : 'SW CIP41'}</strong></span>
+                <span className="text-blue-700 font-mono text-[11px]">Çap: {cipSize}</span>
+              </p>
             </div>
-            <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-xs text-slate-600">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-xs text-slate-600 space-y-1">
               <p className="font-semibold text-slate-700 mb-1">
                 Boşaltım Hatlarında Sabit Vana Grubu ({waterInletValveType ? '+3' : '+2'} / hat)
               </p>
-              <p>• CIP Giriş Vanası — <strong>{cipReturnValveType === 'SD41' ? 'SD41' : 'SW CIP41'}</strong></p>
-              <p>• Leakage Vana — <strong>ESV</strong></p>
+              <p className="flex items-center justify-between gap-2">
+                <span>• CIP Giriş Vanası — <strong>{cipReturnValveType === 'SD41' ? 'SD41' : 'SW CIP41'}</strong></span>
+                <span className="text-blue-700 font-mono text-[11px]">Çap: {cipSize}</span>
+              </p>
+              <p className="flex items-center justify-between gap-2">
+                <span>• Leakage Vana — <strong>ESV</strong></span>
+                <span className="text-blue-700 font-mono text-[11px]">Çap: {leakageSize} (sabit)</span>
+              </p>
               {waterInletValveType && (
-                <p>• Su Giriş Vanası — <strong>{waterInletValveType === 'SD42' ? 'SD42' : 'SW CIP 42'}</strong></p>
+                <p className="flex items-center justify-between gap-2">
+                  <span>• Su Giriş Vanası — <strong>{waterInletValveType === 'SD42' ? 'SD42' : 'SW CIP 42'}</strong></span>
+                  <span className="text-blue-700 font-mono text-[11px]">Çap: {pipeSize}</span>
+                </p>
               )}
               {!waterInletValveType && (
                 <p className="text-slate-400 italic">Su Giriş Vanası seçilmediği için hesaba dahil edilmez.</p>
@@ -580,6 +614,28 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
       <div className="mb-5">
         <h2 className="text-base font-semibold text-slate-800 mb-3">Tanklar</h2>
         <TanksPanel moduleId={module.id} tanks={module.tanks} />
+      </div>
+
+      {/* Revizyon Geçmişi */}
+      <div className="mb-5">
+        <h2 className="text-base font-semibold text-slate-800 mb-3">Revizyon Geçmişi</h2>
+        <RevisionPanel moduleId={module.id} />
+      </div>
+
+      {/* Tank CIP Dönüş */}
+      <div className="mb-5">
+        <h2 className="text-base font-semibold text-slate-800 mb-3">Tank CIP Dönüş</h2>
+        <TankCipReturnPanel
+          moduleId={module.id}
+          tankCount={module.tanks.length}
+          initial={{
+            manifoldExists: module.tankCipReturnManifoldExists,
+            lineCount: module.tankCipReturnLineCount,
+            pumpModel: module.tankCipReturnPumpModel,
+            pumpKw: module.tankCipReturnPumpKw,
+            pumpImpellerSize: module.tankCipReturnPumpImpellerSize,
+          }}
+        />
       </div>
 
       {/* Belge Geçmişi */}

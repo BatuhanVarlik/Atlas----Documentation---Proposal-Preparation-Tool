@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useModuleBuilder } from '@/store/moduleBuilderStore';
 
 export interface TankData {
   id: string;
@@ -72,8 +71,6 @@ function OptionGroup<T extends string>({ options, value, onChange }: {
 }
 
 export default function TankForm({ moduleId, tank, onSaved, onDeleted, onClose }: Props) {
-  const liveCalc = useModuleBuilder((s) => s.liveCalc);
-
   const [name, setName] = useState(tank.name);
   const [volume, setVolume] = useState(String(tank.volume));
   const [s, setS] = useState({
@@ -92,10 +89,6 @@ export default function TankForm({ moduleId, tank, onSaved, onDeleted, onClose }
     tankOutletValveType: (tank.tankOutletValveType ?? 'MANUAL') as 'MANUAL' | 'WITH_ACTUATOR',
     tankOutletValveSubType: (tank.tankOutletValveSubType ?? 'BUTTERFLY') as
       | 'BUTTERFLY' | 'SINGLE_SEAT' | 'SINGLE_SEAT_TANK' | 'SW_CIP_TANK' | 'SD_TANK' | 'D_TANK',
-    manifoldHasCipReturnPump: tank.manifoldHasCipReturnPump ?? false,
-    cipReturnPumpModel: tank.cipReturnPumpModel ?? '',
-    cipReturnPumpKw: tank.cipReturnPumpKw != null ? String(tank.cipReturnPumpKw) : '',
-    cipReturnPumpImpellerSize: tank.cipReturnPumpImpellerSize != null ? String(tank.cipReturnPumpImpellerSize) : '',
   });
 
   const [saving, setSaving] = useState(false);
@@ -133,17 +126,6 @@ export default function TankForm({ moduleId, tank, onSaved, onDeleted, onClose }
     } else {
       payload.tankOutletValveType = null; payload.tankOutletValveSubType = null;
     }
-    payload.manifoldHasCipReturnPump = s.manifoldHasCipReturnPump;
-    if (s.manifoldHasCipReturnPump) {
-      // Manifoldda pompa var → tank için ayrı pompa kaydı yok
-      payload.cipReturnPumpModel = null;
-      payload.cipReturnPumpKw = null;
-      payload.cipReturnPumpImpellerSize = null;
-    } else {
-      payload.cipReturnPumpModel = s.cipReturnPumpModel.trim() || null;
-      payload.cipReturnPumpKw = s.cipReturnPumpKw ? parseFloat(s.cipReturnPumpKw) : null;
-      payload.cipReturnPumpImpellerSize = s.cipReturnPumpImpellerSize ? parseFloat(s.cipReturnPumpImpellerSize) : null;
-    }
 
     try {
       const res = await fetch(`/api/modules/${moduleId}/tanks/${tank.id}`, {
@@ -165,9 +147,6 @@ export default function TankForm({ moduleId, tank, onSaved, onDeleted, onClose }
       onDeleted();
     } finally { setDeleting(false); }
   }
-
-  const drainSize = liveCalc?.tankDrainValveSize ?? '—';
-  const cipSize = liveCalc?.selectedDN.dn ?? '—';
 
   return (
     <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3 text-sm">
@@ -309,42 +288,6 @@ export default function TankForm({ moduleId, tank, onSaved, onDeleted, onClose }
             />
           </div>
         )}
-      </div>
-
-      {/* CIP Return Pump */}
-      <div className="space-y-2">
-        <div className="grid grid-cols-2 gap-3 items-center">
-          <label className="text-xs font-medium text-slate-600">Manifoldda CIP Dönüş Pompası</label>
-          <Toggle
-            value={s.manifoldHasCipReturnPump}
-            onChange={(v) => setS((p) => ({ ...p, manifoldHasCipReturnPump: v }))}
-          />
-        </div>
-        {s.manifoldHasCipReturnPump ? (
-          <p className="text-[11px] text-slate-400 italic">
-            Manifoldda CIP Dönüş Pompası mevcut — bu tank için ayrı pompa bilgisi girilmez.
-          </p>
-        ) : (
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1.5">CIP Dönüş Pompası (Tanka Özel)</label>
-            <div className="grid grid-cols-3 gap-2">
-              <input value={s.cipReturnPumpModel} onChange={(e) => setS((p) => ({ ...p, cipReturnPumpModel: e.target.value }))}
-                className="col-span-1 px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Model" />
-              <input type="number" value={s.cipReturnPumpKw} onChange={(e) => setS((p) => ({ ...p, cipReturnPumpKw: e.target.value }))}
-                className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="kW" step="0.1" min={0} />
-              <input type="number" value={s.cipReturnPumpImpellerSize} onChange={(e) => setS((p) => ({ ...p, cipReturnPumpImpellerSize: e.target.value }))}
-                className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Çark (mm)" min={0} />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Sabit değerler */}
-      <div className="text-xs text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 font-mono">
-        Drain: <strong>{drainSize}</strong> (sabit) · CIP Vanası: <strong>{cipSize}</strong> (sabit) · Check Valve: <strong>{cipSize}</strong> (sabit)
       </div>
 
       {error && (

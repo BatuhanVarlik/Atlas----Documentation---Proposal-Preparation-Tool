@@ -179,22 +179,33 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
         </div>
       </div>
 
-      {liveCalc && (
-        <div className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 font-mono">
-          Seçilen Boru: <strong>{liveCalc.selectedDN.dn}</strong> (iç: {liveCalc.selectedDN.inner} mm) ·
-          Drain: {liveCalc.drainValveSize} · CIP: {liveCalc.cipInletSize}
-          {liveFlowMeter && (
-            <span> · Flow Meter: <strong>{liveFlowMeter.selectedDN.dn}</strong></span>
-          )}
+      <div className="text-xs text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 space-y-1">
+        <p className="font-medium text-slate-600">Bu boşaltım hattına sabit eklenen vana grubu:</p>
+        <div className="flex items-center justify-between gap-3">
+          <span>• CIP Giriş Vanası <span className="text-slate-400">(modül başlığından)</span></span>
+          <span className="text-blue-700 font-mono text-[11px]">
+            Çap: {liveCalc?.cipInletSize ?? '—'}
+          </span>
         </div>
-      )}
-
-      <div className="text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
-        <p className="font-medium text-slate-600 mb-0.5">Bu boşaltım hattına sabit eklenen vana grubu:</p>
-        <p>• CIP Giriş Vanası — modül başlığındaki <strong>CIP Giriş/Dönüş</strong> seçimi</p>
-        <p>• Leakage Vana — <strong>ESV</strong></p>
-        <p>• Su Giriş Vanası — modül başlığında seçildiyse (Yok ise hesaba dahil edilmez)</p>
-        <p className="mt-1 text-slate-400">Vana tipi ve kontrol ünitesi modül başlığından tüm hatlara birlikte ayarlanır.</p>
+        <div className="flex items-center justify-between gap-3">
+          <span>• Leakage Vana — <strong>ESV</strong></span>
+          <span className="text-blue-700 font-mono text-[11px]">Çap: 25 mm (sabit)</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span>• Su Giriş Vanası <span className="text-slate-400">(modül başlığında seçildiyse)</span></span>
+          <span className="text-blue-700 font-mono text-[11px]">
+            Çap: {liveCalc?.selectedDN.dn ?? '—'}
+          </span>
+        </div>
+        {liveFlowMeter && (
+          <div className="flex items-center justify-between gap-3">
+            <span>• Flow Meter</span>
+            <span className="text-blue-700 font-mono text-[11px]">
+              Çap: {liveFlowMeter.selectedDN.dn}
+            </span>
+          </div>
+        )}
+        <p className="text-slate-400 pt-1">Vana tipi ve kontrol ünitesi modül başlığından tüm hatlara birlikte ayarlanır.</p>
       </div>
 
       {/* Pompa */}

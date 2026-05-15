@@ -35,6 +35,7 @@ model User {
   reviewedModules     Module[]               @relation("ModuleReviewer")
   resetRequests       PasswordResetRequest[] @relation("ResetRequestUser")
   resolvedResets      PasswordResetRequest[] @relation("ResetRequestResolver")
+  moduleRevisions     ModuleRevision[]       @relation("ModuleRevisionCreator")
 }
 
 enum Role {
@@ -86,6 +87,13 @@ model Module {
   tankCipInletValveType  TankCipInletValveType?
   tankCipInletDiameter   String?
 
+  // Tank CIP Dönüş Hattı (modül seviyesinde, tüm tanklar için ortak)
+  tankCipReturnManifoldExists Boolean @default(false)
+  tankCipReturnLineCount      Int     @default(1)
+  tankCipReturnPumpModel      String?
+  tankCipReturnPumpKw         Float?
+  tankCipReturnPumpImpellerSize Float?
+
   creatorId  String
   reviewerId String?
   createdAt  DateTime  @default(now())
@@ -99,6 +107,25 @@ model Module {
   aiReviews    AIReview[]
   documents    GeneratedDocument[]
   activities   ModuleActivity[]
+  revisions    ModuleRevision[]
+}
+
+model ModuleRevision {
+  id             String   @id @default(cuid())
+  moduleId       String
+  revisionNumber Int                      // 1, 2, 3...
+  label          String                   // "RV-01", "RV-02"...
+  description    String                   @db.Text
+  detectedChanges Json?                   // [{ field, before, after }]
+  snapshot       Json                     // full module state
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  module    Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("ModuleRevisionCreator", fields: [createdById], references: [id])
+
+  @@unique([moduleId, revisionNumber])
+  @@index([moduleId, createdAt])
 }
 
 enum Standard {

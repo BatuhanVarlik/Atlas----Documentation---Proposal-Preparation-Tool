@@ -298,15 +298,6 @@ export default function ValveClusterPanel({ moduleId, standard, valveCluster, ha
 
   return (
     <div className="space-y-4">
-      {/* Canlı hesap özeti */}
-      {liveCalc && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex flex-wrap gap-4 text-xs font-mono text-emerald-800">
-          <span>Seçilen Boru: <strong>{liveCalc.selectedDN.dn}</strong> (iç ∅{liveCalc.selectedDN.inner} mm / dış ∅{liveCalc.selectedDN.outer} mm)</span>
-          <span>Drain: {liveCalc.drainValveSize}</span>
-          <span>CIP: {liveCalc.cipReturnSize}</span>
-          <span>Leakage: {liveCalc.leakageChamberMm} mm (sabit)</span>
-        </div>
-      )}
       {calcError && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-xs text-amber-700">{calcError}</div>
       )}
