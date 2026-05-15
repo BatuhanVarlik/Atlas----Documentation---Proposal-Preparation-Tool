@@ -54,6 +54,16 @@ function ProjectsIcon() {
   );
 }
 
+function RevisionsIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <polyline points="3 4 3 10 9 10" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  );
+}
+
 function PricingIcon() {
   return (
     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -76,6 +86,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
   { href: '/projects', label: 'Projeler', Icon: ProjectsIcon },
   { href: '/modules', label: 'Modüller', Icon: ModulesIcon },
+  { href: '/revisions', label: 'Revizyon Geçmişi', Icon: RevisionsIcon },
   { href: '/pricing', label: 'Fiyat Kataloğu', Icon: PricingIcon },
   { href: '/templates', label: 'Şablonlar', Icon: TemplatesIcon },
   { href: '/users', label: 'Kullanıcılar', Icon: UsersIcon },

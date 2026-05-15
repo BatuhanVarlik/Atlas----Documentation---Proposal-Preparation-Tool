@@ -8,7 +8,7 @@ import { formatDate } from '@/lib/utils';
 import ValveClusterPanel from '@/components/module-builder/ValveClusterPanel';
 import TanksPanel from '@/components/module-builder/TanksPanel';
 import TankCipReturnPanel from '@/components/module-builder/TankCipReturnPanel';
-import RevisionPanel from '@/components/module-builder/RevisionPanel';
+import SaveRevisionButton from '@/components/module-builder/SaveRevisionButton';
 import Modal from '@/components/ui/Modal';
 import { useModuleBuilder } from '@/store/moduleBuilderStore';
 
@@ -263,6 +263,8 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
 
   return (
     <div className="max-w-4xl">
+      <SaveRevisionButton moduleId={module.id} />
+
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-slate-500 mb-5">
         <Link href="/modules" className="hover:text-slate-900">Modüller</Link>
@@ -614,12 +616,6 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
       <div className="mb-5">
         <h2 className="text-base font-semibold text-slate-800 mb-3">Tanklar</h2>
         <TanksPanel moduleId={module.id} tanks={module.tanks} />
-      </div>
-
-      {/* Revizyon Geçmişi */}
-      <div className="mb-5">
-        <h2 className="text-base font-semibold text-slate-800 mb-3">Revizyon Geçmişi</h2>
-        <RevisionPanel moduleId={module.id} />
       </div>
 
       {/* Tank CIP Dönüş */}
