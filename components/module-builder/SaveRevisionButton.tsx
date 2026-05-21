@@ -12,9 +12,11 @@ interface DetectedChange {
 
 interface Props {
   moduleId: string;
+  /** API ön eki — örn. /api/modules veya /api/milk-reception-modules */
+  apiBase?: string;
 }
 
-export default function SaveRevisionButton({ moduleId }: Props) {
+export default function SaveRevisionButton({ moduleId, apiBase = '/api/modules' }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState('');
@@ -33,7 +35,7 @@ export default function SaveRevisionButton({ moduleId }: Props) {
     setHintLoading(true);
     setHintChanges([]);
     try {
-      const res = await fetch(`/api/modules/${moduleId}/revisions/changes`);
+      const res = await fetch(`${apiBase}/${moduleId}/revisions/changes`);
       const json = await res.json();
       if (json.success) {
         setHintChanges(json.data.changes as DetectedChange[]);
@@ -52,7 +54,7 @@ export default function SaveRevisionButton({ moduleId }: Props) {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(`/api/modules/${moduleId}/revisions`, {
+      const res = await fetch(`${apiBase}/${moduleId}/revisions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description: description.trim() }),

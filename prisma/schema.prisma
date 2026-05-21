@@ -36,6 +36,8 @@ model User {
   resetRequests       PasswordResetRequest[] @relation("ResetRequestUser")
   resolvedResets      PasswordResetRequest[] @relation("ResetRequestResolver")
   moduleRevisions     ModuleRevision[]       @relation("ModuleRevisionCreator")
+  createdMilkReceptionModules  MilkReceptionModule[]         @relation("MilkReceptionModuleCreator")
+  milkReceptionRevisions       MilkReceptionModuleRevision[] @relation("MilkReceptionModuleRevisionCreator")
 }
 
 enum Role {
@@ -335,9 +337,11 @@ model DocumentTemplate {
   filepath     String
   placeholders Json
   isActive     Boolean  @default(true)
+  moduleType   String   @default("STORAGE")
   createdAt    DateTime @default(now())
 
-  documents GeneratedDocument[]
+  documents              GeneratedDocument[]
+  milkReceptionDocuments MilkReceptionGeneratedDocument[]
 }
 
 model PasswordResetRequest {
@@ -369,4 +373,126 @@ model ModuleActivity {
   createdAt DateTime @default(now())
 
   module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+}
+
+// =====================================================================
+// MİLK RECEPTION MODULE (Süt Alım) — Storage modülünden bağımsız yapı
+// =====================================================================
+
+model MilkReceptionModule {
+  id           String       @id @default(cuid())
+  name         String
+  customerName String?
+  projectCode  String?
+  standard     Standard
+  valveControlUnit ControlUnitType @default(AS_I)
+  status       ModuleStatus @default(DRAFT)
+
+  // Hesaplanan/cache değerler
+  selectedDN            String?
+  selectedInnerDiameter Float?
+  selectedOuterDiameter Float?
+
+  // Tanker CIP (modül başına 1, opsiyonel)
+  hasTankerCip              Boolean @default(false)
+  tankerCipCapacity         Float?
+  tankerCipPressure         Float?
+  tankerCipPumpModel        String?
+  tankerCipPumpKw           Float?
+  tankerCipPumpImpellerSize Float?
+
+  creatorId  String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  approvedAt DateTime?
+
+  creator        User                          @relation("MilkReceptionModuleCreator", fields: [creatorId], references: [id])
+  receptionLines MilkReceptionLine[]
+  revisions      MilkReceptionModuleRevision[]
+  documents      MilkReceptionGeneratedDocument[]
+}
+
+model MilkReceptionGeneratedDocument {
+  id            String   @id @default(cuid())
+  moduleId      String
+  templateId    String
+  filename      String
+  filepath      String
+  size          Int
+  generatedById String
+  createdAt     DateTime @default(now())
+
+  module   MilkReceptionModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  template DocumentTemplate    @relation(fields: [templateId], references: [id])
+}
+
+model MilkReceptionLine {
+  id        String              @id @default(cuid())
+  moduleId  String
+  module    MilkReceptionModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  name      String
+  order     Int
+
+  capacity  Float
+  pressure  Float
+  calculatedDiameter Float?     // mm, ham hesap (V=2)
+
+  // Pompa
+  pumpModel        String?
+  pumpKw           Float?
+  pumpImpellerSize Float?
+
+  // Filter Unit
+  filterUnitCount   Int               @default(1)
+  pressureMeterType PressureMeterType @default(MANOMETER)
+
+  // Milk Clarifier
+  hasMilkClarifier         Boolean                   @default(false)
+  clarifierBypassValveType ClarifierBypassValveType?
+
+  // PHE (Plate Heat Exchanger)
+  hasPhe                       Boolean             @default(false)
+  pheCapacity                  Float?
+  pheIceWaterTempSensorType    PheTempSensorType?
+  pheIceWaterPressureMeterType PressureMeterType?
+
+  // Sampling Valve
+  hasSamplingValve  Boolean             @default(false)
+  samplingValveType SamplingValveType?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum PressureMeterType {
+  MANOMETER
+  PRESSURE_TRANSMITTER
+}
+
+enum ClarifierBypassValveType {
+  SW44
+  SW41
+}
+
+enum PheTempSensorType {
+  PT100
+  THERMOMETER
+}
+
+model MilkReceptionModuleRevision {
+  id              String   @id @default(cuid())
+  moduleId        String
+  revisionNumber  Int
+  label           String
+  description     String   @db.Text
+  detectedChanges Json?
+  snapshot        Json
+  createdById     String
+  createdAt       DateTime @default(now())
+
+  module    MilkReceptionModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  createdBy User                @relation("MilkReceptionModuleRevisionCreator", fields: [createdById], references: [id])
+
+  @@unique([moduleId, revisionNumber])
+  @@index([moduleId, createdAt])
 }

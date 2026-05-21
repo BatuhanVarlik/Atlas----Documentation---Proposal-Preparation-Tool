@@ -143,23 +143,31 @@ export default function TankCipReturnPanel({ moduleId, tankCount, initial }: Pro
           {/* Vana özeti */}
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1.5">
             <p className="text-xs font-semibold text-slate-700">
-              Her hatta tank başına eklenecek ekipman (Hat: {lineCount} · Tank: {tankCount} →{' '}
-              {lineCount * tankCount} adet)
+              Ekipman özeti (Hat: {lineCount} · Tank: {tankCount})
             </p>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-              <span className="text-slate-600">
-                CIP Vanası <strong className="text-slate-800">SW41</strong>{' '}
-                <span className="text-slate-400">Çap:</span>{' '}
+            <div className="space-y-1 text-xs">
+              <div className="flex flex-wrap gap-x-3 items-center">
+                <span className="text-slate-600">
+                  CIP Vanası <strong className="text-slate-800">SW41</strong>
+                </span>
+                <span className="text-slate-500">× {lineCount * tankCount} adet (hat × tank)</span>
+                <span className="text-slate-400">Çap:</span>
                 <span className="text-blue-700 font-mono">{cipSize}</span>
-              </span>
-              <span className="text-slate-600">
-                Drain Vanası <span className="text-slate-400">Çap:</span>{' '}
+              </div>
+              <div className="flex flex-wrap gap-x-3 items-center">
+                <span className="text-slate-600">
+                  Drain Vanası <strong className="text-slate-800">SW41</strong>
+                </span>
+                <span className="text-slate-500">× {lineCount} adet (hat başına)</span>
+                <span className="text-slate-400">Çap:</span>
                 <span className="text-blue-700 font-mono">{drainSize}</span>
-              </span>
-              <span className="text-slate-600">
-                Check Valve <span className="text-slate-400">Çap:</span>{' '}
+              </div>
+              <div className="flex flex-wrap gap-x-3 items-center">
+                <span className="text-slate-600">Check Valve</span>
+                <span className="text-slate-500">× {lineCount} adet (hat başına)</span>
+                <span className="text-slate-400">Çap:</span>
                 <span className="text-blue-700 font-mono">{checkSize}</span>
-              </span>
+              </div>
             </div>
           </div>
 

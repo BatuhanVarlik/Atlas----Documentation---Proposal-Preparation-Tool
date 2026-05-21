@@ -7,6 +7,8 @@ import { calculateModule } from '@/lib/calc/moduleCalculator';
 import { formatDate, formatNumberTR } from '@/lib/utils';
 import { buildValveLineItemsForModule, type ModulePricingContext } from '@/lib/pricing/moduleValves';
 import type { CatalogValveType, ControlUnit } from '@/lib/pricing/valveMatcher';
+import { ModuleSchematic } from '@/components/module-builder/ModuleSchematic';
+import { buildStorageInstrumentItems, summarizeStorageInstruments } from '@/lib/pricing/storageInstruments';
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -123,6 +125,111 @@ export default async function ModulePreviewPage({ params }: Props) {
   const valveTotalNet = valveItems.reduce((s, i) => s + i.totalNet, 0);
   const valveMatchedCount = valveItems.filter((i) => i.matched).length;
 
+  // === Diğer Ekipmanlar ===
+  type EquipmentRow = { category: string; name: string; spec: string; quantity: number };
+  const equipment: EquipmentRow[] = [];
+  const tanks = moduleData.tanks;
+  const lineSize = calc?.selectedDN.dn ?? '—';
+
+  // ---- Tank sensörleri ----
+  if (tanks.length > 0) {
+    const lshCount = tanks.filter((t) => t.hasLSH).length;
+    const lsmCount = tanks.filter((t) => t.hasLSM).length;
+    const lslCount = tanks.filter((t) => t.hasLSL).length;
+    const ttCount  = tanks.filter((t) => t.hasTT).length;
+    const ptCount  = tanks.filter((t) => t.hasPT).length;
+    const proxCount = tanks.filter((t) => t.hasProximitySwitch).length;
+    if (lshCount > 0) equipment.push({ category: 'Tank Sensörleri', name: 'LSH (Yüksek seviye)', spec: '—', quantity: lshCount });
+    if (lsmCount > 0) equipment.push({ category: 'Tank Sensörleri', name: 'LSM (Orta seviye)', spec: '—', quantity: lsmCount });
+    if (lslCount > 0) equipment.push({ category: 'Tank Sensörleri', name: 'LSL (Düşük seviye)', spec: '—', quantity: lslCount });
+    if (ttCount > 0)  equipment.push({ category: 'Tank Sensörleri', name: 'TT (Sıcaklık transmitter)', spec: '—', quantity: ttCount });
+    if (ptCount > 0)  equipment.push({ category: 'Tank Sensörleri', name: 'PT (Basınç transmitter)', spec: '—', quantity: ptCount });
+    if (proxCount > 0) equipment.push({ category: 'Tank Sensörleri', name: 'Proximity Switch', spec: '—', quantity: proxCount });
+
+    // ---- Agitatorler ----
+    const agitatedTanks = tanks.filter((t) => t.hasAgitator);
+    for (const t of agitatedTanks) {
+      const spec = `${t.agitatorMotorKw ?? '?'} kW · ${t.agitatorRpm ?? '?'} rpm · ${t.agitatorPosition === 'TOP' ? 'Üst' : 'Yan'}`;
+      equipment.push({ category: 'Agitator', name: `Agitator — ${t.name}`, spec, quantity: 1 });
+    }
+
+    // ---- CIP Ball ----
+    const cipBallStatic = tanks.filter((t) => t.cipBall === 'STATIC').length;
+    const cipBallRotary = tanks.filter((t) => t.cipBall === 'ROTARY').length;
+    if (cipBallStatic > 0) equipment.push({ category: 'CIP Ball', name: 'CIP Ball (Statik)', spec: 'Tank içi', quantity: cipBallStatic });
+    if (cipBallRotary > 0) equipment.push({ category: 'CIP Ball', name: 'CIP Ball (Döner)', spec: 'Tank içi', quantity: cipBallRotary });
+
+    // ---- Tank başına CIP return pump ----
+    for (const t of tanks) {
+      if (t.cipReturnPumpModel) {
+        const spec = `${t.cipReturnPumpModel}${t.cipReturnPumpKw != null ? ` · ${t.cipReturnPumpKw}kW` : ''}${t.cipReturnPumpImpellerSize != null ? ` · ⌀${t.cipReturnPumpImpellerSize}mm` : ''}`;
+        equipment.push({ category: 'Pompalar', name: `CIP Dönüş Pompası — ${t.name}`, spec, quantity: 1 });
+      }
+    }
+  }
+
+  // ---- Discharge hatları: pompalar + FM + PT ----
+  for (const line of dl) {
+    if (line.pumpModel) {
+      const spec = `${line.pumpModel}${line.pumpKw != null ? ` · ${line.pumpKw}kW` : ''}${line.pumpImpellerSize != null ? ` · ⌀${line.pumpImpellerSize}mm` : ''}`;
+      equipment.push({ category: 'Pompalar', name: `Boşaltım Pompası — ${line.name}`, spec, quantity: 1 });
+    }
+  }
+  const flowMeterLines = dl.filter((l) => l.hasFlowMeter);
+  if (flowMeterLines.length > 0) {
+    // Çap bazında grupla
+    const fmGroups = new Map<string, number>();
+    for (const l of flowMeterLines) {
+      const fmResult = calc?.flowMeterResults.find((r) => r.lineId === l.id);
+      const size = fmResult?.selectedDN.dn ?? lineSize;
+      fmGroups.set(size, (fmGroups.get(size) ?? 0) + 1);
+    }
+    fmGroups.forEach((count, size) => {
+      equipment.push({ category: 'Ölçüm', name: 'Flow Meter (electromagnetic)', spec: size, quantity: count });
+    });
+  }
+  const ptLines = dl.filter((l) => l.hasPressureTransmitter).length;
+  if (ptLines > 0) {
+    equipment.push({ category: 'Ölçüm', name: 'Pressure Transmitter (hat üzeri)', spec: 'Boşaltım hattı', quantity: ptLines });
+  }
+
+  // ---- Tank CIP Dönüş Pompası (modül seviyesi) ----
+  if (moduleData.tankCipReturnPumpModel) {
+    const spec = `${moduleData.tankCipReturnPumpModel}${moduleData.tankCipReturnPumpKw != null ? ` · ${moduleData.tankCipReturnPumpKw}kW` : ''}${moduleData.tankCipReturnPumpImpellerSize != null ? ` · ⌀${moduleData.tankCipReturnPumpImpellerSize}mm` : ''}`;
+    equipment.push({ category: 'Pompalar', name: 'Tank CIP Dönüş Pompası (modül)', spec, quantity: 1 });
+  }
+
+  const equipmentTotal = equipment.reduce((s, e) => s + e.quantity, 0);
+
+  // === Enstrüman Fiyatlandırma ===
+  const instrumentRows = (moduleData.tanks.length > 0 || dl.length > 0)
+    ? buildStorageInstrumentItems({
+        standard: moduleData.standard as 'DIN' | 'SMS',
+        tanks: moduleData.tanks.map((t) => ({
+          name: t.name,
+          hasLSH: t.hasLSH,
+          hasLSM: t.hasLSM,
+          hasLSL: t.hasLSL,
+          hasTT: t.hasTT,
+          hasPT: t.hasPT,
+          hasProximitySwitch: t.hasProximitySwitch,
+          hasAgitator: t.hasAgitator,
+          agitatorMotorKw: t.agitatorMotorKw,
+          cipBall: t.cipBall as 'STATIC' | 'ROTARY',
+        })),
+        dischargeLines: dl.map((l) => {
+          const fmResult = calc?.flowMeterResults.find((r) => r.lineId === l.id);
+          return {
+            name: l.name,
+            hasFlowMeter: l.hasFlowMeter,
+            flowMeterSize: l.hasFlowMeter ? (fmResult?.selectedDN.dn ?? calc?.selectedDN.dn ?? null) : null,
+            hasPressureTransmitter: l.hasPressureTransmitter,
+          };
+        }),
+      })
+    : [];
+  const instrumentSummary = summarizeStorageInstruments(instrumentRows);
+
   return (
     <div className="max-w-6xl">
       {/* Breadcrumb */}
@@ -172,6 +279,38 @@ export default async function ModulePreviewPage({ params }: Props) {
           <Row label="Tarih" value={formatDate(moduleData.createdAt)} />
         </div>
       </Collapsible>
+
+      {/* Şematik Diyagram */}
+      {(hasLines || moduleData.tanks.length > 0) && (
+        <Collapsible title="Şematik Diyagram" subtitle="Vana / Pompa / Hat görünümü" defaultOpen>
+          <ModuleSchematic
+            tanks={moduleData.tanks.map((t) => ({ name: t.name, volume: t.volume }))}
+            fillingLines={fl.map((l) => ({
+              name: l.name,
+              capacity: l.capacity,
+              connectedTankCount: l.connectedTankCount,
+            }))}
+            dischargeLines={dl.map((l) => ({
+              name: l.name,
+              capacity: l.capacity,
+              connectedTankCount: l.connectedTankCount,
+              hasPump: !!l.pumpModel,
+            }))}
+            fixedFillingValves={FIXED_FILLING_VALVES}
+            fixedDischargeValves={FIXED_DISCHARGE_VALVES}
+            selectedDN={calc?.selectedDN.dn}
+            tankCipReturn={
+              moduleData.tanks.length > 0
+                ? {
+                    manifoldExists: moduleData.tankCipReturnManifoldExists,
+                    lineCount: moduleData.tankCipReturnLineCount,
+                    hasPump: !!moduleData.tankCipReturnPumpModel,
+                  }
+                : null
+            }
+          />
+        </Collapsible>
+      )}
 
       {/* Sabit Vana Grubu (her hatta uygulanır) */}
       {hasLines && (
@@ -260,72 +399,130 @@ export default async function ModulePreviewPage({ params }: Props) {
         </Collapsible>
       )}
 
-      {/* Vana Fiyatlandırma */}
-      {valveItems.length > 0 && (
-        <Collapsible
-          title="Vana Fiyatlandırma"
-          subtitle={`${valveMatchedCount} / ${valveItems.length} eşleşti`}
-          badge={
-            <span className="text-base font-bold text-slate-800 font-mono">
-              {formatNumberTR(valveTotalNet, { decimals: 2 })} EUR
-            </span>
-          }
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-y border-slate-200">
-                <tr>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600">Bağlam</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600">Vana</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600">Çap</th>
-                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-16">Adet</th>
-                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-32">Birim Liste</th>
-                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-32">Birim Net</th>
-                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-32">Toplam</th>
-                </tr>
-              </thead>
-              <tbody>
-                {valveItems.map((it, i) => (
-                  <tr key={i} className="border-b border-slate-100">
-                    <td className="py-2 px-3 text-xs text-slate-700">{it.context}</td>
-                    <td className="py-2 px-3 text-slate-800">
-                      <div>{it.description}</div>
-                      {it.matchedItem && (
-                        <div className="text-[10px] text-slate-500 mt-0.5 font-mono">{it.matchedItem.eqNo} · {it.matchedItem.techSpec.slice(0, 60)}</div>
-                      )}
-                      {!it.matched && it.reason && (
-                        <div className="text-[10px] text-slate-500 mt-0.5">{it.reason}</div>
-                      )}
-                    </td>
-                    <td className="py-2 px-3 text-xs text-slate-600 font-mono">{it.size}</td>
-                    <td className="py-2 px-3 text-right font-mono text-slate-700">{it.quantity}</td>
-                    <td className="py-2 px-3 text-right font-mono text-slate-700">
-                      {it.matched ? formatNumberTR(it.unitPrice, { decimals: 2 }) : '—'}
-                    </td>
-                    <td className="py-2 px-3 text-right font-mono text-slate-700">
-                      {it.matched ? formatNumberTR(it.unitNetPrice, { decimals: 2 }) : '—'}
-                    </td>
-                    <td className="py-2 px-3 text-right font-mono font-semibold text-slate-800">
-                      {it.matched ? formatNumberTR(it.totalNet, { decimals: 2 }) : '—'}
+      {/* Fiyatlandırma (vanalar + enstrümanlar tek tabloda) */}
+      {(valveItems.length > 0 || instrumentRows.length > 0) && (() => {
+        type PricingRow = {
+          category: string;
+          description: string;
+          context?: string;
+          size: string | null;
+          quantity: number;
+          matched: boolean;
+          matchedItem: { eqNo: string; techSpec: string } | null;
+          reason?: string;
+          unitPrice: number;
+          unitNetPrice: number;
+          totalNet: number;
+        };
+        const combined: PricingRow[] = [
+          ...valveItems.map((it) => ({
+            category: 'Vanalar',
+            description: it.description,
+            context: it.context,
+            size: it.size,
+            quantity: it.quantity,
+            matched: it.matched,
+            matchedItem: it.matchedItem
+              ? { eqNo: it.matchedItem.eqNo, techSpec: it.matchedItem.techSpec }
+              : null,
+            reason: it.reason,
+            unitPrice: it.unitPrice,
+            unitNetPrice: it.unitNetPrice,
+            totalNet: it.totalNet,
+          })),
+          ...instrumentRows.map((r) => ({
+            category: r.category,
+            description: r.description,
+            size: r.size,
+            quantity: r.quantity,
+            matched: r.matched,
+            matchedItem: r.matchedItem
+              ? { eqNo: r.matchedItem.eqNo, techSpec: r.matchedItem.techSpec }
+              : null,
+            reason: r.reason,
+            unitPrice: r.unitPrice,
+            unitNetPrice: r.unitNetPrice,
+            totalNet: r.totalNet,
+          })),
+        ];
+        const total = combined.reduce((s, r) => s + (r.matched ? r.totalNet : 0), 0);
+        const matched = combined.filter((r) => r.matched).length;
+
+        return (
+          <Collapsible
+            title="Fiyatlandırma"
+            subtitle={`${matched} / ${combined.length} eşleşti`}
+            badge={
+              <span className="text-base font-bold text-slate-800 font-mono">
+                {formatNumberTR(total, { decimals: 2 })} EUR
+              </span>
+            }
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-y border-slate-200">
+                  <tr>
+                    <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600 w-28">Kategori</th>
+                    <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600">Ekipman</th>
+                    <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600 w-24">Çap</th>
+                    <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-16">Adet</th>
+                    <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-28">Birim Liste</th>
+                    <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-28">Birim Net</th>
+                    <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-28">Toplam</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {combined.map((r, i) => (
+                    <tr key={i} className="border-b border-slate-100">
+                      <td className="py-2 px-3">
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
+                          {r.category}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-slate-800">
+                        <div>{r.description}</div>
+                        {r.context && (
+                          <div className="text-[10px] text-slate-500 mt-0.5">{r.context}</div>
+                        )}
+                        {r.matchedItem && (
+                          <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                            {r.matchedItem.eqNo} · {r.matchedItem.techSpec.slice(0, 70)}
+                          </div>
+                        )}
+                        {!r.matched && r.reason && (
+                          <div className="text-[10px] text-slate-500 mt-0.5">{r.reason}</div>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-600 font-mono">{r.size ?? '—'}</td>
+                      <td className="py-2 px-3 text-right font-mono text-slate-700">{r.quantity}</td>
+                      <td className="py-2 px-3 text-right font-mono text-slate-700">
+                        {r.matched ? formatNumberTR(r.unitPrice, { decimals: 2 }) : '—'}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono text-slate-700">
+                        {r.matched ? formatNumberTR(r.unitNetPrice, { decimals: 2 }) : '—'}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono font-semibold text-slate-800">
+                        {r.matched ? formatNumberTR(r.totalNet, { decimals: 2 }) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-50 border-t-2 border-slate-300">
+                    <td colSpan={6} className="py-3 px-3 text-right text-sm font-semibold text-slate-700">Toplam (EUR)</td>
+                    <td className="py-3 px-3 text-right font-mono font-bold text-slate-800 text-lg">
+                      {formatNumberTR(total, { decimals: 2 })}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-slate-50 border-t-2 border-slate-300">
-                  <td colSpan={6} className="py-3 px-3 text-right text-sm font-semibold text-slate-700">Toplam (EUR)</td>
-                  <td className="py-3 px-3 text-right font-mono font-bold text-slate-800 text-lg">
-                    {formatNumberTR(valveTotalNet, { decimals: 2 })}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <p className="mt-3 text-[11px] text-slate-500">
-            Net birim fiyat = Liste × (1 − İskonto). Eşleşmeyen satırlar toplama dahil edilmez — katalogda doğrudan karşılığı bulunamadı.
-          </p>
-        </Collapsible>
-      )}
+                </tfoot>
+              </table>
+            </div>
+            <p className="mt-3 text-[11px] text-slate-500">
+              Net birim fiyat = Liste × (1 − İskonto). Eşleşmeyen satırlar toplama dahil edilmez. W+ serisi pompalar katalogda olmadığı için listelenmez — manuel fiyatlanmalıdır.
+            </p>
+          </Collapsible>
+        );
+      })()}
 
       {/* Dolum Hatları */}
       {fl.length > 0 && (
@@ -521,20 +718,34 @@ export default async function ModulePreviewPage({ params }: Props) {
             <>
               <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 mb-3">
                 <p className="text-xs font-semibold text-slate-700 mb-2">
-                  Hat başına tank başına ekipman ({moduleData.tankCipReturnLineCount} hat × {moduleData.tanks.length} tank ={' '}
-                  {moduleData.tankCipReturnLineCount * moduleData.tanks.length} adet)
+                  Ekipman özeti ({moduleData.tankCipReturnLineCount} hat · {moduleData.tanks.length} tank)
                 </p>
                 <div className="space-y-1.5 text-sm">
-                  <div className="flex justify-between gap-2">
-                    <span className="text-slate-700">CIP Vanası <strong className="text-slate-800">SW41</strong></span>
+                  <div className="flex justify-between gap-2 items-center">
+                    <span className="text-slate-700">
+                      CIP Vanası <strong className="text-slate-800">SW41</strong>
+                      <span className="ml-2 text-[11px] text-slate-500">
+                        × {moduleData.tankCipReturnLineCount * moduleData.tanks.length} adet (hat × tank)
+                      </span>
+                    </span>
                     <span className="text-slate-800 font-mono text-[11px]">Çap: {tankCipPipeSize}</span>
                   </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-slate-700">Drain Vanası</span>
+                  <div className="flex justify-between gap-2 items-center">
+                    <span className="text-slate-700">
+                      Drain Vanası <strong className="text-slate-800">SW41</strong>
+                      <span className="ml-2 text-[11px] text-slate-500">
+                        × {moduleData.tankCipReturnLineCount} adet (hat başına)
+                      </span>
+                    </span>
                     <span className="text-slate-800 font-mono text-[11px]">Çap: {tankCipDrainSize}</span>
                   </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-slate-700">Check Valve</span>
+                  <div className="flex justify-between gap-2 items-center">
+                    <span className="text-slate-700">
+                      Check Valve
+                      <span className="ml-2 text-[11px] text-slate-500">
+                        × {moduleData.tankCipReturnLineCount} adet (hat başına)
+                      </span>
+                    </span>
                     <span className="text-slate-800 font-mono text-[11px]">Çap: {tankCipPipeSize}</span>
                   </div>
                 </div>
@@ -555,6 +766,47 @@ export default async function ModulePreviewPage({ params }: Props) {
               )}
             </>
           )}
+        </Collapsible>
+      )}
+
+      {/* Diğer Ekipmanlar */}
+      {equipment.length > 0 && (
+        <Collapsible title="Diğer Ekipmanlar" subtitle={`${equipmentTotal} adet`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-y border-slate-200">
+                <tr>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-slate-700 w-32">Kategori</th>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-slate-700">Ekipman</th>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-slate-700">Açıklama / Model</th>
+                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-700 w-24">Adet</th>
+                </tr>
+              </thead>
+              <tbody>
+                {equipment.map((e, i) => (
+                  <tr key={i} className="border-b border-slate-100">
+                    <td className="py-2 px-3">
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
+                        {e.category}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-slate-800">{e.name}</td>
+                    <td className="py-2 px-3 text-xs text-slate-600">{e.spec}</td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-slate-800">{e.quantity}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-50 border-t-2 border-slate-300">
+                  <td colSpan={3} className="py-2 px-3 text-right text-xs font-semibold text-slate-700">Toplam</td>
+                  <td className="py-2 px-3 text-right font-mono font-bold text-slate-800">{equipmentTotal}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-3">
+            Vanalar bu listede yer almaz — onlar için <strong>Kullanılacak Vanalar</strong> kartına bakın. Burada sensörler, agitator, CIP ball, pompalar ve ölçüm cihazları listelenir.
+          </p>
         </Collapsible>
       )}
 

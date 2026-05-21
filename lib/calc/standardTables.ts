@@ -18,7 +18,7 @@ export const SMS_TABLE: PipeSize[] = [
   { dn: '25 SMS (1")',      inner: 23.4, outer: 25.4  },
   { dn: '38 SMS (1"1/2)',   inner: 36,   outer: 38    },
   { dn: '51 SMS (2")',      inner: 48.5, outer: 51    },
-  { dn: '63 SMS (2"1/2)',   inner: 60.5, outer: 63.5  },
+  { dn: '63 SMS (2"1/2)',   inner: 60.5, outer: 63.5  },  
   { dn: '76 SMS (3")',      inner: 73,   outer: 76.2  },
   { dn: '101,6 SMS (4")',   inner: 97.6, outer: 101.6 },
 ];

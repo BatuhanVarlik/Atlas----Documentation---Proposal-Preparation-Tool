@@ -231,14 +231,17 @@ export function buildValveLineItemsForModule(ctx: ModulePricingContext): ValveLi
     ctx.tankCipReturn.lineCount > 0 &&
     selectedSize
   ) {
-    const totalQty = ctx.tankCipReturn.lineCount * ctx.tankCipReturn.tankCount;
+    // CIP Vanası: her hatta her tank için bir tane → lineCount × tankCount
+    // Drain Vanası: her hatta bir tane (manifold seviyesinde) → lineCount
+    const cipQty = ctx.tankCipReturn.lineCount * ctx.tankCipReturn.tankCount;
+    const drainQty = ctx.tankCipReturn.lineCount;
     const label = `Tank CIP Dönüş (${ctx.tankCipReturn.lineCount} hat × ${ctx.tankCipReturn.tankCount} tank)`;
     push({
       description: 'CIP Dönüş Vanası — SW41',
       context: label,
       valveType: 'SW41',
       size: selectedSize,
-      quantity: totalQty,
+      quantity: cipQty,
       controlUnit: ctx.controlUnit,
     });
     if (drainSize) {
@@ -247,7 +250,7 @@ export function buildValveLineItemsForModule(ctx: ModulePricingContext): ValveLi
         context: label,
         valveType: 'SW41',
         size: drainSize,
-        quantity: totalQty,
+        quantity: drainQty,
         controlUnit: ctx.controlUnit,
       });
     }

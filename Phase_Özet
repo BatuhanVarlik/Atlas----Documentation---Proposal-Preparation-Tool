@@ -88,3 +88,45 @@ ModuleDetailClient.tsx — Tank interface tüm alanlarla genişletildi, TanksPan
 Pompa Modeli ve Çark Boyutu input'ları artık combo-box olarak çalışıyor — kullanıcı serbest metin yazabilir veya input'a tıklayıp/oka basıp dropdown listeden seçebilir. Liste sabitleri lib/constants/pumpOptions.ts içinde tutuluyor; hem toplu ekleme formunda (ValveClusterPanel.tsx) hem de hat detay formunda (DischargeLineForm.tsx) aynı kaynaktan besleniyor.
 
 Yeni pompa modeli veya impeller boyutu eklemen gerekirse o tek dosyayı güncellemen yeterli.
+
+Excel analizi:
+
+PRECALCULATION sheet'inde 23.380 satır, 88 sütun
+2.500 ürün satırı, 2.049 ürünün geçerli liste fiyatı var
+Üst kategori sayısı: 14 (PROCESS VALVES, OTHER VALVE, PUMPS, INSTRUMENTS, MIXER & AGITATOR, COMPRESSED AIR TREATMENT, UTILITY MATERIALS, CIP BALL, STERIL AIR CABINET, vs.)
+Alt kategori ~ 200+, ürün tipi (Butterfly Valve, Single Seat Valve, Centrifugal Pump, vb.) 156 farklı
+Tedarikçi: 62 distinct (APV/SPX FLOW TECH., EUROBINOX, KROHNE, SAMSON, vs.)
+Çıkarılan veri yapısı (lib/pricing/precalculation.json — 646 KB):
+
+eqNo — APV stok kodu (örn: H349979)
+techSpec — açıklama
+category — ürün tipi (col H)
+topCategory / subCategory — hiyerarşi (ör: PROCESS VALVES › SV1 BUTTERFLY VALVE)
+standard — SMS / DIN / boş
+supplier, label
+listPrice, discount, netPrice (= liste × (1 − iskonto))
+Sayfa — /pricing:
+
+Sol menüye "Fiyat Kataloğu" linki eklendi
+Üstte 4'lü filtre satırı: Arama / Standart (DIN/SMS) / Tedarikçi
+Hiyerarşik filtre: Üst Kategori → Alt Kategori → Ürün Tipi (üstteki seçim alttakileri daraltır)
+Min/Maks fiyat filtresi
+3 stat kartı: Eşleşen ürün adedi, toplam liste değeri, toplam net değer
+Sıralanabilir tablo (Eq No, Açıklama, Ürün Tipi, Liste, Net)
+Sayfa başına 50 ürün, sayfa gezinme
+Excel güncellenince yeniden çıkartma:
+
+
+npm run pricing:extract
+# veya: node scripts/extract-precalculation.js public/YENI_DOSYA.xlsm
+Test için dev server'ı başlatıp /pricing sayfasına gidin — fiyatları görüp filtrelerin doğru çalıştığını doğrulayın.
+
+Katalogda olmayan ve fiyatlanmayan ürünler: Milk Clarifier, Plate Heat Exchanger (gövde), W+ serisi pompalar — kart altı notunda "manuel fiyatlanmalıdır" uyarısı
+
+Preview kartı: Storage'daki Vana Fiyatlandırma kartıyla aynı UI:
+
+Kategori | Ekipman | Çap | Adet | Birim Liste | Birim Net | Toplam
+Eşleşmeyen satırlar — ile gösterilir, sebep mesajı altta küçük yazıyla
+Toplam (EUR) sağ üst rozet + tablo footer'da
+"Net birim fiyat = Liste × (1 − İskonto)" açıklaması altta
+size çıkarımı lib/calc/standardTables.ts'teki DIN/SMS outer diameter değerlerinden türetiliyor; katalogda DIA N / NW-N / ISO-N token'ları ile ±2mm tolerans ile aranıyor. Storage modülüyle aynı vana matcher (findValvePrice) kullanılıyor — SV1, SWCIP41, SW44/SW41 için.

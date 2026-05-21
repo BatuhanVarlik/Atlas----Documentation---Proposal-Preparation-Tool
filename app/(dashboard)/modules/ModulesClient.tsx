@@ -4,25 +4,29 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ModuleStatusBadge } from '@/components/ui/StatusBadge';
 import { formatDate } from '@/lib/utils';
-import Modal from '@/components/ui/Modal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import ContextMenu, { type ContextMenuEntry } from '@/components/ui/ContextMenu';
+import NewModuleModal from '@/components/modules/NewModuleModal';
 
-interface Module {
+export type ModuleType = 'STORAGE' | 'MILK_RECEPTION';
+
+export interface UnifiedModule {
   id: string;
+  type: ModuleType;
   name: string;
   customerName: string | null;
   projectCode: string | null;
   standard: string;
-  productType: string;
+  productType: string | null;
   status: 'DRAFT' | 'IN_PROGRESS' | 'REVIEW' | 'APPROVED' | 'DOCUMENT_GENERATED' | 'ARCHIVED' | 'CANCELLED';
+  childCount: number;
+  childLabel: string;
   createdAt: Date | string;
   creator: { id: string; name: string };
-  _count: { tanks: number };
 }
 
 interface Props {
-  initialModules: Module[];
+  initialModules: UnifiedModule[];
   userRole: string;
   userId: string;
 }
@@ -37,28 +41,40 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'ARCHIVED', label: 'Arşivlendi' },
 ];
 
-const STANDARD_LABELS: Record<string, string> = { DIN: 'DIN', SMS: 'SMS' };
+const TYPE_LABELS: Record<ModuleType, string> = {
+  STORAGE: 'Raw Milk Storage',
+  MILK_RECEPTION: 'Raw Milk Reception',
+};
+
 const PRODUCT_LABELS: Record<string, string> = {
   HYGIENIC: 'Hijyenik',
   ULTRA_HYGIENIC: 'Ultrahijyenik',
 };
 
-export default function ModulesClient({ initialModules, userRole, userId }: Props) {
+function moduleHref(m: UnifiedModule): string {
+  return m.type === 'STORAGE' ? `/modules/${m.id}` : `/milk-reception-modules/${m.id}`;
+}
+
+function moduleApiBase(m: UnifiedModule): string {
+  return m.type === 'STORAGE' ? `/api/modules/${m.id}` : `/api/milk-reception-modules/${m.id}`;
+}
+
+export default function ModulesClient({ initialModules }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [standardFilter, setStandardFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'' | ModuleType>('');
 
-  // Context menu + delete state
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; module: Module } | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Module | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; module: UnifiedModule } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UnifiedModule | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/modules/${deleteTarget.id}`, { method: 'DELETE' });
+      const res = await fetch(moduleApiBase(deleteTarget), { method: 'DELETE' });
       const json = await res.json();
       if (!json.success) {
         alert(json.error ?? 'Silinemedi');
@@ -71,15 +87,7 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
     }
   }
 
-  // Create modal state
   const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newCustomer, setNewCustomer] = useState('');
-  const [newCode, setNewCode] = useState('');
-  const [newStandard, setNewStandard] = useState<'DIN' | 'SMS'>('DIN');
-  const [newProductType, setNewProductType] = useState<'HYGIENIC' | 'ULTRA_HYGIENIC'>('HYGIENIC');
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState('');
 
   const filtered = useMemo(() => {
     return initialModules.filter((m) => {
@@ -91,40 +99,10 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
         (m.projectCode ?? '').toLowerCase().includes(q);
       const matchStatus = !statusFilter || m.status === statusFilter;
       const matchStandard = !standardFilter || m.standard === standardFilter;
-      return matchSearch && matchStatus && matchStandard;
+      const matchType = !typeFilter || m.type === typeFilter;
+      return matchSearch && matchStatus && matchStandard && matchType;
     });
-  }, [initialModules, search, statusFilter, standardFilter]);
-
-  function resetCreateForm() {
-    setNewName(''); setNewCustomer(''); setNewCode('');
-    setNewStandard('DIN'); setNewProductType('HYGIENIC');
-    setCreateError('');
-  }
-
-  async function handleCreate() {
-    if (!newName.trim()) { setCreateError('Modül adı zorunludur'); return; }
-    setCreating(true); setCreateError('');
-    try {
-      const res = await fetch('/api/modules', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newName.trim(),
-          customerName: newCustomer.trim() || undefined,
-          projectCode: newCode.trim() || undefined,
-          standard: newStandard,
-          productType: newProductType,
-        }),
-      });
-      const json = await res.json();
-      if (!json.success) { setCreateError(json.error ?? 'Hata'); return; }
-      setShowCreate(false);
-      resetCreateForm();
-      router.push(`/modules/${json.data.id}`);
-    } finally {
-      setCreating(false);
-    }
-  }
+  }, [initialModules, search, statusFilter, standardFilter, typeFilter]);
 
   return (
     <div>
@@ -136,14 +114,13 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
           </p>
         </div>
         <button
-          onClick={() => { setShowCreate(true); resetCreateForm(); }}
+          onClick={() => setShowCreate(true)}
           className="px-4 py-2 bg-secondary hover:bg-secondary-container text-white text-sm font-semibold rounded-lg transition-colors"
         >
           + Yeni Modül
         </button>
       </div>
 
-      {/* Filtreler */}
       <div className="flex flex-wrap gap-3 mb-5">
         <input
           type="text"
@@ -152,6 +129,15 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
           onChange={(e) => setSearch(e.target.value)}
           className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-64"
         />
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as '' | ModuleType)}
+          className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Tüm Modül Tipleri</option>
+          <option value="STORAGE">Raw Milk Storage</option>
+          <option value="MILK_RECEPTION">Raw Milk Reception</option>
+        </select>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -170,9 +156,9 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
           <option value="DIN">DIN</option>
           <option value="SMS">SMS</option>
         </select>
-        {(search || statusFilter || standardFilter) && (
+        {(search || statusFilter || standardFilter || typeFilter) && (
           <button
-            onClick={() => { setSearch(''); setStatusFilter(''); setStandardFilter(''); }}
+            onClick={() => { setSearch(''); setStatusFilter(''); setStandardFilter(''); setTypeFilter(''); }}
             className="px-3 py-2 text-sm text-slate-500 hover:text-slate-900 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
           >
             Temizle
@@ -183,13 +169,13 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
       {filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
           <p className="text-slate-400 text-sm">
-            {search || statusFilter || standardFilter
+            {search || statusFilter || standardFilter || typeFilter
               ? 'Filtreyle eşleşen modül yok.'
               : 'Henüz modül yok. Yeni modül oluşturun.'}
           </p>
-          {!search && !statusFilter && !standardFilter && (
+          {!search && !statusFilter && !standardFilter && !typeFilter && (
             <button
-              onClick={() => { setShowCreate(true); resetCreateForm(); }}
+              onClick={() => setShowCreate(true)}
               className="inline-block mt-3 text-sm text-blue-600 hover:text-blue-700"
             >
               + Yeni Modül Oluştur
@@ -202,11 +188,12 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Modül</th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">Tip</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Müşteri</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Standart</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Ürün Tipi</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Durum</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">Tanklar</th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">Hat / Tank</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Oluşturan</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Tarih</th>
               </tr>
@@ -214,8 +201,8 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
             <tbody>
               {filtered.map((mod) => (
                 <tr
-                  key={mod.id}
-                  onClick={() => router.push(`/modules/${mod.id}`)}
+                  key={`${mod.type}-${mod.id}`}
+                  onClick={() => router.push(moduleHref(mod))}
                   onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, module: mod }); }}
                   className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer"
                 >
@@ -227,13 +214,22 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
                       <p className="text-xs text-slate-400 font-mono">{mod.projectCode}</p>
                     )}
                   </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${mod.type === 'STORAGE' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>
+                      {TYPE_LABELS[mod.type]}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-slate-600">
                     {mod.customerName ?? <span className="text-slate-300">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{STANDARD_LABELS[mod.standard]}</td>
-                  <td className="px-4 py-3 text-slate-600">{PRODUCT_LABELS[mod.productType]}</td>
+                  <td className="px-4 py-3 text-slate-600">{mod.standard}</td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {mod.productType ? (PRODUCT_LABELS[mod.productType] ?? mod.productType) : <span className="text-slate-300">—</span>}
+                  </td>
                   <td className="px-4 py-3"><ModuleStatusBadge status={mod.status} /></td>
-                  <td className="px-4 py-3 text-slate-600">{mod._count.tanks}</td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {mod.childCount} <span className="text-[11px] text-slate-400">{mod.childLabel}</span>
+                  </td>
                   <td className="px-4 py-3 text-slate-500">{mod.creator.name}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs">{formatDate(mod.createdAt)}</td>
                 </tr>
@@ -243,77 +239,8 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
         </div>
       )}
 
-      {/* Yeni Modül Modal */}
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); resetCreateForm(); }} title="Yeni Modül Oluştur">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Modül Adı <span className="text-red-500">*</span></label>
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="örn: Raw Milk Storage"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Müşteri Adı</label>
-              <input
-                value={newCustomer}
-                onChange={(e) => setNewCustomer(e.target.value)}
-                placeholder="örn: ABC Süt A.Ş."
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Proje Kodu</label>
-              <input
-                value={newCode}
-                onChange={(e) => setNewCode(e.target.value)}
-                placeholder="örn: PRJ-2025-001"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Standart</label>
-            <div className="flex gap-2">
-              {(['DIN', 'SMS'] as const).map((s) => (
-                <button key={s} onClick={() => setNewStandard(s)}
-                  className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${newStandard === s ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-600 hover:border-slate-400'}`}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Ürün Tipi</label>
-            <div className="flex gap-2">
-              {([{ value: 'HYGIENIC', label: 'Hijyenik' }, { value: 'ULTRA_HYGIENIC', label: 'Ultrahijyenik' }] as const).map((pt) => (
-                <button key={pt.value} onClick={() => setNewProductType(pt.value)}
-                  className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${newProductType === pt.value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-600 hover:border-slate-400'}`}>
-                  {pt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          {createError && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{createError}</p>
-          )}
-          <div className="flex gap-3 justify-end pt-1">
-            <button onClick={() => { setShowCreate(false); resetCreateForm(); }}
-              className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">
-              İptal
-            </button>
-            <button onClick={handleCreate} disabled={!newName.trim() || creating}
-              className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 rounded-lg transition-colors">
-              {creating ? 'Oluşturuluyor...' : 'Oluştur'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <NewModuleModal open={showCreate} onClose={() => setShowCreate(false)} defaultType="STORAGE" />
 
-      {/* Sağ-tık context menüsü */}
       {ctxMenu && (
         <ContextMenu
           x={ctxMenu.x}
@@ -329,14 +256,13 @@ export default function ModulesClient({ initialModules, userRole, userId }: Prop
         />
       )}
 
-      {/* Silme onayı */}
       <ConfirmDialog
         open={deleteTarget !== null}
         title="Modülü Sil"
         message={
           deleteTarget && (
             <>
-              <strong>{deleteTarget.name}</strong> modülü ve ilişkili tüm verileri (valve cluster, hatlar, tanklar) kalıcı olarak silinecek. Bu işlem geri alınamaz. Devam edilsin mi?
+              <strong>{deleteTarget.name}</strong> modülü ve ilişkili tüm verileri kalıcı olarak silinecek. Bu işlem geri alınamaz. Devam edilsin mi?
             </>
           )
         }
