@@ -50,7 +50,7 @@ interface Props {
 
 // === Sembol genişlikleri (her bileşenin yatayda kapladığı net alan) ===
 const W = {
-  tanker: 80,
+  tanker: 120,
   inletValve: 30,
   degazor: 90,
   outletValve: 30,
@@ -82,7 +82,7 @@ export function MilkReceptionSchematic({
     );
   }
 
-  const labelPad = 160;
+  const labelPad = 240;
   const symbolGap = 8;
   const lineGap = 180;        // hatlar arası dikey mesafe — degazör üstündeki bubble'lar için yeterli
   const topPad = 50;          // üst başlık + Water Inlet rozeti için
@@ -100,7 +100,6 @@ export function MilkReceptionSchematic({
       cursor += width + symbolGap;
     };
 
-    push('tanker', W.tanker);
     push('inlet-valve', W.inletValve);
     push('degazor', W.degazor);
     push('outlet-esv', W.outletValve);
@@ -132,7 +131,6 @@ export function MilkReceptionSchematic({
       items.push({ id, cx: cursor + width / 2, width });
       cursor += width + symbolGap;
     };
-    push('tanker', W.tanker);
     push('inlet-valve', W.inletValve);
     push('degazor', W.degazor);
     push('outlet-esv', W.outletValve);
@@ -259,18 +257,27 @@ function ReceptionLineRow({
   const lineEndX = layout.totalWidth - 6;
   const pmLabel = line.pressureMeterType === 'PRESSURE_TRANSMITTER' ? 'PT' : 'M';
   const pmType = line.pressureMeterType === 'PRESSURE_TRANSMITTER' ? ('local' as const) : ('local' as const);
+  // Sol blok: yatay tanker (orijinal hali) + etiket hat üstünde
+  const tankerW = W.tanker;
+  const tankerCx = 10 + tankerW / 2;
+  const tankerRightX = tankerCx + tankerW / 2;
+  const labelX = tankerRightX + 12;
 
   return (
     <g>
-      {/* Sol etiket — hat adı + kapasite + DN */}
-      <text x={lineStartX - 8} y={y - 4} fontSize="10" fill="#0f172a" fontWeight="700" textAnchor="end">
+      {/* Sol köşe: yatay tanker görseli */}
+      <Tanker cx={tankerCx} cy={y} width={tankerW} />
+      {/* Tanker sağından hat çizgisine kadar bağlantı çizgisi */}
+      <line x1={tankerRightX} y1={y} x2={lineStartX} y2={y} stroke={processColor} strokeWidth="3" />
+      {/* Etiket — tanker'in sağında, hat çizgisinin ÜSTÜNDE */}
+      <text x={labelX} y={y - 28} fontSize="12" fill="#0f172a" fontWeight="700" textAnchor="start">
         {line.name}
       </text>
-      <text x={lineStartX - 8} y={y + 8} fontSize="8" fill={PID_COLORS.muted} textAnchor="end">
+      <text x={labelX} y={y - 16} fontSize="9" fill={PID_COLORS.muted} textAnchor="start">
         {line.capacity > 0 ? `${line.capacity.toLocaleString('tr-TR')} L/h` : '— L/h'}
       </text>
       {line.dn && (
-        <text x={lineStartX - 8} y={y + 19} fontSize="8" fill="#0f172a" textAnchor="end" fontWeight="600">
+        <text x={labelX} y={y - 4} fontSize="9" fill="#0f172a" textAnchor="start" fontWeight="600">
           ⌀ {line.dn}
         </text>
       )}
@@ -283,17 +290,13 @@ function ReceptionLineRow({
 
       {layout.items.map((it) => {
         switch (it.id) {
-          case 'tanker':
+          case 'inlet-valve':
             return (
               <g key={it.id}>
-                <Tanker cx={it.cx} cy={y - 22} width={W.tanker} />
-                <text x={it.cx} y={y + 18} fontSize="6.5" textAnchor="middle" fill={PID_COLORS.muted}>
-                  Tanker / Süt girişi
-                </text>
+                <line x1={it.cx} y1={y} x2={it.cx} y2={y - 14} stroke={processColor} strokeWidth="2" />
+                <ButterflyValve cx={it.cx} cy={y - 14} color={processColor} actuated label="ESV" />
               </g>
             );
-          case 'inlet-valve':
-            return <ButterflyValve key={it.id} cx={it.cx} cy={y} color={processColor} actuated label="ESV" />;
           case 'degazor':
             return (
               <Degazor
@@ -305,7 +308,12 @@ function ReceptionLineRow({
               />
             );
           case 'outlet-esv':
-            return <ButterflyValve key={it.id} cx={it.cx} cy={y} color={processColor} actuated label="ESV outlet" />;
+            return (
+              <g key={it.id}>
+                <line x1={it.cx} y1={y} x2={it.cx} y2={y - 14} stroke={processColor} strokeWidth="2" />
+                <ButterflyValve cx={it.cx} cy={y - 14} color={processColor} actuated label="ESV outlet" />
+              </g>
+            );
           case 'pump':
             return (
               <HygienicPump
@@ -420,17 +428,23 @@ function TankerCipRow({
   const lineStartX = labelPad;
   const lineEndX = layout.totalWidth - 6;
   const cipColor = PID_COLORS.cip;
+  const tankerW = W.tanker;
+  const tankerCx = 10 + tankerW / 2;
+  const tankerRightX = tankerCx + tankerW / 2;
+  const labelX = tankerRightX + 12;
 
   return (
     <g>
-      <text x={lineStartX - 8} y={y - 4} fontSize="10" fill="#6b21a8" fontWeight="700" textAnchor="end">
+      <Tanker cx={tankerCx} cy={y} width={tankerW} />
+      <line x1={tankerRightX} y1={y} x2={lineStartX} y2={y} stroke={cipColor} strokeWidth="3" strokeDasharray="6 4" />
+      <text x={labelX} y={y - 28} fontSize="12" fill="#6b21a8" fontWeight="700" textAnchor="start">
         Tanker CIP
       </text>
-      <text x={lineStartX - 8} y={y + 8} fontSize="8" fill="#a78bfa" textAnchor="end">
+      <text x={labelX} y={y - 16} fontSize="9" fill="#a78bfa" textAnchor="start">
         {tankerCip.capacity ? `${tankerCip.capacity.toLocaleString('tr-TR')} L/h` : '— L/h'}
       </text>
       {tankerCip.dn && (
-        <text x={lineStartX - 8} y={y + 19} fontSize="8" fill="#6b21a8" textAnchor="end" fontWeight="600">
+        <text x={labelX} y={y - 4} fontSize="9" fill="#6b21a8" textAnchor="start" fontWeight="600">
           ⌀ {tankerCip.dn}
         </text>
       )}
@@ -441,17 +455,13 @@ function TankerCipRow({
 
       {layout.items.map((it) => {
         switch (it.id) {
-          case 'tanker':
+          case 'inlet-valve':
             return (
               <g key={it.id}>
-                <Tanker cx={it.cx} cy={y - 22} width={W.tanker} />
-                <text x={it.cx} y={y + 18} fontSize="6.5" textAnchor="middle" fill={PID_COLORS.muted}>
-                  Tanker CIP
-                </text>
+                <line x1={it.cx} y1={y} x2={it.cx} y2={y - 14} stroke={cipColor} strokeWidth="2" />
+                <SingleSeatValve cx={it.cx} cy={y - 14} color={cipColor} actuated label="SW41" />
               </g>
             );
-          case 'inlet-valve':
-            return <SingleSeatValve key={it.id} cx={it.cx} cy={y} color={cipColor} actuated label="SW41" />;
           case 'degazor':
             return (
               <Degazor
@@ -463,11 +473,21 @@ function TankerCipRow({
               />
             );
           case 'outlet-esv':
-            return <ButterflyValve key={it.id} cx={it.cx} cy={y} color={cipColor} actuated label="ESV outlet" />;
+            return (
+              <g key={it.id}>
+                <line x1={it.cx} y1={y} x2={it.cx} y2={y - 14} stroke={cipColor} strokeWidth="2" />
+                <ButterflyValve cx={it.cx} cy={y - 14} color={cipColor} actuated label="ESV outlet" />
+              </g>
+            );
           case 'pump':
             return <HygienicPump key={it.id} cx={it.cx} cy={y} label="CIP Pompa" />;
           case 'check':
-            return <CheckValve key={it.id} cx={it.cx} cy={y} color={cipColor} label="VPN" />;
+            return (
+              <g key={it.id}>
+                <line x1={it.cx} y1={y} x2={it.cx} y2={y - 14} stroke={cipColor} strokeWidth="2" />
+                <CheckValve cx={it.cx} cy={y - 14} color={cipColor} label="VPN" />
+              </g>
+            );
           case 'outlet':
             return (
               <g key={it.id}>

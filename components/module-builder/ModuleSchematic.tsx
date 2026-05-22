@@ -42,25 +42,25 @@ export function ModuleSchematic({
   const tankCipLineCount =
     tankCipReturn && !tankCipReturn.manifoldExists ? tankCipReturn.lineCount : 0;
 
-  // Layout sabitleri (sığması için biraz daraltıldı)
-  const tankW = 56;
-  const tankH = 70;
-  const tankGap = 18;
-  const tankAreaTop = 24;
+  // Layout sabitleri
+  const tankW = 64;
+  const tankH = 84;
+  const tankGap = 22;
+  const tankAreaTop = 36;
   const tankSpacing = tankW + tankGap;
-  const labelPad = 80;                  // sol etiket alanı
-  const preFixedPad = 90;               // boşaltım hattındaki sabit vana grubu için
+  const labelPad = 100;                 // sol etiket alanı
+  const preFixedPad = 100;              // boşaltım hattındaki sabit vana grubu için
   const leftPad = labelPad + preFixedPad; // tankların başladığı konum
-  const rightFixedPad = 140;
-  const lineGap = 42;
-  const lineStartY = tankAreaTop + tankH + 30;
+  const rightFixedPad = 150;
+  const lineGap = 52;
+  const lineStartY = tankAreaTop + tankH + 36;
 
   const tanksCount = tanks.length;
   const totalLines = fillingLines.length + dischargeLines.length + tankCipLineCount;
   const tankAreaWidth = Math.max(tanksCount, 1) * tankSpacing;
   const width = leftPad + tankAreaWidth + rightFixedPad;
   const manifoldBottom = lineStartY + Math.max(totalLines, 1) * lineGap;
-  const height = manifoldBottom + 50;
+  const height = manifoldBottom + 60;
 
   const tankCenterX = (i: number) => leftPad + i * tankSpacing + tankW / 2;
 
@@ -76,57 +76,103 @@ export function ModuleSchematic({
         preserveAspectRatio="xMidYMid meet"
         className="w-full h-auto"
       >
+        {/* Paslanmaz çelik gradient (tank dış gövde) */}
+        <defs>
+          <linearGradient id="tank-body" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#cbd5e1" />
+            <stop offset="35%" stopColor="#f1f5f9" />
+            <stop offset="65%" stopColor="#f8fafc" />
+            <stop offset="100%" stopColor="#cbd5e1" />
+          </linearGradient>
+          <linearGradient id="tank-cap" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#94a3b8" />
+            <stop offset="100%" stopColor="#cbd5e1" />
+          </linearGradient>
+        </defs>
+
         {/* Tanklar */}
         {tanks.map((t, i) => {
           const cx = tankCenterX(i);
+          const top = tankAreaTop;
+          const bodyTop = top + 10;
+          const bodyBottom = top + tankH - 10;
           return (
             <g key={i}>
+              {/* Üst kapak (yarım elips) */}
               <path
-                d={`M ${cx - tankW / 2} ${tankAreaTop + 8} A ${tankW / 2} 8 0 0 1 ${cx + tankW / 2} ${tankAreaTop + 8}`}
-                fill="#1e293b"
-                stroke="#475569"
+                d={`M ${cx - tankW / 2} ${bodyTop} A ${tankW / 2} 10 0 0 1 ${cx + tankW / 2} ${bodyTop} Z`}
+                fill="url(#tank-cap)"
+                stroke="#64748b"
+                strokeWidth="1"
               />
+              {/* Manhole — üst kapağın ortasında */}
+              <rect
+                x={cx - 4}
+                y={top - 2}
+                width="8"
+                height="6"
+                rx="1"
+                fill="#475569"
+                stroke="#334155"
+                strokeWidth="0.8"
+              />
+              {/* Gövde — paslanmaz gradient */}
               <rect
                 x={cx - tankW / 2}
-                y={tankAreaTop + 8}
+                y={bodyTop}
                 width={tankW}
-                height={tankH - 16}
-                fill="#0f172a"
-                stroke="#475569"
+                height={bodyBottom - bodyTop}
+                fill="url(#tank-body)"
+                stroke="#64748b"
+                strokeWidth="1"
               />
+              {/* Konik alt (V şeklinde) */}
               <path
-                d={`M ${cx - tankW / 2} ${tankAreaTop + tankH - 8} A ${tankW / 2} 8 0 0 0 ${cx + tankW / 2} ${tankAreaTop + tankH - 8}`}
-                fill="#0f172a"
-                stroke="#475569"
+                d={`M ${cx - tankW / 2} ${bodyBottom} L ${cx} ${top + tankH} L ${cx + tankW / 2} ${bodyBottom} Z`}
+                fill="url(#tank-cap)"
+                stroke="#64748b"
+                strokeWidth="1"
               />
+              {/* Yansıma çubuğu (paslanmaz çelik vurgusu) */}
+              <line
+                x1={cx - tankW / 2 + 4}
+                y1={bodyTop + 4}
+                x2={cx - tankW / 2 + 4}
+                y2={bodyBottom - 4}
+                stroke="white"
+                strokeWidth="1.5"
+                opacity="0.7"
+              />
+              {/* Tank etiketi — koyu metin, açık tank üzerinde */}
               <text
                 x={cx}
-                y={tankAreaTop + tankH / 2 - 2}
+                y={bodyTop + (bodyBottom - bodyTop) / 2 - 1}
                 textAnchor="middle"
-                fill="#f8fafc"
-                fontSize="10"
-                fontWeight="600"
+                fill="#0f172a"
+                fontSize="11"
+                fontWeight="700"
               >
                 {t.name}
               </text>
               <text
                 x={cx}
-                y={tankAreaTop + tankH / 2 + 10}
+                y={bodyTop + (bodyBottom - bodyTop) / 2 + 12}
                 textAnchor="middle"
-                fill="#cbd5e1"
-                fontSize="8"
+                fill="#475569"
+                fontSize="8.5"
+                fontWeight="500"
               >
                 {t.volume.toLocaleString('tr-TR')} L
               </text>
-              {/* Tank → manifold düşüş hattı (kesikli kılavuz) */}
+              {/* Tank → manifold düşüş hattı (proses çıkışı) */}
               <line
                 x1={cx}
-                y1={tankAreaTop + tankH}
+                y1={top + tankH}
                 x2={cx}
                 y2={manifoldBottom - lineGap / 2}
-                stroke="#475569"
-                strokeWidth="1"
-                strokeDasharray="2 3"
+                stroke="#94a3b8"
+                strokeWidth="1.2"
+                strokeDasharray="3 3"
               />
             </g>
           );
@@ -227,26 +273,28 @@ export function ModuleSchematic({
           </g>
         )}
 
-        {/* Lejant */}
-        <g transform={`translate(10, ${height - 22})`}>
-          <circle cx="6" cy="8" r="5" fill="white" stroke="#0ea5e9" strokeWidth="2" />
-          <text x="16" y="11" fontSize="9" fill="#334155">Vana</text>
+        {/* Lejant — arka planlı kart */}
+        <g transform={`translate(10, ${height - 36})`}>
+          <rect x="0" y="0" width={width - 20} height="30" rx="4" fill="#f8fafc" stroke="#e2e8f0" />
+          <g transform="translate(10, 8)">
+            <circle cx="6" cy="7" r="5.5" fill="white" stroke="#475569" strokeWidth="1.8" />
+            <text x="18" y="10" fontSize="9" fill="#1e293b" fontWeight="500">Vana</text>
 
-          <polygon points="52,3 64,8 52,13" fill="white" stroke="#475569" strokeWidth="1.5" />
-          <text x="70" y="11" fontSize="9" fill="#334155">Pompa</text>
+            <polygon points="58,1 70,7 58,13" fill="white" stroke="#475569" strokeWidth="1.8" />
+            <text x="78" y="10" fontSize="9" fill="#1e293b" fontWeight="500">Pompa</text>
 
-          <line x1="108" y1="8" x2="128" y2="8" stroke={fillingColor} strokeWidth="2.5" />
-          <text x="132" y="11" fontSize="9" fill="#334155">Dolum</text>
+            <line x1="120" y1="7" x2="142" y2="7" stroke={fillingColor} strokeWidth="2.8" strokeLinecap="round" />
+            <text x="148" y="10" fontSize="9" fill="#1e293b" fontWeight="500">Dolum hattı</text>
 
-          <line x1="172" y1="8" x2="192" y2="8" stroke={dischargeColor} strokeWidth="2.5" />
-          <text x="196" y="11" fontSize="9" fill="#334155">Boşaltım</text>
+            <line x1="208" y1="7" x2="230" y2="7" stroke={dischargeColor} strokeWidth="2.8" strokeLinecap="round" />
+            <text x="236" y="10" fontSize="9" fill="#1e293b" fontWeight="500">Boşaltım hattı</text>
 
-          <line x1="246" y1="8" x2="266" y2="8" stroke={tankCipColor} strokeWidth="2.5" />
-          <text x="270" y="11" fontSize="9" fill="#334155">Tank CIP Dönüş</text>
-
+            <line x1="306" y1="7" x2="328" y2="7" stroke={tankCipColor} strokeWidth="2.8" strokeLinecap="round" />
+            <text x="334" y="10" fontSize="9" fill="#1e293b" fontWeight="500">Tank CIP Dönüş</text>
+          </g>
           {selectedDN && (
-            <text x={width - 10} y="11" fontSize="9" fill="#64748b" textAnchor="end">
-              Boru: <tspan fontWeight="600" fill="#0f172a">{selectedDN}</tspan>
+            <text x={width - 30} y="19" fontSize="10" fill="#475569" textAnchor="end">
+              Seçilen boru çapı: <tspan fontWeight="700" fill="#0f172a">{selectedDN}</tspan>
             </text>
           )}
         </g>
@@ -288,73 +336,107 @@ function LineRow({
 }) {
   const lineStartX = labelPad - 4;
   const tankAreaEnd = leftPad + tankAreaWidth;
-  const fixedSpacing = 24;
 
-  const startFixedStart = labelPad + 6;
-  const endFixedStart = tankAreaEnd + 14;
-  const endFixedEnd = endFixedStart + fixedValves * fixedSpacing;
-  const pumpX = (fixedSide === 'end' ? endFixedEnd : tankAreaEnd + 14) + 12;
-  const lineEndX = hasPump ? pumpX + 14 : (fixedSide === 'end' ? endFixedEnd + 4 : tankAreaEnd + 20);
+  // Yeni sabit vana yerleşimi: tek bir noktada T-yıldız (top + right + bottom)
+  // 3 vana → üst/sağ/alt, 2 vana → üst/alt, 1 vana → üst
+  const fixedAreaWidth = fixedValves >= 3 ? 30 : 0;
+  const startFixedX = labelPad + 18;
+  const endFixedX = tankAreaEnd + 22;
+  const fixedX = fixedSide === 'start' ? startFixedX : endFixedX;
+  const fixedRightEdge = fixedX + fixedAreaWidth;
 
-  const fixedStartX = fixedSide === 'start' ? startFixedStart : endFixedStart;
+  const pumpX = (fixedSide === 'end' ? fixedRightEdge : tankAreaEnd + 18) + 14;
+  const lineEndX = hasPump ? pumpX + 16 : (fixedSide === 'end' ? fixedRightEdge + 14 : tankAreaEnd + 26);
 
   return (
     <g>
-      {/* Sol etiket */}
+      {/* Sol etiket — hat ismi + kapasite */}
       <text
-        x={lineStartX - 4}
-        y={y + 3}
-        fontSize="9"
-        fill="#334155"
+        x={lineStartX - 6}
+        y={y + 2}
+        fontSize="10"
+        fill="#0f172a"
         textAnchor="end"
-        fontWeight="600"
+        fontWeight="700"
       >
         {label}
       </text>
       {capacity != null && (
-        <text x={lineStartX - 4} y={y + 14} fontSize="7" fill="#94a3b8" textAnchor="end">
+        <text x={lineStartX - 6} y={y + 14} fontSize="8" fill="#64748b" textAnchor="end">
           {capacity.toLocaleString('tr-TR')} L/h
         </text>
       )}
 
       {/* Manifold çizgisi */}
-      <line x1={lineStartX} y1={y} x2={lineEndX} y2={y} stroke={color} strokeWidth="2.5" />
+      <line x1={lineStartX} y1={y} x2={lineEndX} y2={y} stroke={color} strokeWidth="2.8" strokeLinecap="round" />
 
       {/* Tank altlarındaki bağlantı vanaları */}
       {Array.from({ length: connectedCount }).map((_, i) => {
         const cx = tankCenterX(i);
         return (
           <g key={i}>
-            <line x1={cx} y1={y - 12} x2={cx} y2={y} stroke={color} strokeWidth="1.8" />
-            <Valve cx={cx} cy={y - 12} color={color} />
+            <line x1={cx} y1={y - 14} x2={cx} y2={y} stroke={color} strokeWidth="2" />
+            <Valve cx={cx} cy={y - 14} color={color} />
           </g>
         );
       })}
 
-      {/* Sabit vanalar */}
-      {fixedLabels.slice(0, fixedValves).map((lbl, i) => {
-        const cx = fixedStartX + i * fixedSpacing;
-        return (
-          <g key={`fx-${i}`}>
-            <Valve cx={cx} cy={y} color={color} small />
-            <text x={cx} y={y + 18} textAnchor="middle" fontSize="7" fill="#64748b">
-              {lbl}
-            </text>
-          </g>
-        );
-      })}
+      {/* Sabit vanalar — tek bir noktada üst/sağ/alt yıldız yerleşimi */}
+      {(() => {
+        const labels = fixedLabels.slice(0, fixedValves);
+        const offset = 18; // hat çizgisinden vana merkezine dikey mesafe
+        const rightOffset = 22; // sağdaki vana için yatay mesafe
+        // i=0 üst, i=1 sağ (3 vana ise) veya alt (2 vana ise), i=2 alt
+        return labels.map((lbl, i) => {
+          let cx: number, cy: number, textX: number, textY: number, textAnchor: 'middle' | 'start';
+          if (i === 0) {
+            // ÜST
+            cx = fixedX; cy = y - offset;
+            textX = cx; textY = y - offset - 10; textAnchor = 'middle';
+          } else if (labels.length === 3 && i === 1) {
+            // SAĞ — hat hizasında
+            cx = fixedX + rightOffset; cy = y;
+            textX = cx + 9; textY = y - 5; textAnchor = 'start';
+          } else {
+            // ALT
+            cx = fixedX; cy = y + offset;
+            textX = cx; textY = y + offset + 15; textAnchor = 'middle';
+          }
+          // Hattan vanaya bağlantı mili (sağ vana için yok, manifold zaten geçiyor)
+          const showMil = cy !== y;
+          const milY2 = cy > y ? cy - 5 : cy + 5; // vana kenarına kadar
+          return (
+            <g key={`fx-${i}`}>
+              {showMil && (
+                <line x1={cx} y1={y} x2={cx} y2={milY2} stroke={color} strokeWidth="2" />
+              )}
+              <Valve cx={cx} cy={cy} color={color} small />
+              <text
+                x={textX}
+                y={textY}
+                textAnchor={textAnchor}
+                fontSize="8"
+                fill={color}
+                fontWeight="600"
+              >
+                {lbl}
+              </text>
+            </g>
+          );
+        });
+      })()}
 
       {/* Pompa */}
       {hasPump && (
         <g>
           <polygon
-            points={`${pumpX - 7},${y - 7} ${pumpX + 8},${y} ${pumpX - 7},${y + 7}`}
+            points={`${pumpX - 8},${y - 8} ${pumpX + 9},${y} ${pumpX - 8},${y + 8}`}
             fill="white"
             stroke={color}
-            strokeWidth="1.8"
+            strokeWidth="2"
           />
-          <text x={pumpX} y={y + 18} textAnchor="middle" fontSize="7" fill="#64748b">
-            Pompa
+          <text x={pumpX} y={y + 20} textAnchor="middle" fontSize="8" fill={color} fontWeight="600">
+            P
           </text>
         </g>
       )}
@@ -362,13 +444,13 @@ function LineRow({
       {/* Yön oku */}
       {arrowDirection === 'right' && (
         <polygon
-          points={`${lineEndX - 2},${y - 3} ${lineEndX + 5},${y} ${lineEndX - 2},${y + 3}`}
+          points={`${lineEndX - 2},${y - 5} ${lineEndX + 7},${y} ${lineEndX - 2},${y + 5}`}
           fill={color}
         />
       )}
       {arrowDirection === 'left' && (
         <polygon
-          points={`${lineStartX + 2},${y - 3} ${lineStartX - 5},${y} ${lineStartX + 2},${y + 3}`}
+          points={`${lineStartX + 2},${y - 5} ${lineStartX - 7},${y} ${lineStartX + 2},${y + 5}`}
           fill={color}
         />
       )}

@@ -423,7 +423,17 @@ export function SamplingValve({
 }
 
 // === Tanker (kamyon) sembolü — /public/tank.png görselini kullanır ===
-export function Tanker({ cx, cy, width = 72 }: { cx: number; cy: number; width?: number }) {
+export function Tanker({
+  cx,
+  cy,
+  width = 72,
+  rotate = 0,
+}: {
+  cx: number;
+  cy: number;
+  width?: number;
+  rotate?: number;
+}) {
   // /tank.png ~2.6:1 en/boy oranlı
   const height = width / 2.6;
   return (
@@ -434,6 +444,7 @@ export function Tanker({ cx, cy, width = 72 }: { cx: number; cy: number; width?:
       width={width}
       height={height}
       preserveAspectRatio="xMidYMid meet"
+      transform={rotate ? `rotate(${rotate} ${cx} ${cy})` : undefined}
     />
   );
 }
