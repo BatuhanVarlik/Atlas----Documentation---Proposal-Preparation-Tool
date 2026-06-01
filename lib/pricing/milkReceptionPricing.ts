@@ -26,6 +26,7 @@
 import { getPricingDataset, type PricingItem } from './loader';
 import { findValvePrice, type ControlUnit } from './valveMatcher';
 import { findBySizeTokens } from './catalogSizeMatcher';
+import { getOneSizeSmallerDN } from '@/lib/calc/selectDN';
 
 export interface MRPricedItem {
   /** Tablodaki gruplama etiketi (örn: "Vanalar", "Filter Ünite", "Sensörler") */
@@ -297,13 +298,15 @@ export function buildMilkReceptionPricing(ctx: MilkReceptionPricingContext): MRP
   );
   for (const line of lines) {
     if (!line.dn) continue;
-    const { item, matchedToken } = findBySizeTokens(krohneItems, line.dn, standard);
+    // Flow meter hat çapından bir size küçük seçilir (akış hızını ölçüm için yükseltmek üzere).
+    const fmSize = getOneSizeSmallerDN(line.dn, standard);
+    const { item, matchedToken } = findBySizeTokens(krohneItems, fmSize, standard);
     const model = item && /Optimass/i.test(item.techSpec)
       ? 'Krohne Optimass 6400'
       : 'Krohne Optiflux 6050';
     rows.push(makeRow(
-      'Ölçüm', `Flow Meter ${model} — ${line.name}`, model, line.dn, 1, !!item, item,
-      item ? undefined : `Krohne ${standard} ${line.dn} katalogda yok (Optiflux DN50/DN65, Optimass SMS Ø25/38/51 mevcut)`,
+      'Ölçüm', `Flow Meter ${model} — ${line.name}`, model, fmSize, 1, !!item, item,
+      item ? undefined : `Krohne ${standard} ${fmSize} katalogda yok (Optiflux DN50/DN65, Optimass SMS Ø25/38/51 mevcut)`,
     ));
     if (item && matchedToken) {
       // gelecekte token debug için

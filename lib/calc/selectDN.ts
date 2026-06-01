@@ -16,11 +16,19 @@ export function selectDN(
   return selected;
 }
 
-export function getDrainValveSize(currentDN: string, standard: 'DIN' | 'SMS'): string {
+/**
+ * Verilen DN'den standart tablosunda bir basamak küçük olan DN'i döndürür.
+ * En küçük değerdeyse (veya tabloda bulunamazsa) en küçük DN'i döndürür.
+ */
+export function getOneSizeSmallerDN(currentDN: string, standard: 'DIN' | 'SMS'): string {
   const table = standard === 'DIN' ? DIN_TABLE : SMS_TABLE;
   const idx = table.findIndex((r) => r.dn === currentDN);
   if (idx <= 0) return table[0].dn;
   return table[idx - 1].dn;
+}
+
+export function getDrainValveSize(currentDN: string, standard: 'DIN' | 'SMS'): string {
+  return getOneSizeSmallerDN(currentDN, standard);
 }
 
 export function getTankDrainValveSize(standard: 'DIN' | 'SMS'): string {

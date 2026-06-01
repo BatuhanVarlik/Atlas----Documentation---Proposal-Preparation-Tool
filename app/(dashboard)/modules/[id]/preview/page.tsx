@@ -4,11 +4,13 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { calculateModule } from '@/lib/calc/moduleCalculator';
-import { formatDate, formatNumberTR } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import { buildValveLineItemsForModule, type ModulePricingContext } from '@/lib/pricing/moduleValves';
 import type { CatalogValveType, ControlUnit } from '@/lib/pricing/valveMatcher';
 import { ModuleSchematic } from '@/components/module-builder/ModuleSchematic';
 import { buildStorageInstrumentItems, summarizeStorageInstruments } from '@/lib/pricing/storageInstruments';
+import { EditablePricingCard, type PricingRowView } from '@/components/pricing/EditablePricingCard';
+import { createRowKeyer } from '@/lib/pricing/rowKey';
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -401,126 +403,55 @@ export default async function ModulePreviewPage({ params }: Props) {
 
       {/* Fiyatlandırma (vanalar + enstrümanlar tek tabloda) */}
       {(valveItems.length > 0 || instrumentRows.length > 0) && (() => {
-        type PricingRow = {
-          category: string;
-          description: string;
-          context?: string;
-          size: string | null;
-          quantity: number;
-          matched: boolean;
-          matchedItem: { eqNo: string; techSpec: string } | null;
-          reason?: string;
-          unitPrice: number;
-          unitNetPrice: number;
-          totalNet: number;
-        };
-        const combined: PricingRow[] = [
-          ...valveItems.map((it) => ({
-            category: 'Vanalar',
-            description: it.description,
-            context: it.context,
-            size: it.size,
-            quantity: it.quantity,
-            matched: it.matched,
-            matchedItem: it.matchedItem
-              ? { eqNo: it.matchedItem.eqNo, techSpec: it.matchedItem.techSpec }
-              : null,
-            reason: it.reason,
-            unitPrice: it.unitPrice,
-            unitNetPrice: it.unitNetPrice,
-            totalNet: it.totalNet,
-          })),
+        const keyer = createRowKeyer();
+        const rows: PricingRowView[] = [
+          ...valveItems.map((it) => {
+            const parts: string[] = [];
+            if (it.context) parts.push(it.context);
+            if (it.matchedItem) parts.push(`${it.matchedItem.eqNo} · ${it.matchedItem.techSpec.slice(0, 70)}`);
+            else if (it.reason) parts.push(it.reason);
+            return {
+              key: keyer('Vanalar', it.description, it.size),
+              category: 'Vanalar',
+              description: it.description,
+              subText: parts.join(' — ') || undefined,
+              size: it.size,
+              quantity: it.quantity,
+              unitListPrice: it.matched ? it.unitPrice : null,
+              baseUnitNet: it.matched ? it.unitNetPrice : null,
+            };
+          }),
           ...instrumentRows.map((r) => ({
+            key: keyer(r.category, r.description, r.size),
             category: r.category,
             description: r.description,
+            subText: r.matchedItem
+              ? `${r.matchedItem.eqNo} · ${r.matchedItem.techSpec.slice(0, 70)}`
+              : r.reason,
             size: r.size,
             quantity: r.quantity,
-            matched: r.matched,
-            matchedItem: r.matchedItem
-              ? { eqNo: r.matchedItem.eqNo, techSpec: r.matchedItem.techSpec }
-              : null,
-            reason: r.reason,
-            unitPrice: r.unitPrice,
-            unitNetPrice: r.unitNetPrice,
-            totalNet: r.totalNet,
+            unitListPrice: r.matched ? r.unitPrice : null,
+            baseUnitNet: r.matched ? r.unitNetPrice : null,
           })),
         ];
-        const total = combined.reduce((s, r) => s + (r.matched ? r.totalNet : 0), 0);
-        const matched = combined.filter((r) => r.matched).length;
+        const matched =
+          valveItems.filter((i) => i.matched).length + instrumentRows.filter((r) => r.matched).length;
 
         return (
-          <Collapsible
-            title="Fiyatlandırma"
-            subtitle={`${matched} / ${combined.length} eşleşti`}
-            badge={
-              <span className="text-base font-bold text-slate-800 font-mono">
-                {formatNumberTR(total, { decimals: 2 })} EUR
-              </span>
+          <EditablePricingCard
+            saveUrl={`/api/modules/${moduleData.id}/pricing`}
+            rows={rows}
+            initialOverrides={(moduleData.priceOverrides as Record<string, number> | null) ?? {}}
+            initialMultiplier={moduleData.priceMultiplier ?? 1}
+            matchedCount={matched}
+            footerNote={
+              <>
+                Net birim fiyat = Liste × (1 − İskonto). Katalogda eşleşmeyen ürünler (W+ serisi pompalar vb.) otomatik
+                fiyatlanmaz — <strong>Düzenle</strong> ile elle fiyat girilebilir. Kaydedilen fiyatlar ve çarpan bu modül
+                için kalıcıdır.
+              </>
             }
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-y border-slate-200">
-                  <tr>
-                    <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600 w-28">Kategori</th>
-                    <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600">Ekipman</th>
-                    <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600 w-24">Çap</th>
-                    <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-16">Adet</th>
-                    <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-28">Birim Liste</th>
-                    <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-28">Birim Net</th>
-                    <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-28">Toplam</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {combined.map((r, i) => (
-                    <tr key={i} className="border-b border-slate-100">
-                      <td className="py-2 px-3">
-                        <span className="text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
-                          {r.category}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-slate-800">
-                        <div>{r.description}</div>
-                        {r.context && (
-                          <div className="text-[10px] text-slate-500 mt-0.5">{r.context}</div>
-                        )}
-                        {r.matchedItem && (
-                          <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
-                            {r.matchedItem.eqNo} · {r.matchedItem.techSpec.slice(0, 70)}
-                          </div>
-                        )}
-                        {!r.matched && r.reason && (
-                          <div className="text-[10px] text-slate-500 mt-0.5">{r.reason}</div>
-                        )}
-                      </td>
-                      <td className="py-2 px-3 text-xs text-slate-600 font-mono">{r.size ?? '—'}</td>
-                      <td className="py-2 px-3 text-right font-mono text-slate-700">{r.quantity}</td>
-                      <td className="py-2 px-3 text-right font-mono text-slate-700">
-                        {r.matched ? formatNumberTR(r.unitPrice, { decimals: 2 }) : '—'}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono text-slate-700">
-                        {r.matched ? formatNumberTR(r.unitNetPrice, { decimals: 2 }) : '—'}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-semibold text-slate-800">
-                        {r.matched ? formatNumberTR(r.totalNet, { decimals: 2 }) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-slate-50 border-t-2 border-slate-300">
-                    <td colSpan={6} className="py-3 px-3 text-right text-sm font-semibold text-slate-700">Toplam (EUR)</td>
-                    <td className="py-3 px-3 text-right font-mono font-bold text-slate-800 text-lg">
-                      {formatNumberTR(total, { decimals: 2 })}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-            <p className="mt-3 text-[11px] text-slate-500">
-              Net birim fiyat = Liste × (1 − İskonto). Eşleşmeyen satırlar toplama dahil edilmez. W+ serisi pompalar katalogda olmadığı için listelenmez — manuel fiyatlanmalıdır.
-            </p>
-          </Collapsible>
+          />
         );
       })()}
 

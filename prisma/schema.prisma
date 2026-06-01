@@ -96,6 +96,10 @@ model Module {
   tankCipReturnPumpKw         Float?
   tankCipReturnPumpImpellerSize Float?
 
+  // Fiyatlandırma manuel düzenlemeleri (önizlemeden kaydedilir)
+  priceMultiplier Float @default(1)
+  priceOverrides  Json?   // { [rowKey]: number } — satır bazında manuel birim net fiyat
+
   creatorId  String
   reviewerId String?
   createdAt  DateTime  @default(now())
@@ -400,6 +404,10 @@ model MilkReceptionModule {
   tankerCipPumpModel        String?
   tankerCipPumpKw           Float?
   tankerCipPumpImpellerSize Float?
+
+  // Fiyatlandırma manuel düzenlemeleri (önizlemeden kaydedilir)
+  priceMultiplier Float @default(1)
+  priceOverrides  Json?   // { [rowKey]: number } — satır bazında manuel birim net fiyat
 
   creatorId  String
   createdAt  DateTime  @default(now())

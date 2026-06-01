@@ -4,10 +4,12 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { calculatePipeDiameter } from '@/lib/calc/pipeDiameter';
-import { selectDN } from '@/lib/calc/selectDN';
-import { formatDate, formatNumberTR } from '@/lib/utils';
+import { selectDN, getOneSizeSmallerDN } from '@/lib/calc/selectDN';
+import { formatDate } from '@/lib/utils';
 import { MilkReceptionSchematic } from '@/components/milk-reception/MilkReceptionSchematic';
 import { buildMilkReceptionPricing, summarizeMilkReceptionPricing } from '@/lib/pricing/milkReceptionPricing';
+import { EditablePricingCard, type PricingRowView } from '@/components/pricing/EditablePricingCard';
+import { createRowKeyer } from '@/lib/pricing/rowKey';
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -105,7 +107,9 @@ export default async function MilkReceptionPreviewPage({ params }: Props) {
     const calc = lineCalcs.find((c) => c.lineId === line.id);
     const lineSize = calc?.dn ?? '—';
 
-    flowMeterPerLine.push({ lineId: line.id, size: calc?.dn ?? null });
+    // Flow meter hat çapından bir size küçük seçilir.
+    const flowMeterSize = calc?.dn ? getOneSizeSmallerDN(calc.dn, standard) : null;
+    flowMeterPerLine.push({ lineId: line.id, size: flowMeterSize });
 
     // Degazör air exhaust ESV (DN25/25SMS)
     valveCount.esvSmall += 1;
@@ -285,6 +289,20 @@ export default async function MilkReceptionPreviewPage({ params }: Props) {
   }) : [];
   const pricingSummary = summarizeMilkReceptionPricing(pricingRows);
 
+  const pricingKeyer = createRowKeyer();
+  const pricingRowViews: PricingRowView[] = pricingRows.map((r) => ({
+    key: pricingKeyer(r.category, r.description, r.size),
+    category: r.category,
+    description: r.description,
+    subText: r.matchedItem
+      ? `${r.matchedItem.eqNo} · ${r.matchedItem.techSpec.slice(0, 70)}`
+      : r.reason,
+    size: r.size,
+    quantity: r.quantity,
+    unitListPrice: r.matched ? r.unitPrice : null,
+    baseUnitNet: r.matched ? r.unitNetPrice : null,
+  }));
+
   return (
     <div className="max-w-6xl">
       {/* Breadcrumb */}
@@ -372,7 +390,7 @@ export default async function MilkReceptionPreviewPage({ params }: Props) {
               <li>Degazör + Air Exhaust Vana <strong>ESV</strong> <span className="text-[11px] text-slate-500 font-mono">({fixedSmallSize})</span></li>
               <li>LSH + LSL sensörleri</li>
               <li>Butterfly Outlet Vana <strong>ESV</strong> <span className="text-[11px] text-slate-500">(hat çapı)</span></li>
-              <li>Flow Meter <strong>Krohne</strong> electromagnetic <span className="text-[11px] text-slate-500">(hat çapı)</span></li>
+              <li>Flow Meter <strong>Krohne</strong> electromagnetic <span className="text-[11px] text-slate-500">(hat çapından 1 size küçük)</span></li>
               <li>Temperature Sensor <strong>PT100</strong></li>
             </ul>
           </div>
@@ -587,78 +605,21 @@ export default async function MilkReceptionPreviewPage({ params }: Props) {
 
       {/* Fiyatlandırma */}
       {pricingRows.length > 0 && (
-        <Collapsible
-          title="Fiyatlandırma"
-          subtitle={`${pricingSummary.matched} / ${pricingSummary.totalRows} eşleşti`}
-        >
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs text-slate-500">Net birim fiyat = Liste × (1 − İskonto). Eşleşmeyen satırlar toplama dahil edilmez.</span>
-            <span className="text-base font-bold text-slate-800 font-mono">
-              {formatNumberTR(pricingSummary.total, { decimals: 2 })} EUR
-            </span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-y border-slate-200">
-                <tr>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600 w-28">Kategori</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600">Ekipman</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-slate-600 w-24">Çap</th>
-                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-16">Adet</th>
-                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-28">Birim Liste</th>
-                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-28">Birim Net</th>
-                  <th className="py-2 px-3 text-right text-xs font-semibold text-slate-600 w-28">Toplam</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pricingRows.map((r, i) => (
-                  <tr key={i} className="border-b border-slate-100">
-                    <td className="py-2 px-3">
-                      <span className="text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
-                        {r.category}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-slate-800">
-                      <div>{r.description}</div>
-                      {r.matchedItem && (
-                        <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
-                          {r.matchedItem.eqNo} · {r.matchedItem.techSpec.slice(0, 70)}
-                        </div>
-                      )}
-                      {!r.matched && r.reason && (
-                        <div className="text-[10px] text-slate-500 mt-0.5">{r.reason}</div>
-                      )}
-                    </td>
-                    <td className="py-2 px-3 text-xs text-slate-600 font-mono">{r.size ?? '—'}</td>
-                    <td className="py-2 px-3 text-right font-mono text-slate-700">{r.quantity}</td>
-                    <td className="py-2 px-3 text-right font-mono text-slate-700">
-                      {r.matched ? formatNumberTR(r.unitPrice, { decimals: 2 }) : '—'}
-                    </td>
-                    <td className="py-2 px-3 text-right font-mono text-slate-700">
-                      {r.matched ? formatNumberTR(r.unitNetPrice, { decimals: 2 }) : '—'}
-                    </td>
-                    <td className="py-2 px-3 text-right font-mono font-semibold text-slate-800">
-                      {r.matched ? formatNumberTR(r.totalNet, { decimals: 2 }) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-slate-50 border-t-2 border-slate-300">
-                  <td colSpan={6} className="py-3 px-3 text-right text-sm font-semibold text-slate-700">Toplam (EUR)</td>
-                  <td className="py-3 px-3 text-right font-mono font-bold text-slate-800 text-lg">
-                    {formatNumberTR(pricingSummary.total, { decimals: 2 })}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <p className="mt-3 text-[11px] text-slate-500">
-            Fiyatlar yalnızca katalogda kesin karşılığı bulunan ürünler için hesaplanır: SV1 (ESV) butterfly, SW-CIP41, SW44/SW41, APV VPN, Krohne Optiflux, IFM PT100, Bimethal termometre, A300G.100 manometer, PI1700 pressure transmitter, EUROBINOX Y-Type filter & sampling, APV PRD20, DEGASIFIER tank, IFM proximity switch.
-            <br />
-            Katalogda karşılığı olmayan ürünler (Milk Clarifier, Plate Heat Exchanger, W+ pompalar) bu listede yer almaz — manuel fiyatlanmalıdır.
-          </p>
-        </Collapsible>
+        <EditablePricingCard
+          saveUrl={`/api/milk-reception-modules/${mod.id}/pricing`}
+          rows={pricingRowViews}
+          initialOverrides={(mod.priceOverrides as Record<string, number> | null) ?? {}}
+          initialMultiplier={mod.priceMultiplier ?? 1}
+          matchedCount={pricingSummary.matched}
+          footerNote={
+            <>
+              Net birim fiyat = Liste × (1 − İskonto). Fiyatlar yalnızca katalogda kesin karşılığı bulunan ürünler için
+              otomatik hesaplanır (SV1 ESV, SW-CIP41, SW44/SW41, APV VPN, Krohne, IFM PT100, Bimethal, A300G.100, PI1700,
+              EUROBINOX Y-Type & sampling, APV PRD20, DEGASIFIER, proximity switch). Karşılığı olmayanlar (Milk Clarifier,
+              PHE, W+ pompalar) <strong>Düzenle</strong> ile elle fiyatlanabilir.
+            </>
+          }
+        />
       )}
 
       {/* Diğer Ekipmanlar */}

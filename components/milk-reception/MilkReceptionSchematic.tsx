@@ -14,6 +14,7 @@ import {
   Tanker,
   FlowArrow,
 } from './pidSymbols';
+import { getOneSizeSmallerDN } from '@/lib/calc/selectDN';
 
 type LineData = {
   name: string;
@@ -69,6 +70,7 @@ const W = {
 };
 
 export function MilkReceptionSchematic({
+  standard,
   waterInletSize,
   fixedSmallSize,
   lines,
@@ -183,6 +185,7 @@ export function MilkReceptionSchematic({
               processColor={processColor}
               cipColor={cipColor}
               fixedSmallSize={fixedSmallSize}
+              standard={standard}
             />
           );
         })}
@@ -244,6 +247,7 @@ function ReceptionLineRow({
   processColor,
   cipColor,
   fixedSmallSize,
+  standard,
 }: {
   y: number;
   line: LineData;
@@ -252,6 +256,7 @@ function ReceptionLineRow({
   processColor: string;
   cipColor: string;
   fixedSmallSize: string;
+  standard: 'DIN' | 'SMS';
 }) {
   const lineStartX = labelPad;
   const lineEndX = layout.totalWidth - 6;
@@ -378,7 +383,14 @@ function ReceptionLineRow({
               </g>
             );
           case 'flowmeter':
-            return <FlowMeter key={it.id} cx={it.cx} cy={y} size={line.dn ?? undefined} />;
+            return (
+              <FlowMeter
+                key={it.id}
+                cx={it.cx}
+                cy={y}
+                size={line.dn ? getOneSizeSmallerDN(line.dn, standard) : undefined}
+              />
+            );
           case 'outlet':
             return (
               <g key={it.id}>
