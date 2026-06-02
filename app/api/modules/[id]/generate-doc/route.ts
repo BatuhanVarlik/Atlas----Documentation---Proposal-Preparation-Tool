@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, apiError, apiSuccess } from '@/lib/auth-middleware';
 import { buildTemplateContext } from '@/lib/docx/buildContext';
-import { renderTemplate } from '@/lib/docx/renderTemplate';
+import { renderTemplateWithMedia } from '@/lib/docx/renderTemplate';
+import { renderStorageDiagram, DIAGRAM_REL_ID, DIAGRAM_FILENAME } from '@/lib/docx/diagram';
+import { getCustomPricingItems } from '@/lib/pricing/customCatalogServer';
 import { writeFile } from 'fs/promises';
 import path from 'path';
 
@@ -40,8 +42,12 @@ export async function POST(req: Request, { params }: Params) {
     if (user.role === 'MEMBER' && module.creatorId !== user.id) return apiError('Forbidden', 403);
 
     const templatePath = path.join(process.cwd(), 'public', template.filepath);
-    const context = buildTemplateContext(module);
-    const docBuffer = renderTemplate(templatePath, context);
+    const customItems = await getCustomPricingItems();
+    const baseContext = buildTemplateContext(module, customItems);
+    const diagram = await renderStorageDiagram(module);
+    const context = { ...baseContext, hasDiagram: !!diagram, diagramXml: diagram?.drawingXml ?? '' };
+    const media = diagram ? [{ relId: DIAGRAM_REL_ID, filename: DIAGRAM_FILENAME, data: diagram.png }] : [];
+    const docBuffer = renderTemplateWithMedia(templatePath, context, media);
 
     const safeModuleName = module.name.replace(/[^a-zA-Z0-9ğüşöçıİĞÜŞÖÇ\s-]/g, '').trim().replace(/\s+/g, '_');
     const filename = `${safeModuleName}_${Date.now()}.docx`;
@@ -63,7 +69,7 @@ export async function POST(req: Request, { params }: Params) {
       await prisma.module.update({ where: { id: moduleId }, data: { status: 'DOCUMENT_GENERATED' } });
     }
 
-    return apiSuccess({ ...docRecord, downloadUrl: `/uploads/generated/${filename}` }, 'Belge oluşturuldu');
+    return apiSuccess({ ...docRecord, downloadUrl: `/api/modules/${moduleId}/documents/${docRecord.id}` }, 'Belge oluşturuldu');
   } catch (e: unknown) {
     if (e instanceof Error && 'status' in e) return apiError(e.message, (e as { status: number }).status);
     console.error('generate-doc error:', e);

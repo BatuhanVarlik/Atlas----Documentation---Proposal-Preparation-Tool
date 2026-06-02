@@ -300,7 +300,6 @@ export function EditablePricingCard({
                         ) : (
                           <span className={isOverridden ? 'text-blue-700 font-semibold' : 'text-slate-700'}>
                             {unit > 0 || isOverridden ? formatNumberTR(unit, { decimals: 2 }) : '—'}
-                            {isOverridden && <span className="ml-1 text-[9px] text-blue-500">(elle)</span>}
                           </span>
                         )}
                       </td>

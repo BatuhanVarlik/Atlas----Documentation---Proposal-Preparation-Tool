@@ -1,4 +1,10 @@
 import { calculateModule } from '@/lib/calc/moduleCalculator';
+import { buildValveLineItemsForModule, type ModulePricingContext } from '@/lib/pricing/moduleValves';
+import type { CatalogValveType, ControlUnit } from '@/lib/pricing/valveMatcher';
+import { buildStorageInstrumentItems } from '@/lib/pricing/storageInstruments';
+import type { PricingItem } from '@/lib/pricing/loader';
+import { summarizePricingWithOverrides, type CanonicalPricingRow } from '@/lib/pricing/totals';
+import { formatNumberTR } from '@/lib/utils';
 
 interface FillingLine {
   id: string;
@@ -6,6 +12,7 @@ interface FillingLine {
   capacity: number;
   valveType: string;
   valveControlUnit: string;
+  connectedTankCount: number;
 }
 
 interface DischargeLine {
@@ -15,6 +22,7 @@ interface DischargeLine {
   pressure: number;
   valveType: string;
   valveControlUnit: string;
+  connectedTankCount: number;
   pumpModel: string | null;
   pumpKw: number | null;
   pumpImpellerSize: number | null;
@@ -63,6 +71,11 @@ export interface ModuleForDoc {
   waterInletValveType: string | null;
   tankCipInletValveType: string | null;
   tankCipInletDiameter: string | null;
+  tankCipReturnManifoldExists: boolean;
+  tankCipReturnLineCount: number;
+  tankCipReturnPumpModel: string | null;
+  priceMultiplier: number;
+  priceOverrides: unknown;
   status: string;
   createdAt: Date | string;
   creator: { name: string };
@@ -96,7 +109,7 @@ const CIP_RETURN_VALVE_LABEL: Record<string, string> = {
 
 const FIXED_FILLING_VALVES = 3;
 
-export function buildTemplateContext(module: ModuleForDoc) {
+export function buildTemplateContext(module: ModuleForDoc, customItems: PricingItem[] = []) {
   const fl = module.valveCluster?.fillingLines ?? [];
   const dl = module.valveCluster?.dischargeLines ?? [];
   const hasLines = fl.length > 0 || dl.length > 0;
@@ -116,6 +129,83 @@ export function buildTemplateContext(module: ModuleForDoc) {
   const waterInletValveLabel = module.waterInletValveType
     ? (WATER_INLET_LABEL[module.waterInletValveType] ?? module.waterInletValveType)
     : 'Yok';
+
+  // === Fiyatlandırma (önizleme kartıyla aynı satır sırası/anahtarları) ===
+  const valveItems =
+    module.valveType && hasLines
+      ? buildValveLineItemsForModule({
+          standard: module.standard as 'DIN' | 'SMS',
+          valveType: module.valveType as CatalogValveType,
+          controlUnit: (module.valveControlUnit ?? 'AS_I') as ControlUnit,
+          cipReturnValveType: (module.cipReturnValveType ?? 'SW_CIP41') as 'SWCIP41' | 'SD41',
+          waterInletValveType: module.waterInletValveType as 'SWCIP42' | 'SD42' | null,
+          tankCipInlet:
+            module.tankCipInletValveType && module.tankCipInletDiameter
+              ? { type: module.tankCipInletValveType as 'SW43' | 'SW44', diameter: module.tankCipInletDiameter }
+              : null,
+          tankCipReturn: {
+            manifoldExists: module.tankCipReturnManifoldExists,
+            lineCount: module.tankCipReturnLineCount,
+            tankCount: module.tanks.length,
+          },
+          fillingLines: fl.map((l) => ({ id: l.id, name: l.name, capacity: l.capacity, connectedTankCount: l.connectedTankCount })),
+          dischargeLines: dl.map((l) => ({ id: l.id, name: l.name, capacity: l.capacity, connectedTankCount: l.connectedTankCount })),
+        } as ModulePricingContext)
+      : [];
+
+  const instrumentRows =
+    module.tanks.length > 0 || dl.length > 0
+      ? buildStorageInstrumentItems({
+          standard: module.standard as 'DIN' | 'SMS',
+          tanks: module.tanks.map((t) => ({
+            name: t.name,
+            hasLSH: t.hasLSH,
+            hasLSM: t.hasLSM,
+            hasLSL: t.hasLSL,
+            hasTT: t.hasTT,
+            hasPT: t.hasPT,
+            hasProximitySwitch: t.hasProximitySwitch,
+            hasAgitator: t.hasAgitator,
+            agitatorMotorKw: t.agitatorMotorKw,
+            cipBall: t.cipBall as 'STATIC' | 'ROTARY',
+            cipReturnPumpModel: t.cipReturnPumpModel,
+          })),
+          dischargeLines: dl.map((l) => {
+            const fmResult = calc?.flowMeterResults.find((r) => r.lineId === l.id);
+            return {
+              name: l.name,
+              hasFlowMeter: l.hasFlowMeter,
+              flowMeterSize: l.hasFlowMeter ? (fmResult?.selectedDN.dn ?? calc?.selectedDN.dn ?? null) : null,
+              hasPressureTransmitter: l.hasPressureTransmitter,
+              pumpModel: l.pumpModel,
+            };
+          }),
+          tankCipReturnPumpModel: module.tankCipReturnPumpModel,
+          customItems,
+        })
+      : [];
+
+  const overrides = (module.priceOverrides as Record<string, number> | null) ?? {};
+  const multiplier = module.priceMultiplier ?? 1;
+  const canonicalRows: CanonicalPricingRow[] = [
+    ...valveItems.map((it) => ({
+      category: 'Vanalar',
+      description: it.description,
+      size: it.size,
+      quantity: it.quantity,
+      matched: it.matched,
+      unitNetPrice: it.unitNetPrice,
+    })),
+    ...instrumentRows.map((r) => ({
+      category: r.category,
+      description: r.description,
+      size: r.size,
+      quantity: r.quantity,
+      matched: r.matched,
+      unitNetPrice: r.unitNetPrice,
+    })),
+  ];
+  const pricingTotals = summarizePricingWithOverrides(canonicalRows, overrides, multiplier);
 
   return {
     module: {
@@ -232,5 +322,20 @@ export function buildTemplateContext(module: ModuleForDoc) {
         checkValveSize: calc?.selectedDN.dn ?? '—',
       };
     }),
+    // Özet sayımlar — ekipmanları tek tek listelemeden
+    fillingLineCount: fl.length,
+    dischargeLineCount: dl.length,
+    tankCount: module.tanks.length,
+    valveCount: pricingTotals.valveCount,
+    otherCount: pricingTotals.otherCount,
+    itemCount: pricingTotals.itemCount,
+    counts: pricingTotals.counts,
+    // Fiyatlandırma — yalnızca toplam
+    pricing: {
+      currency: 'EUR',
+      multiplier: formatNumberTR(multiplier, { decimals: 2 }),
+      subtotal: formatNumberTR(pricingTotals.subtotal, { decimals: 2 }),
+      totalPrice: formatNumberTR(pricingTotals.total, { decimals: 2 }),
+    },
   };
 }

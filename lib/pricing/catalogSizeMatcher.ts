@@ -6,14 +6,15 @@ import type { PricingItem } from './loader';
 
 export type Standard = 'DIN' | 'SMS';
 
-// SMS hat numarası → outer Ø (mm), inch tam isim
-const SMS_LOOKUP: Record<number, { outer: string; inch: string }> = {
-  25: { outer: '25.4', inch: '1"' },
-  38: { outer: '38.1', inch: '1 1/2"' },
-  51: { outer: '50.8', inch: '2"' },
-  63: { outer: '63.5', inch: '2 1/2"' },
-  76: { outer: '76.1', inch: '3"' },
-  101: { outer: '101.6', inch: '4"' },
+// SMS hat numarası → outer Ø (mm), inch isim varyantları
+// (katalogda hem "2 1/2\"" hem "2,5\"" hem "2.5\"" yazımı geçebilir — hepsini dene)
+const SMS_LOOKUP: Record<number, { outer: string; inch: string[] }> = {
+  25: { outer: '25.4', inch: ['1"'] },
+  38: { outer: '38.1', inch: ['1 1/2"', '1,5"', '1.5"'] },
+  51: { outer: '50.8', inch: ['2"'] },
+  63: { outer: '63.5', inch: ['2 1/2"', '2,5"', '2.5"'] },
+  76: { outer: '76.1', inch: ['3"'] },
+  101: { outer: '101.6', inch: ['4"'] },
 };
 
 // DIN nominal → inch eşdeğeri (yaygın inç-uyumlu boyutlar)
@@ -76,7 +77,7 @@ export function generateSizeTokens(size: string, standard: Standard): string[] {
         `SMS�${meta.outer}`,
         `SMS${meta.outer}`,
         `SMS ${meta.outer}`,
-        meta.inch,                  // örn. `1 1/2"`, `2"`
+        ...meta.inch,               // örn. `1 1/2"`, `2,5"`, `2.5"`
         // ISO 2037 outer Ø (APV VPN: "ISO-50.8", "ISO-38" gibi)
         `ISO-${meta.outer}`,
         `ISO ${meta.outer}`,

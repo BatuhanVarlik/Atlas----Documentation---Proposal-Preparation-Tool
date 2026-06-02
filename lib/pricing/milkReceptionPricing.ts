@@ -27,6 +27,7 @@ import { getPricingDataset, type PricingItem } from './loader';
 import { findValvePrice, type ControlUnit } from './valveMatcher';
 import { findBySizeTokens } from './catalogSizeMatcher';
 import { getOneSizeSmallerDN } from '@/lib/calc/selectDN';
+import { matchCustomItem } from './customCatalog';
 
 export interface MRPricedItem {
   /** Tablodaki gruplama etiketi (örn: "Vanalar", "Filter Ünite", "Sensörler") */
@@ -64,8 +65,11 @@ export interface MilkReceptionPricingContext {
     pheIceWaterPressureMeterType: 'MANOMETER' | 'PRESSURE_TRANSMITTER' | null;
     hasSamplingValve: boolean;
     samplingValveType: 'MANUAL' | 'WITH_ACTUATOR' | null;
+    pumpModel: string | null;
   }>;
-  tankerCip: { hasPump: boolean; dn: string | null } | null;
+  tankerCip: { hasPump: boolean; dn: string | null; pumpModel: string | null } | null;
+  /** Kataloğa elle eklenmiş ürünler (PricingItem'a çevrilmiş) */
+  customItems?: PricingItem[];
 }
 
 // ============ Eşleyici yardımcılar ============
@@ -118,6 +122,7 @@ function findFixedItem(filterFn: (it: PricingItem) => boolean): PricingItem | nu
 export function buildMilkReceptionPricing(ctx: MilkReceptionPricingContext): MRPricedItem[] {
   const rows: MRPricedItem[] = [];
   const { standard, controlUnit, fixedSmallSize, waterInletSize, lines, tankerCip } = ctx;
+  const customItems = ctx.customItems ?? [];
 
   // --- ESV (SV1 Butterfly Valve) ---
   // 1) Her hat: 1 air exhaust (DN25/25SMS) + 1 outlet (hat çapı) + 4×filterUnitCount filter ESV + 2×PHE (varsa)
@@ -354,6 +359,31 @@ export function buildMilkReceptionPricing(ctx: MilkReceptionPricingContext): MRP
     rows.push(makeRow(
       'Ekipman', `CIP Paneli Proximity Switch × ${lines.length}`, 'Proximity Switch', null, lines.length, !!prox, prox,
     ));
+  }
+
+  // --- Katalogda karşılığı olmayan ürünler (Özel Katalog'dan çekilir, yoksa elle) ---
+  const noMatchReason = 'Katalogda karşılığı yok — Özel Katalog\'a ekleyin veya elle fiyat girin';
+  for (const line of lines) {
+    // Milk Clarifier (separatör)
+    if (line.hasMilkClarifier) {
+      const item = matchCustomItem(customItems, 'MILK_CLARIFIER', { standard, size: line.dn });
+      rows.push(makeRow('Opsiyonel', `Milk Clarifier — ${line.name}`, 'Milk Clarifier', line.dn, 1, !!item, item, item ? undefined : noMatchReason));
+    }
+    // Plate Heat Exchanger (PHE)
+    if (line.hasPhe) {
+      const item = matchCustomItem(customItems, 'PHE', { standard, size: line.dn });
+      rows.push(makeRow('PHE', `Plate Heat Exchanger — ${line.name}`, 'PHE', line.dn, 1, !!item, item, item ? undefined : noMatchReason));
+    }
+    // Süt alım pompası (W+ vb.)
+    if (line.pumpModel) {
+      const item = matchCustomItem(customItems, 'PUMP', { standard, nameContains: line.pumpModel });
+      rows.push(makeRow('Pompalar', `Süt Alım Pompası ${line.pumpModel} — ${line.name}`, 'Pompa', null, 1, !!item, item, item ? undefined : noMatchReason));
+    }
+  }
+  // Tanker CIP pompası
+  if (tankerCip?.pumpModel) {
+    const item = matchCustomItem(customItems, 'PUMP', { standard, nameContains: tankerCip.pumpModel });
+    rows.push(makeRow('Pompalar', `Tanker CIP Pompası ${tankerCip.pumpModel}`, 'Pompa', null, 1, !!item, item, item ? undefined : noMatchReason));
   }
 
   return rows;

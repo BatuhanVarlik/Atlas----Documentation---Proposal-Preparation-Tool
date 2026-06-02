@@ -166,7 +166,7 @@ export default function TemplatesClient({ initialTemplates }: Props) {
                     className="text-xs px-2.5 py-1 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
                     {t.isActive ? 'Pasifleştir' : 'Aktifleştir'}
                   </button>
-                  <a href={t.filepath} download
+                  <a href={`/api/templates/${t.id}/download`} download
                     className="text-xs px-2.5 py-1 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
                     İndir
                   </a>

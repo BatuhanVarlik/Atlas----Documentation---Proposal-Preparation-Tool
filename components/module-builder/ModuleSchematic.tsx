@@ -277,7 +277,7 @@ export function ModuleSchematic({
         <g transform={`translate(10, ${height - 36})`}>
           <rect x="0" y="0" width={width - 20} height="30" rx="4" fill="#f8fafc" stroke="#e2e8f0" />
           <g transform="translate(10, 8)">
-            <circle cx="6" cy="7" r="5.5" fill="white" stroke="#475569" strokeWidth="1.8" />
+            <rect x="0.5" y="1.5" width="11" height="11" fill="white" stroke="#475569" strokeWidth="1.8" />
             <text x="18" y="10" fontSize="9" fill="#1e293b" fontWeight="500">Vana</text>
 
             <polygon points="58,1 70,7 58,13" fill="white" stroke="#475569" strokeWidth="1.8" />
@@ -337,9 +337,9 @@ function LineRow({
   const lineStartX = labelPad - 4;
   const tankAreaEnd = leftPad + tankAreaWidth;
 
-  // Yeni sabit vana yerleşimi: tek bir noktada T-yıldız (top + right + bottom)
-  // 3 vana → üst/sağ/alt, 2 vana → üst/alt, 1 vana → üst
-  const fixedAreaWidth = fixedValves >= 3 ? 30 : 0;
+  // Sabit vanalar hat üzerinde, yatay sırayla dizilir
+  const fixedSpacing = 22;
+  const fixedAreaWidth = Math.max(fixedValves - 1, 0) * fixedSpacing;
   const startFixedX = labelPad + 18;
   const endFixedX = tankAreaEnd + 22;
   const fixedX = fixedSide === 'start' ? startFixedX : endFixedX;
@@ -370,61 +370,24 @@ function LineRow({
       {/* Manifold çizgisi */}
       <line x1={lineStartX} y1={y} x2={lineEndX} y2={y} stroke={color} strokeWidth="2.8" strokeLinecap="round" />
 
-      {/* Tank altlarındaki bağlantı vanaları */}
+      {/* Tank altlarındaki bağlantı vanaları — hat üzerinde */}
       {Array.from({ length: connectedCount }).map((_, i) => {
         const cx = tankCenterX(i);
+        return <Valve key={i} cx={cx} cy={y} color={color} />;
+      })}
+
+      {/* Sabit vanalar — hat üzerinde yatay sırayla; "Çek" check valve (köşegenli) */}
+      {fixedLabels.slice(0, fixedValves).map((lbl, i) => {
+        const cx = fixedX + i * fixedSpacing;
         return (
-          <g key={i}>
-            <line x1={cx} y1={y - 14} x2={cx} y2={y} stroke={color} strokeWidth="2" />
-            <Valve cx={cx} cy={y - 14} color={color} />
+          <g key={`fx-${i}`}>
+            <Valve cx={cx} cy={y} color={color} small check={lbl === 'Çek'} />
+            <text x={cx} y={y + 15} textAnchor="middle" fontSize="7" fill={color} fontWeight="600">
+              {lbl}
+            </text>
           </g>
         );
       })}
-
-      {/* Sabit vanalar — tek bir noktada üst/sağ/alt yıldız yerleşimi */}
-      {(() => {
-        const labels = fixedLabels.slice(0, fixedValves);
-        const offset = 18; // hat çizgisinden vana merkezine dikey mesafe
-        const rightOffset = 22; // sağdaki vana için yatay mesafe
-        // i=0 üst, i=1 sağ (3 vana ise) veya alt (2 vana ise), i=2 alt
-        return labels.map((lbl, i) => {
-          let cx: number, cy: number, textX: number, textY: number, textAnchor: 'middle' | 'start';
-          if (i === 0) {
-            // ÜST
-            cx = fixedX; cy = y - offset;
-            textX = cx; textY = y - offset - 10; textAnchor = 'middle';
-          } else if (labels.length === 3 && i === 1) {
-            // SAĞ — hat hizasında
-            cx = fixedX + rightOffset; cy = y;
-            textX = cx + 9; textY = y - 5; textAnchor = 'start';
-          } else {
-            // ALT
-            cx = fixedX; cy = y + offset;
-            textX = cx; textY = y + offset + 15; textAnchor = 'middle';
-          }
-          // Hattan vanaya bağlantı mili (sağ vana için yok, manifold zaten geçiyor)
-          const showMil = cy !== y;
-          const milY2 = cy > y ? cy - 5 : cy + 5; // vana kenarına kadar
-          return (
-            <g key={`fx-${i}`}>
-              {showMil && (
-                <line x1={cx} y1={y} x2={cx} y2={milY2} stroke={color} strokeWidth="2" />
-              )}
-              <Valve cx={cx} cy={cy} color={color} small />
-              <text
-                x={textX}
-                y={textY}
-                textAnchor={textAnchor}
-                fontSize="8"
-                fill={color}
-                fontWeight="600"
-              >
-                {lbl}
-              </text>
-            </g>
-          );
-        });
-      })()}
 
       {/* Pompa */}
       {hasPump && (
@@ -458,7 +421,13 @@ function LineRow({
   );
 }
 
-function Valve({ cx, cy, color, small = false }: { cx: number; cy: number; color: string; small?: boolean }) {
-  const r = small ? 4.5 : 5.5;
-  return <circle cx={cx} cy={cy} r={r} fill="white" stroke={color} strokeWidth="1.8" />;
+// Vana — kare (hat üzerinde). check=true ise sağ üst → sol alt köşegeniyle ayırt edilir.
+function Valve({ cx, cy, color, small = false, check = false }: { cx: number; cy: number; color: string; small?: boolean; check?: boolean }) {
+  const s = small ? 4.5 : 5.5;
+  return (
+    <g>
+      <rect x={cx - s} y={cy - s} width={s * 2} height={s * 2} fill="white" stroke={color} strokeWidth="1.8" />
+      {check && <line x1={cx + s} y1={cy - s} x2={cx - s} y2={cy + s} stroke={color} strokeWidth="1.4" />}
+    </g>
+  );
 }

@@ -2,6 +2,11 @@
 
 import { calculatePipeDiameter } from '@/lib/calc/pipeDiameter';
 import { selectDN } from '@/lib/calc/selectDN';
+import { buildMilkReceptionPricing } from '@/lib/pricing/milkReceptionPricing';
+import type { PricingItem } from '@/lib/pricing/loader';
+import type { ControlUnit } from '@/lib/pricing/valveMatcher';
+import { summarizePricingWithOverrides, type CanonicalPricingRow } from '@/lib/pricing/totals';
+import { formatNumberTR } from '@/lib/utils';
 
 interface ReceptionLine {
   id: string;
@@ -37,6 +42,8 @@ interface ModuleForDoc {
   tankerCipPumpModel: string | null;
   tankerCipPumpKw: number | null;
   tankerCipPumpImpellerSize: number | null;
+  priceMultiplier: number;
+  priceOverrides: unknown;
   createdAt: Date | string;
   creator: { name: string };
   receptionLines: ReceptionLine[];
@@ -63,7 +70,7 @@ const PHE_TEMP_LABEL: Record<string, string> = {
   THERMOMETER: 'Termometre',
 };
 
-export function buildMilkReceptionContext(module: ModuleForDoc) {
+export function buildMilkReceptionContext(module: ModuleForDoc, customItems: PricingItem[] = []) {
   const lines = module.receptionLines;
   const fixedSmallSize = module.standard === 'DIN' ? 'DN25' : '25 SMS (1")';
 
@@ -94,6 +101,52 @@ export function buildMilkReceptionContext(module: ModuleForDoc) {
   const largestSize = lineCalcs
     .filter((c) => c.dn !== '—')
     .sort((a, b) => (parseInt(b.inner, 10) || 0) - (parseInt(a.inner, 10) || 0))[0]?.dn ?? '—';
+
+  // === Fiyatlandırma (önizleme kartıyla aynı satır sırası/anahtarları) ===
+  const overrides = (module.priceOverrides as Record<string, number> | null) ?? {};
+  const multiplier = module.priceMultiplier ?? 1;
+  const pricingRows =
+    lines.length > 0 || module.hasTankerCip
+      ? buildMilkReceptionPricing({
+          standard: module.standard as 'DIN' | 'SMS',
+          controlUnit: (module.valveControlUnit ?? 'AS_I') as ControlUnit,
+          fixedSmallSize,
+          waterInletSize: largestSize,
+          lines: lines.map((l) => {
+            const dn = lineCalcs.find((c) => c.lineId === l.id)?.dn ?? '—';
+            return {
+              name: l.name,
+              dn: dn === '—' ? null : dn,
+              filterUnitCount: (l.filterUnitCount === 2 ? 2 : 1) as 1 | 2,
+              pressureMeterType: l.pressureMeterType as 'MANOMETER' | 'PRESSURE_TRANSMITTER',
+              hasMilkClarifier: l.hasMilkClarifier,
+              clarifierBypassValveType: l.clarifierBypassValveType as 'SW44' | 'SW41' | null,
+              hasPhe: l.hasPhe,
+              pheIceWaterTempSensorType: l.pheIceWaterTempSensorType as 'PT100' | 'THERMOMETER' | null,
+              pheIceWaterPressureMeterType: l.pheIceWaterPressureMeterType as
+                | 'MANOMETER'
+                | 'PRESSURE_TRANSMITTER'
+                | null,
+              hasSamplingValve: l.hasSamplingValve,
+              samplingValveType: l.samplingValveType as 'MANUAL' | 'WITH_ACTUATOR' | null,
+              pumpModel: l.pumpModel,
+            };
+          }),
+          tankerCip: module.hasTankerCip
+            ? { hasPump: !!module.tankerCipPumpModel, dn: tankerCipDN === '—' ? null : tankerCipDN, pumpModel: module.tankerCipPumpModel }
+            : null,
+          customItems,
+        })
+      : [];
+  const canonicalRows: CanonicalPricingRow[] = pricingRows.map((r) => ({
+    category: r.category,
+    description: r.description,
+    size: r.size,
+    quantity: r.quantity,
+    matched: r.matched,
+    unitNetPrice: r.unitNetPrice,
+  }));
+  const pricingTotals = summarizePricingWithOverrides(canonicalRows, overrides, multiplier);
 
   return {
     module: {
@@ -138,6 +191,7 @@ export function buildMilkReceptionContext(module: ModuleForDoc) {
           : '—',
       };
     }),
+    showTankerCip: module.hasTankerCip,
     tankerCip: {
       enabled: module.hasTankerCip,
       label: module.hasTankerCip ? 'Var' : 'Yok',
@@ -154,6 +208,18 @@ export function buildMilkReceptionContext(module: ModuleForDoc) {
       clarifierCount: lines.filter((l) => l.hasMilkClarifier).length,
       pheCount: lines.filter((l) => l.hasPhe).length,
       samplingCount: lines.filter((l) => l.hasSamplingValve).length,
+    },
+    // Özet sayımlar — ekipmanları tek tek listelemeden
+    valveCount: pricingTotals.valveCount,
+    otherCount: pricingTotals.otherCount,
+    itemCount: pricingTotals.itemCount,
+    counts: pricingTotals.counts,
+    // Fiyatlandırma — yalnızca toplam
+    pricing: {
+      currency: 'EUR',
+      multiplier: formatNumberTR(multiplier, { decimals: 2 }),
+      subtotal: formatNumberTR(pricingTotals.subtotal, { decimals: 2 }),
+      totalPrice: formatNumberTR(pricingTotals.total, { decimals: 2 }),
     },
   };
 }

@@ -18,6 +18,7 @@
 
 import { getPricingDataset, type PricingItem } from './loader';
 import { findBySizeTokens } from './catalogSizeMatcher';
+import { matchCustomItem } from './customCatalog';
 
 export interface StorageInstrumentItem {
   category: string;
@@ -47,13 +48,19 @@ export interface StorageInstrumentContext {
     hasAgitator: boolean;
     agitatorMotorKw: number | null;
     cipBall: 'STATIC' | 'ROTARY';
+    cipReturnPumpModel: string | null;
   }>;
   dischargeLines: Array<{
     name: string;
     hasFlowMeter: boolean;
     flowMeterSize: string | null;  // örn 'DN50' veya '51 SMS (2")'
     hasPressureTransmitter: boolean;
+    pumpModel: string | null;
   }>;
+  /** Modül seviyesi Tank CIP Dönüş pompası */
+  tankCipReturnPumpModel?: string | null;
+  /** Kataloğa elle eklenmiş ürünler (PricingItem'a çevrilmiş) */
+  customItems?: PricingItem[];
 }
 
 // ============ Yardımcılar ============
@@ -208,6 +215,26 @@ export function buildStorageInstrumentItems(ctx: StorageInstrumentContext): Stor
         'Ölçüm', `Pressure Transmitter — ${line.name}`, 'PI1700', null, 1, !!pressTransmitter, pressTransmitter,
       ));
     }
+  }
+
+  // --- Katalogda karşılığı olmayan pompalar (Özel Katalog'dan çekilir, yoksa elle) ---
+  const customItems = ctx.customItems ?? [];
+  const noMatchReason = 'Katalogda karşılığı yok — Özel Katalog\'a ekleyin veya elle fiyat girin';
+  for (const line of dischargeLines) {
+    if (line.pumpModel) {
+      const item = matchCustomItem(customItems, 'PUMP', { standard, nameContains: line.pumpModel });
+      rows.push(makeRow('Pompalar', `Boşaltım Pompası ${line.pumpModel} — ${line.name}`, 'Pompa', null, 1, !!item, item, item ? undefined : noMatchReason));
+    }
+  }
+  for (const tank of tanks) {
+    if (tank.cipReturnPumpModel) {
+      const item = matchCustomItem(customItems, 'PUMP', { standard, nameContains: tank.cipReturnPumpModel });
+      rows.push(makeRow('Pompalar', `CIP Dönüş Pompası ${tank.cipReturnPumpModel} — ${tank.name}`, 'Pompa', null, 1, !!item, item, item ? undefined : noMatchReason));
+    }
+  }
+  if (ctx.tankCipReturnPumpModel) {
+    const item = matchCustomItem(customItems, 'PUMP', { standard, nameContains: ctx.tankCipReturnPumpModel });
+    rows.push(makeRow('Pompalar', `Tank CIP Dönüş Pompası ${ctx.tankCipReturnPumpModel}`, 'Pompa', null, 1, !!item, item, item ? undefined : noMatchReason));
   }
 
   return rows;

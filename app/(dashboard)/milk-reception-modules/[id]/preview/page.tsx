@@ -8,6 +8,7 @@ import { selectDN, getOneSizeSmallerDN } from '@/lib/calc/selectDN';
 import { formatDate } from '@/lib/utils';
 import { MilkReceptionSchematic } from '@/components/milk-reception/MilkReceptionSchematic';
 import { buildMilkReceptionPricing, summarizeMilkReceptionPricing } from '@/lib/pricing/milkReceptionPricing';
+import { getCustomPricingItems } from '@/lib/pricing/customCatalogServer';
 import { EditablePricingCard, type PricingRowView } from '@/components/pricing/EditablePricingCard';
 import { createRowKeyer } from '@/lib/pricing/rowKey';
 
@@ -267,6 +268,7 @@ export default async function MilkReceptionPreviewPage({ params }: Props) {
   const equipmentTotal = equipment.reduce((s, e) => s + e.quantity, 0);
 
   // === Fiyatlandırma — sabit kimlikli ürünler için katalog eşleştirmesi ===
+  const customItems = await getCustomPricingItems();
   const pricingRows = lineCount > 0 || mod.hasTankerCip ? buildMilkReceptionPricing({
     standard,
     controlUnit: (mod.valveControlUnit ?? 'AS_I') as 'NONE' | 'AS_I' | 'DC',
@@ -284,8 +286,10 @@ export default async function MilkReceptionPreviewPage({ params }: Props) {
       pheIceWaterPressureMeterType: l.pheIceWaterPressureMeterType,
       hasSamplingValve: l.hasSamplingValve,
       samplingValveType: l.samplingValveType,
+      pumpModel: l.pumpModel,
     })),
-    tankerCip: mod.hasTankerCip ? { hasPump: !!mod.tankerCipPumpModel, dn: tankerCipCalc?.dn ?? null } : null,
+    tankerCip: mod.hasTankerCip ? { hasPump: !!mod.tankerCipPumpModel, dn: tankerCipCalc?.dn ?? null, pumpModel: mod.tankerCipPumpModel } : null,
+    customItems,
   }) : [];
   const pricingSummary = summarizeMilkReceptionPricing(pricingRows);
 

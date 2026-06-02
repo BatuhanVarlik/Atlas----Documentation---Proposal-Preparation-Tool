@@ -187,8 +187,10 @@ for (let i = 8; i < data.length; i++) {
     continue;
   }
 
-  // Ürün satırı
-  if (b && c) {
+  // Ürün satırı — techSpec (C) + liste fiyatı (I) yeterli; eqNo (B) opsiyonel.
+  // Bazı ürünler (ör. KROHNE flowmetreler, RGE regulating valve'ler) eqNo'suz
+  // listelenmiş; eski `b && c` koşulu bunları (203 ürün) atlıyordu.
+  if (c) {
     const listPrice = typeof row[8] === 'number' ? row[8] : null;
     const rawDiscount = typeof row[9] === 'number' ? row[9] : 0;
     if (!listPrice) continue;
@@ -197,7 +199,7 @@ for (let i = 8; i < data.length; i++) {
     const discount = rawDiscount === 1 ? 0 : rawDiscount;
     items.push({
       id: items.length + 1,
-      eqNo: String(b).trim(),
+      eqNo: b ? String(b).trim() : '',
       techSpec: String(c).trim().replace(/\s+/g, ' '),
       label: row[3] ? String(row[3]).trim() : '',
       supplier: row[4] ? String(row[4]).trim() : '',
@@ -226,6 +228,27 @@ fs.writeFileSync(OUT, JSON.stringify({ meta, items }));
 
 console.log(`✓ ${items.length} ürün ${OUT} dosyasına yazıldı.`);
 console.log(`  Boyut: ${(fs.statSync(OUT).size / 1024).toFixed(1)} KB`);
+
+// === Doğrulama: techSpec(C) + sayısal liste fiyatı(I) olan tüm satırlar alınmalı ===
+let priceableRows = 0;
+let noPriceRows = 0;
+for (let i = 8; i < data.length; i++) {
+  const r = data[i];
+  if (!r) continue;
+  const a = r[0]; const b = r[1]; const c = r[2];
+  if (a && !c) continue; // başlık satırı
+  const price = typeof r[8] === 'number' ? r[8] : null;
+  if (c && price) priceableRows++;
+  else if (b && c && !price) noPriceRows++;
+}
+if (priceableRows === items.length) {
+  console.log(`✓ Doğrulama: fiyatlı ${priceableRows} ürün satırının tamamı çıkarıldı.`);
+} else {
+  console.warn(`⚠ Doğrulama: ${priceableRows} fiyatlı satır var ama ${items.length} çıkarıldı (fark: ${priceableRows - items.length}).`);
+}
+console.log(`  Not: ${noPriceRows} satırda eqNo+techSpec var ama liste fiyatı (col I) boş — fiyatlandırılamaz (kaynak veride fiyat yok).`);
+const fmCount = items.filter((it) => it.subCategory === 'FLOW METER').length;
+console.log(`  Flow meter (FLOW METER alt kategorisi): ${fmCount} ürün.`);
 
 // Özet
 const topTally = {};

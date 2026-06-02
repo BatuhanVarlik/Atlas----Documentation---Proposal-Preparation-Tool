@@ -1,16 +1,14 @@
 import {
   PID_COLORS,
   InstrumentBubble,
-  ButterflyValve,
-  SingleSeatValve,
-  CheckValve,
+  SquareValve,
+  SquareCheckValve,
   HygienicPump,
   InlineFilter,
   Degazor,
   PlateHeatExchanger,
   MilkClarifier,
   FlowMeter,
-  SamplingValve,
   Tanker,
   FlowArrow,
 } from './pidSymbols';
@@ -53,7 +51,7 @@ interface Props {
 const W = {
   tanker: 120,
   inletValve: 30,
-  degazor: 90,
+  degazor: 66,
   outletValve: 30,
   pump: 36,
   filter: 30,
@@ -72,7 +70,6 @@ const W = {
 export function MilkReceptionSchematic({
   standard,
   waterInletSize,
-  fixedSmallSize,
   lines,
   tankerCip,
 }: Props) {
@@ -184,7 +181,6 @@ export function MilkReceptionSchematic({
               labelPad={labelPad}
               processColor={processColor}
               cipColor={cipColor}
-              fixedSmallSize={fixedSmallSize}
               standard={standard}
             />
           );
@@ -197,7 +193,6 @@ export function MilkReceptionSchematic({
             tankerCip={tankerCip}
             layout={tankerLayout}
             labelPad={labelPad}
-            fixedSmallSize={fixedSmallSize}
           />
         )}
 
@@ -214,8 +209,8 @@ export function MilkReceptionSchematic({
             {/* Hava hattı */}
             <line x1="195" y1="6" x2="217" y2="6" stroke={PID_COLORS.air} strokeWidth="2" strokeDasharray="1 2" />
             <text x="223" y="9" fontSize="8" fill="#334155">Hava</text>
-            {/* Vana — yuvarlak */}
-            <circle cx="265" cy="6" r="5.5" fill="white" stroke={processColor} strokeWidth="1.8" />
+            {/* Vana — kare */}
+            <rect x="259.5" y="0.5" width="11" height="11" fill="white" stroke={processColor} strokeWidth="1.8" />
             <text x="275" y="9" fontSize="8" fill="#334155">Vana</text>
             {/* Pompa — üçgen ok */}
             <polygon points="313,-1 313,13 321,6" fill="white" stroke="#334155" strokeWidth="1.8" />
@@ -224,9 +219,9 @@ export function MilkReceptionSchematic({
             <circle cx="378" cy="6" r="5.5" fill="white" stroke="#334155" strokeWidth="1.4" />
             <line x1="372.5" y1="6" x2="383.5" y2="6" stroke="#334155" strokeWidth="0.9" />
             <text x="388" y="9" fontSize="8" fill="#334155">Sensör / Ölçer</text>
-            {/* Check valve — yuvarlak + dolu merkez */}
-            <circle cx="460" cy="6" r="5.5" fill="white" stroke={processColor} strokeWidth="1.8" />
-            <circle cx="460" cy="6" r="2.2" fill={processColor} />
+            {/* Check valve — kare + köşegen */}
+            <rect x="454.5" y="0.5" width="11" height="11" fill="white" stroke={processColor} strokeWidth="1.8" />
+            <line x1="465.5" y1="0.5" x2="454.5" y2="11.5" stroke={processColor} strokeWidth="1.2" />
             <text x="470" y="9" fontSize="8" fill="#334155">Check valve (VPN)</text>
           </g>
           <text x={maxWidth - 8} y="20" fontSize="8" fill={PID_COLORS.muted} textAnchor="end">
@@ -246,7 +241,6 @@ function ReceptionLineRow({
   labelPad,
   processColor,
   cipColor,
-  fixedSmallSize,
   standard,
 }: {
   y: number;
@@ -255,7 +249,6 @@ function ReceptionLineRow({
   labelPad: number;
   processColor: string;
   cipColor: string;
-  fixedSmallSize: string;
   standard: 'DIN' | 'SMS';
 }) {
   const lineStartX = labelPad;
@@ -296,29 +289,13 @@ function ReceptionLineRow({
       {layout.items.map((it) => {
         switch (it.id) {
           case 'inlet-valve':
-            return (
-              <g key={it.id}>
-                <line x1={it.cx} y1={y} x2={it.cx} y2={y - 14} stroke={processColor} strokeWidth="2" />
-                <ButterflyValve cx={it.cx} cy={y - 14} color={processColor} actuated label="ESV" />
-              </g>
-            );
+            return <SquareValve key={it.id} cx={it.cx} cy={y} color={processColor} label="ESV" />;
           case 'degazor':
             return (
-              <Degazor
-                key={it.id}
-                cx={it.cx}
-                cy={y - 12}
-                width={W.degazor}
-                exhaustValveLabel={`ESV ${fixedSmallSize}`}
-              />
+              <Degazor key={it.id} cx={it.cx} cy={y} width={W.degazor} />
             );
           case 'outlet-esv':
-            return (
-              <g key={it.id}>
-                <line x1={it.cx} y1={y} x2={it.cx} y2={y - 14} stroke={processColor} strokeWidth="2" />
-                <ButterflyValve cx={it.cx} cy={y - 14} color={processColor} actuated label="ESV outlet" />
-              </g>
-            );
+            return <SquareValve key={it.id} cx={it.cx} cy={y} color={processColor} label="ESV outlet" />;
           case 'pump':
             return (
               <HygienicPump
@@ -367,12 +344,12 @@ function ReceptionLineRow({
             );
           case 'sampling':
             return (
-              <SamplingValve
+              <SquareValve
                 key={it.id}
                 cx={it.cx}
                 cy={y}
                 color={processColor}
-                isActuated={line.samplingValveType === 'WITH_ACTUATOR'}
+                label={line.samplingValveType === 'WITH_ACTUATOR' ? 'Numune ⚙' : 'Numune'}
               />
             );
           case 'pt100':
@@ -429,13 +406,11 @@ function TankerCipRow({
   tankerCip,
   layout,
   labelPad,
-  fixedSmallSize,
 }: {
   y: number;
   tankerCip: TankerCip;
   layout: { items: { id: string; cx: number; width: number }[]; totalWidth: number };
   labelPad: number;
-  fixedSmallSize: string;
 }) {
   const lineStartX = labelPad;
   const lineEndX = layout.totalWidth - 6;
@@ -468,38 +443,17 @@ function TankerCipRow({
       {layout.items.map((it) => {
         switch (it.id) {
           case 'inlet-valve':
-            return (
-              <g key={it.id}>
-                <line x1={it.cx} y1={y} x2={it.cx} y2={y - 14} stroke={cipColor} strokeWidth="2" />
-                <SingleSeatValve cx={it.cx} cy={y - 14} color={cipColor} actuated label="SW41" />
-              </g>
-            );
+            return <SquareValve key={it.id} cx={it.cx} cy={y} color={cipColor} label="SW41" />;
           case 'degazor':
             return (
-              <Degazor
-                key={it.id}
-                cx={it.cx}
-                cy={y - 12}
-                width={W.degazor}
-                exhaustValveLabel={`ESV ${fixedSmallSize}`}
-              />
+              <Degazor key={it.id} cx={it.cx} cy={y} width={W.degazor} />
             );
           case 'outlet-esv':
-            return (
-              <g key={it.id}>
-                <line x1={it.cx} y1={y} x2={it.cx} y2={y - 14} stroke={cipColor} strokeWidth="2" />
-                <ButterflyValve cx={it.cx} cy={y - 14} color={cipColor} actuated label="ESV outlet" />
-              </g>
-            );
+            return <SquareValve key={it.id} cx={it.cx} cy={y} color={cipColor} label="ESV outlet" />;
           case 'pump':
             return <HygienicPump key={it.id} cx={it.cx} cy={y} label="CIP Pompa" />;
           case 'check':
-            return (
-              <g key={it.id}>
-                <line x1={it.cx} y1={y} x2={it.cx} y2={y - 14} stroke={cipColor} strokeWidth="2" />
-                <CheckValve cx={it.cx} cy={y - 14} color={cipColor} label="VPN" />
-              </g>
-            );
+            return <SquareCheckValve key={it.id} cx={it.cx} cy={y} color={cipColor} label="VPN" />;
           case 'outlet':
             return (
               <g key={it.id}>

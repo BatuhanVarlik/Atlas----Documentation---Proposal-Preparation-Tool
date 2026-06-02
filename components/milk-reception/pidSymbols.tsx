@@ -78,6 +78,59 @@ export function ButterflyValve({
   );
 }
 
+// === Vana — kare (hat üzerinde çizilen ESV vanaları için) ===
+// Pompada olduğu gibi doğrudan hattın üzerinde durur; yukarı bağlantı çizgisi yoktur.
+export function SquareValve({
+  cx,
+  cy,
+  color = PID_COLORS.process,
+  label,
+}: {
+  cx: number;
+  cy: number;
+  color?: string;
+  label?: string;
+}) {
+  const s = 6;
+  return (
+    <g>
+      <rect x={cx - s} y={cy - s} width={s * 2} height={s * 2} fill="white" stroke={color} strokeWidth="1.8" />
+      {label && (
+        <text x={cx} y={cy + 18} fontSize="6.5" textAnchor="middle" fill={PID_COLORS.label}>
+          {label}
+        </text>
+      )}
+    </g>
+  );
+}
+
+// === Check valve — kare + köşegen (sağ üst → sol alt) ile ayırt edilir ===
+export function SquareCheckValve({
+  cx,
+  cy,
+  color = PID_COLORS.process,
+  label,
+}: {
+  cx: number;
+  cy: number;
+  color?: string;
+  label?: string;
+}) {
+  const s = 6;
+  return (
+    <g>
+      <rect x={cx - s} y={cy - s} width={s * 2} height={s * 2} fill="white" stroke={color} strokeWidth="1.8" />
+      {/* Köşegen: sağ üst köşeden sol alt köşeye */}
+      <line x1={cx + s} y1={cy - s} x2={cx - s} y2={cy + s} stroke={color} strokeWidth="1.4" />
+      {label && (
+        <text x={cx} y={cy + 18} fontSize="6.5" textAnchor="middle" fill={PID_COLORS.label}>
+          {label}
+        </text>
+      )}
+    </g>
+  );
+}
+
 // === Single seat valve (SW-CIP, SW41, SW43) — yuvarlak (Storage tutarlı) ===
 export function SingleSeatValve({
   cx,
@@ -213,7 +266,6 @@ export function Degazor({
   color = PID_COLORS.stroke,
   hasLsh = true,
   hasLsl = true,
-  exhaustValveLabel,
 }: {
   cx: number;
   cy: number;
@@ -221,9 +273,8 @@ export function Degazor({
   color?: string;
   hasLsh?: boolean;
   hasLsl?: boolean;
-  exhaustValveLabel?: string;
 }) {
-  const h = 36;
+  const h = 26;
   const w = width;
   return (
     <g>
@@ -232,10 +283,6 @@ export function Degazor({
       {/* Sol/sağ kapaklar — yarım daire */}
       <path d={`M ${cx - w / 2} ${cy - h / 2} A ${h / 2} ${h / 2} 0 0 0 ${cx - w / 2} ${cy + h / 2}`} fill="#e2e8f0" stroke={color} strokeWidth="1.4" />
       <path d={`M ${cx + w / 2} ${cy - h / 2} A ${h / 2} ${h / 2} 0 0 1 ${cx + w / 2} ${cy + h / 2}`} fill="#e2e8f0" stroke={color} strokeWidth="1.4" />
-
-      {/* Üst air exhaust çıkışı + vana */}
-      <line x1={cx} y1={cy - h / 2} x2={cx} y2={cy - h / 2 - 14} stroke={color} strokeWidth="1.4" />
-      <ButterflyValve cx={cx} cy={cy - h / 2 - 22} color={PID_COLORS.air} actuated label={exhaustValveLabel} />
 
       {/* LSH / LSL sensör bubble'ları */}
       {hasLsh && (
@@ -301,11 +348,11 @@ export function PlateHeatExchanger({
           strokeWidth="0.8"
         />
       ))}
-      {/* Ice water giriş (alt) ve dönüş (üst) bağlantı kanalları */}
-      <line x1={cx - w / 2 + 8} y1={cy + h / 2} x2={cx - w / 2 + 8} y2={cy + h / 2 + 10} stroke={iceColor} strokeWidth="1.6" strokeDasharray="3 2" />
-      <text x={cx - w / 2 + 8} y={cy + h / 2 + 18} fontSize="5.5" textAnchor="middle" fill={iceColor}>Ice→</text>
-      <line x1={cx + w / 2 - 8} y1={cy - h / 2} x2={cx + w / 2 - 8} y2={cy - h / 2 - 10} stroke={iceColor} strokeWidth="1.6" strokeDasharray="3 2" />
-      <text x={cx + w / 2 - 8} y={cy - h / 2 - 13} fontSize="5.5" textAnchor="middle" fill={iceColor}>←Ice</text>
+      {/* Ice water giriş ve dönüş — ikisi de üstte, uzun kesikli kanallar */}
+      <line x1={cx - w / 2 + 8} y1={cy - h / 2} x2={cx - w / 2 + 8} y2={cy - h / 2 - 30} stroke={iceColor} strokeWidth="1.6" strokeDasharray="3 2" />
+      <text x={cx - w / 2 + 8} y={cy - h / 2 - 33} fontSize="5.5" textAnchor="middle" fill={iceColor}>Ice→</text>
+      <line x1={cx + w / 2 - 8} y1={cy - h / 2} x2={cx + w / 2 - 8} y2={cy - h / 2 - 30} stroke={iceColor} strokeWidth="1.6" strokeDasharray="3 2" />
+      <text x={cx + w / 2 - 8} y={cy - h / 2 - 33} fontSize="5.5" textAnchor="middle" fill={iceColor}>←Ice</text>
 
       <text x={cx} y={cy + h / 2 + 28} fontSize="7" textAnchor="middle" fill={PID_COLORS.label} fontWeight="600">
         {label}

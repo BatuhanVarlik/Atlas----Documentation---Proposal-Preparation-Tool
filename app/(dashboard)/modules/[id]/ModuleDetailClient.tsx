@@ -111,6 +111,7 @@ interface Template {
   name: string;
   description: string | null;
   isActive: boolean;
+  moduleType?: string;
 }
 
 interface GeneratedDoc {
@@ -184,7 +185,12 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
 
   useEffect(() => {
     fetch('/api/templates').then((r) => r.json()).then((j) => {
-      if (j.success) setTemplates((j.data as Template[]).filter((t) => t.isActive));
+      if (j.success) {
+        // Yalnızca STORAGE şablonları (varsa) — yoksa hepsi gösterilir
+        const all = (j.data as Template[]).filter((t) => t.isActive);
+        const storage = all.filter((t) => t.moduleType === 'STORAGE');
+        setTemplates(storage.length > 0 ? storage : all);
+      }
     });
     fetch(`/api/modules/${module.id}/documents`).then((r) => r.json()).then((j) => {
       if (j.success) setDocs(j.data as GeneratedDoc[]);
@@ -272,11 +278,37 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
         <span className="text-slate-900 font-medium">{module.name}</span>
       </div>
 
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">{module.name}</h1>
+          <div className="flex items-center gap-3 mt-1">
+            <ModuleStatusBadge status={module.status} />
+            <span className="text-xs text-slate-500">
+              {module.creator.name} · {formatDate(module.createdAt)}
+            </span>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Link
+            href={`/modules/${module.id}/preview`}
+            className="px-4 py-2 text-sm text-slate-600 border border-slate-300 hover:bg-slate-50 rounded-lg"
+          >
+            Önizleme →
+          </Link>
+          <button
+            type="button"
+            onClick={() => { setShowGenerate(true); setGenerateError(''); }}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors"
+          >
+            Teklif Oluştur (.docx)
+          </button>
+        </div>
+      </div>
+
       {/* Header Kartı */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 mb-5">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
-            <ModuleStatusBadge status={module.status} />
             {module.selectedDN && (
               <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">
                 {module.selectedDN}
@@ -584,21 +616,6 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
           )}
         </div>
 
-        {/* Aksiyon Butonları */}
-        <div className="mt-5 pt-5 border-t border-slate-100 flex items-center justify-between">
-          <Link
-            href={`/modules/${module.id}/preview`}
-            className="px-4 py-2 text-sm text-slate-700 border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors"
-          >
-            Önizle
-          </Link>
-          <button
-            onClick={() => { setShowGenerate(true); setGenerateError(''); }}
-            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors"
-          >
-            Teklif Oluştur (.docx)
-          </button>
-        </div>
       </div>
 
       {/* Valve Cluster Builder */}
@@ -648,7 +665,7 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-slate-400">{formatDate(doc.createdAt)}</span>
                   <span className="text-xs text-slate-400">{Math.round(doc.size / 1024)} KB</span>
-                  <a href={doc.filepath} download
+                  <a href={`/api/modules/${module.id}/documents/${doc.id}`} download
                     className="text-xs px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors">
                     İndir
                   </a>

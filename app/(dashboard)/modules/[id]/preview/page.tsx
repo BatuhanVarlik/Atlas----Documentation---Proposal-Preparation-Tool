@@ -9,6 +9,7 @@ import { buildValveLineItemsForModule, type ModulePricingContext } from '@/lib/p
 import type { CatalogValveType, ControlUnit } from '@/lib/pricing/valveMatcher';
 import { ModuleSchematic } from '@/components/module-builder/ModuleSchematic';
 import { buildStorageInstrumentItems, summarizeStorageInstruments } from '@/lib/pricing/storageInstruments';
+import { getCustomPricingItems } from '@/lib/pricing/customCatalogServer';
 import { EditablePricingCard, type PricingRowView } from '@/components/pricing/EditablePricingCard';
 import { createRowKeyer } from '@/lib/pricing/rowKey';
 
@@ -204,6 +205,7 @@ export default async function ModulePreviewPage({ params }: Props) {
   const equipmentTotal = equipment.reduce((s, e) => s + e.quantity, 0);
 
   // === Enstrüman Fiyatlandırma ===
+  const customItems = await getCustomPricingItems();
   const instrumentRows = (moduleData.tanks.length > 0 || dl.length > 0)
     ? buildStorageInstrumentItems({
         standard: moduleData.standard as 'DIN' | 'SMS',
@@ -218,6 +220,7 @@ export default async function ModulePreviewPage({ params }: Props) {
           hasAgitator: t.hasAgitator,
           agitatorMotorKw: t.agitatorMotorKw,
           cipBall: t.cipBall as 'STATIC' | 'ROTARY',
+          cipReturnPumpModel: t.cipReturnPumpModel,
         })),
         dischargeLines: dl.map((l) => {
           const fmResult = calc?.flowMeterResults.find((r) => r.lineId === l.id);
@@ -226,8 +229,11 @@ export default async function ModulePreviewPage({ params }: Props) {
             hasFlowMeter: l.hasFlowMeter,
             flowMeterSize: l.hasFlowMeter ? (fmResult?.selectedDN.dn ?? calc?.selectedDN.dn ?? null) : null,
             hasPressureTransmitter: l.hasPressureTransmitter,
+            pumpModel: l.pumpModel,
           };
         }),
+        tankCipReturnPumpModel: moduleData.tankCipReturnPumpModel,
+        customItems,
       })
     : [];
   const instrumentSummary = summarizeStorageInstruments(instrumentRows);

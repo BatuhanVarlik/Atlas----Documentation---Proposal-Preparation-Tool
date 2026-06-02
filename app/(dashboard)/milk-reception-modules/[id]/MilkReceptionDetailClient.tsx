@@ -427,7 +427,7 @@ export default function MilkReceptionDetailClient({ module }: Props) {
                   <span className="text-xs text-slate-400">{formatDate(doc.createdAt)}</span>
                   <span className="text-xs text-slate-400">{Math.round(doc.size / 1024)} KB</span>
                   <a
-                    href={doc.filepath}
+                    href={`/api/milk-reception-modules/${module.id}/documents/${doc.id}`}
                     download
                     className="text-xs px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
                   >

@@ -38,6 +38,7 @@ model User {
   moduleRevisions     ModuleRevision[]       @relation("ModuleRevisionCreator")
   createdMilkReceptionModules  MilkReceptionModule[]         @relation("MilkReceptionModuleCreator")
   milkReceptionRevisions       MilkReceptionModuleRevision[] @relation("MilkReceptionModuleRevisionCreator")
+  customCatalogItems           CustomCatalogItem[]           @relation("CustomCatalogCreator")
 }
 
 enum Role {
@@ -346,6 +347,23 @@ model DocumentTemplate {
 
   documents              GeneratedDocument[]
   milkReceptionDocuments MilkReceptionGeneratedDocument[]
+}
+
+// Kataloğa elle eklenen ürünler (Excel'de karşılığı olmayanlar:
+// Milk Clarifier, PHE, W+ pompalar vb.). Fiyatlandırma bunlardan otomatik çeker.
+model CustomCatalogItem {
+  id          String   @id @default(cuid())
+  kind        String                 // MILK_CLARIFIER | PHE | PUMP | OTHER (eşleştirme anahtarı)
+  name        String                 // teknik açıklama / model
+  standard    String   @default("")  // 'DIN' | 'SMS' | '' (her ikisi)
+  size        String?                // ör. "DN50" / "63 SMS (2\")" / pompa modeli
+  listPrice   Float
+  discount    Float    @default(0)
+  createdById String
+  createdBy   User     @relation("CustomCatalogCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([kind])
 }
 
 model PasswordResetRequest {
