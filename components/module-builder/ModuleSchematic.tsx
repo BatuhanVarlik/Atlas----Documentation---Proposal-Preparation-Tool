@@ -52,8 +52,8 @@ export function ModuleSchematic({
   const preFixedPad = 100;              // boşaltım hattındaki sabit vana grubu için
   const leftPad = labelPad + preFixedPad; // tankların başladığı konum
   const rightFixedPad = 150;
-  const lineGap = 52;
-  const lineStartY = tankAreaTop + tankH + 36;
+  const lineGap = 64;                    // CIP (yukarı) / Drain (aşağı) dallarına dikey alan
+  const lineStartY = tankAreaTop + tankH + 44;
 
   const tanksCount = tanks.length;
   const totalLines = fillingLines.length + dischargeLines.length + tankCipLineCount;
@@ -198,6 +198,7 @@ export function ModuleSchematic({
               fixedLabels={['Drain', 'Lkg', 'CIP↩']}
               fixedSide="end"
               arrowDirection="right"
+              branch
             />
           );
         })}
@@ -224,6 +225,7 @@ export function ModuleSchematic({
               fixedLabels={labels}
               fixedSide="start"
               arrowDirection="right"
+              branch
             />
           );
         })}
@@ -250,6 +252,8 @@ export function ModuleSchematic({
               fixedLabels={['Drain', 'Çek']}
               fixedSide="end"
               arrowDirection="right"
+              spacing={42}
+              pumpGap={36}
             />
           );
         })}
@@ -318,6 +322,9 @@ function LineRow({
   fixedLabels,
   fixedSide,
   arrowDirection,
+  branch = false,
+  spacing = 22,
+  pumpGap = 14,
 }: {
   y: number;
   label: string;
@@ -333,19 +340,32 @@ function LineRow({
   fixedLabels: string[];
   fixedSide: 'start' | 'end';
   arrowDirection: 'left' | 'right';
+  /** true ise: etiketinde "CIP" geçen vana ince hatla yukarı, "Drain" ince hatla aşağı taşınır */
+  branch?: boolean;
+  /** ardışık sabit vanalar arası yatay mesafe */
+  spacing?: number;
+  /** son sabit vana ile pompa arası yatay mesafe */
+  pumpGap?: number;
 }) {
   const lineStartX = labelPad - 4;
   const tankAreaEnd = leftPad + tankAreaWidth;
 
-  // Sabit vanalar hat üzerinde, yatay sırayla dizilir
-  const fixedSpacing = 22;
-  const fixedAreaWidth = Math.max(fixedValves - 1, 0) * fixedSpacing;
+  // Sabit vanalar hat boyunca yatay sırayla dizilir (branch ise CIP yukarı / Drain aşağı dallanır)
+  const fixedAreaWidth = Math.max(fixedValves - 1, 0) * spacing;
   const startFixedX = labelPad + 18;
   const endFixedX = tankAreaEnd + 22;
   const fixedX = fixedSide === 'start' ? startFixedX : endFixedX;
   const fixedRightEdge = fixedX + fixedAreaWidth;
 
-  const pumpX = (fixedSide === 'end' ? fixedRightEdge : tankAreaEnd + 18) + 14;
+  const branchOffset = 20; // hat ile yukarı/aşağı taşınan vana merkezi arası dikey mesafe
+
+  // CIP geri dönüş vanasının konumu (branch modunda yukarı taşınan "CIP" etiketli vana).
+  // Bu vanadan tank altındaki vanalara ince mavi kesikli geri dönüş hattı çizilir.
+  const cipReturnColor = '#2563eb';
+  const cipReturnIdx = branch ? fixedLabels.slice(0, fixedValves).findIndex((l) => l.includes('CIP')) : -1;
+  const cipReturnCx = cipReturnIdx >= 0 ? fixedX + cipReturnIdx * spacing : null;
+
+  const pumpX = (fixedSide === 'end' ? fixedRightEdge : tankAreaEnd + 18) + pumpGap;
   const lineEndX = hasPump ? pumpX + 16 : (fixedSide === 'end' ? fixedRightEdge + 14 : tankAreaEnd + 26);
 
   return (
@@ -370,15 +390,64 @@ function LineRow({
       {/* Manifold çizgisi */}
       <line x1={lineStartX} y1={y} x2={lineEndX} y2={y} stroke={color} strokeWidth="2.8" strokeLinecap="round" />
 
+      {/* CIP geri dönüş hattı — CIP vanasından tank altındaki vanalara ince mavi kesikli dağıtım.
+          Yatay başlık CIP vanası hizasında, her tank vanasına kısa düşüşle iner. */}
+      {cipReturnCx != null && connectedCount > 0 && (() => {
+        const vy = y - branchOffset;
+        const xs = Array.from({ length: connectedCount }, (_, i) => tankCenterX(i));
+        const headerMin = Math.min(cipReturnCx, ...xs);
+        const headerMax = Math.max(cipReturnCx, ...xs);
+        return (
+          <g>
+            <line x1={headerMin} y1={vy} x2={headerMax} y2={vy} stroke={cipReturnColor} strokeWidth="1" strokeDasharray="3 2" />
+            {xs.map((tx, i) => (
+              <line key={`cipret-${i}`} x1={tx} y1={vy} x2={tx} y2={y - 5.5} stroke={cipReturnColor} strokeWidth="1" strokeDasharray="3 2" />
+            ))}
+          </g>
+        );
+      })()}
+
       {/* Tank altlarındaki bağlantı vanaları — hat üzerinde */}
       {Array.from({ length: connectedCount }).map((_, i) => {
         const cx = tankCenterX(i);
         return <Valve key={i} cx={cx} cy={y} color={color} />;
       })}
 
-      {/* Sabit vanalar — hat üzerinde yatay sırayla; "Çek" check valve (köşegenli) */}
+      {/* Sabit vanalar — branch modunda "CIP" ince hatla yukarı, "Drain" ince hatla aşağı;
+          diğerleri hat üzerinde. "Çek" check valve köşegenle ayırt edilir. */}
       {fixedLabels.slice(0, fixedValves).map((lbl, i) => {
-        const cx = fixedX + i * fixedSpacing;
+        const cx = fixedX + i * spacing;
+        const valveS = 4.5; // küçük vana yarı-kenarı (Valve small)
+
+        // CIP → ince hatla yukarı, etiket vananın üstünde
+        if (branch && lbl.includes('CIP')) {
+          const vy = y - branchOffset;
+          return (
+            <g key={`fx-${i}`}>
+              <line x1={cx} y1={y} x2={cx} y2={vy + valveS} stroke={color} strokeWidth="1.2" />
+              <Valve cx={cx} cy={vy} color={color} small />
+              <text x={cx} y={vy - 7} textAnchor="middle" fontSize="7" fill={color} fontWeight="600">
+                {lbl}
+              </text>
+            </g>
+          );
+        }
+
+        // Drain → ince hatla aşağı, etiket vananın altında
+        if (branch && lbl === 'Drain') {
+          const vy = y + branchOffset;
+          return (
+            <g key={`fx-${i}`}>
+              <line x1={cx} y1={y} x2={cx} y2={vy - valveS} stroke={color} strokeWidth="1.2" />
+              <Valve cx={cx} cy={vy} color={color} small />
+              <text x={cx} y={vy + 14} textAnchor="middle" fontSize="7" fill={color} fontWeight="600">
+                {lbl}
+              </text>
+            </g>
+          );
+        }
+
+        // Hat üzerinde kalanlar (Lkg / Su / Çek)
         return (
           <g key={`fx-${i}`}>
             <Valve cx={cx} cy={y} color={color} small check={lbl === 'Çek'} />

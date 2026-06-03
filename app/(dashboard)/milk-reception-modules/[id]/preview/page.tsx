@@ -346,7 +346,6 @@ export default async function MilkReceptionPreviewPage({ params }: Props) {
           <MilkReceptionSchematic
             standard={standard}
             waterInletSize={largestSize}
-            fixedSmallSize={fixedSmallSize}
             lines={mod.receptionLines.map((l) => ({
               name: l.name,
               capacity: l.capacity,

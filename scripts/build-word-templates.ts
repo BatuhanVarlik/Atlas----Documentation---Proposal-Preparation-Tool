@@ -8,7 +8,7 @@ import path from 'path';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { prisma } from '../lib/prisma';
-import { extractPlaceholders } from '../lib/docx/renderTemplate';
+import { extractPlaceholders, dotNotationParser } from '../lib/docx/renderTemplate';
 
 // ---------- Renk paleti ----------
 const NAVY = '1B2A52';
@@ -341,7 +341,14 @@ function assembleDocx(body: string, logo: Buffer): Buffer {
 // ---------- Render-test (placeholder eksiği / bozuk XML yakalar) ----------
 function renderTest(buffer: Buffer, context: unknown, label: string) {
   const zip = new PizZip(buffer);
-  const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
+  // Üretimle (renderTemplateWithMedia) AYNI parser/nullGetter — aksi halde nokta-notasyonlu
+  // placeholder'lar testte sessizce boş çözülür ve gerçek bir hatayı yakalamaz.
+  const doc = new Docxtemplater(zip, {
+    paragraphLoop: true,
+    linebreaks: true,
+    parser: dotNotationParser,
+    nullGetter: () => '',
+  });
   doc.render(context as Record<string, unknown>);
   doc.getZip().generate({ type: 'nodebuffer' });
   console.log(`  ✓ render-test geçti: ${label}`);

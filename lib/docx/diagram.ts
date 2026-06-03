@@ -51,8 +51,12 @@ async function svgToPng(fullMarkup: string): Promise<{ png: Buffer; widthEmu: nu
   return { png, widthEmu, heightEmu };
 }
 
-function drawingParagraph(widthEmu: number, heightEmu: number): string {
-  return (
+function drawingParagraph(
+  widthEmu: number,
+  heightEmu: number,
+  opts: { pageBreakAfter?: boolean } = {},
+): string {
+  const image =
     '<w:p><w:pPr><w:spacing w:after="160"/></w:pPr><w:r><w:drawing>' +
     `<wp:inline distT="0" distB="0" distL="0" distR="0">` +
     `<wp:extent cx="${widthEmu}" cy="${heightEmu}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
@@ -63,8 +67,16 @@ function drawingParagraph(widthEmu: number, heightEmu: number): string {
     `<pic:blipFill><a:blip r:embed="${DIAGRAM_REL_ID}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
     `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm>` +
     `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>` +
-    `</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
-  );
+    `</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+
+  // Sonraki içeriği yeni sayfada başlatmak için boş bir taşıyıcı paragrafa pageBreakBefore
+  // konur. Sabit <w:br w:type="page"/> (ve boş satırlar) görsel sayfayı doldurduğunda
+  // taşma yapıp araya boş bir sayfa ekliyordu; pageBreakBefore bu yan etkiyi yapmaz.
+  const pageBreak = opts.pageBreakAfter
+    ? '<w:p><w:pPr><w:pageBreakBefore/><w:spacing w:before="0" w:after="0"/></w:pPr></w:p>'
+    : '';
+
+  return image + pageBreak;
 }
 
 // ============ Süt Alım diyagramı ============
@@ -110,12 +122,21 @@ export async function renderMilkReceptionDiagram(module: MRModuleForDiagram): Pr
     }
   });
   const largest = [...lineCalcs].filter((c) => c.dn).sort((a, b) => b.inner - a.inner)[0]?.dn ?? '—';
-  const fixedSmallSize = standard === 'DIN' ? 'DN25' : '25 SMS (1")';
+
+  // Tanker CIP çapı — önizlemeyle aynı şekilde hesapla (V=2.0), aksi halde doc diyagramında boş kalır.
+  let tankerCipDn: string | null = null;
+  if (module.hasTankerCip && module.tankerCipCapacity && module.tankerCipCapacity > 0) {
+    const d = calculatePipeDiameter({ capacityLh: module.tankerCipCapacity, velocity: 2.0 });
+    try {
+      tankerCipDn = selectDN(d.diameterMm, standard).dn;
+    } catch {
+      tankerCipDn = null;
+    }
+  }
 
   const props = {
     standard,
     waterInletSize: largest,
-    fixedSmallSize,
     lines: module.receptionLines.map((l) => ({
       name: l.name,
       capacity: l.capacity,
@@ -134,13 +155,19 @@ export async function renderMilkReceptionDiagram(module: MRModuleForDiagram): Pr
       samplingValveType: l.samplingValveType,
     })),
     tankerCip: module.hasTankerCip
-      ? { capacity: module.tankerCipCapacity, pressure: module.tankerCipPressure, hasPump: !!module.tankerCipPumpModel, dn: null }
+      ? { capacity: module.tankerCipCapacity, pressure: module.tankerCipPressure, hasPump: !!module.tankerCipPumpModel, dn: tankerCipDn }
       : null,
   } as React.ComponentProps<typeof MilkReceptionSchematic>;
 
-  const markup = renderToStaticMarkup(React.createElement(MilkReceptionSchematic, props));
-  const { png, widthEmu, heightEmu } = await svgToPng(markup);
-  return { png, drawingXml: drawingParagraph(widthEmu, heightEmu) };
+  // Render/raster hatası tüm belge üretimini düşürmesin — diyagram opsiyoneldir.
+  try {
+    const markup = renderToStaticMarkup(React.createElement(MilkReceptionSchematic, props));
+    const { png, widthEmu, heightEmu } = await svgToPng(markup);
+    return { png, drawingXml: drawingParagraph(widthEmu, heightEmu) };
+  } catch (e) {
+    console.error('Süt Alım diyagramı üretilemedi, atlanıyor:', e);
+    return null;
+  }
 }
 
 // ============ Depolama diyagramı ============
@@ -165,28 +192,37 @@ export async function renderStorageDiagram(module: StorageModuleForDiagram): Pro
   const hasLines = fl.length > 0 || dl.length > 0;
   const FIXED_FILLING = 3;
   const FIXED_DISCHARGE = module.waterInletValveType ? 3 : 2;
-  const calc = hasLines
-    ? calculateModule({
-        standard,
-        fillingLines: fl.map((l) => ({ id: l.id, capacity: l.capacity })),
-        dischargeLines: dl.map((l) => ({ id: l.id, capacity: l.capacity, hasFlowMeter: false })),
-      })
-    : null;
 
-  const props = {
-    tanks: module.tanks.map((t) => ({ name: t.name, volume: t.volume })),
-    fillingLines: fl.map((l) => ({ name: l.name, capacity: l.capacity, connectedTankCount: l.connectedTankCount })),
-    dischargeLines: dl.map((l) => ({ name: l.name, capacity: l.capacity, connectedTankCount: l.connectedTankCount, hasPump: !!l.pumpModel })),
-    fixedFillingValves: FIXED_FILLING,
-    fixedDischargeValves: FIXED_DISCHARGE,
-    selectedDN: calc?.selectedDN.dn,
-    tankCipReturn:
-      module.tanks.length > 0
-        ? { manifoldExists: module.tankCipReturnManifoldExists, lineCount: module.tankCipReturnLineCount, hasPump: !!module.tankCipReturnPumpModel }
-        : null,
-  } as React.ComponentProps<typeof ModuleSchematic>;
+  // Hesap (kapasite tabloyu aşarsa selectDN fırlatabilir) + render/raster — diyagram opsiyonel
+  // olduğundan herhangi bir hata tüm belge üretimini düşürmemeli.
+  try {
+    const calc = hasLines
+      ? calculateModule({
+          standard,
+          fillingLines: fl.map((l) => ({ id: l.id, capacity: l.capacity })),
+          dischargeLines: dl.map((l) => ({ id: l.id, capacity: l.capacity, hasFlowMeter: false })),
+        })
+      : null;
 
-  const markup = renderToStaticMarkup(React.createElement(ModuleSchematic, props));
-  const { png, widthEmu, heightEmu } = await svgToPng(markup);
-  return { png, drawingXml: drawingParagraph(widthEmu, heightEmu) };
+    const props = {
+      tanks: module.tanks.map((t) => ({ name: t.name, volume: t.volume })),
+      fillingLines: fl.map((l) => ({ name: l.name, capacity: l.capacity, connectedTankCount: l.connectedTankCount })),
+      dischargeLines: dl.map((l) => ({ name: l.name, capacity: l.capacity, connectedTankCount: l.connectedTankCount, hasPump: !!l.pumpModel })),
+      fixedFillingValves: FIXED_FILLING,
+      fixedDischargeValves: FIXED_DISCHARGE,
+      selectedDN: calc?.selectedDN.dn,
+      tankCipReturn:
+        module.tanks.length > 0
+          ? { manifoldExists: module.tankCipReturnManifoldExists, lineCount: module.tankCipReturnLineCount, hasPump: !!module.tankCipReturnPumpModel }
+          : null,
+    } as React.ComponentProps<typeof ModuleSchematic>;
+
+    const markup = renderToStaticMarkup(React.createElement(ModuleSchematic, props));
+    const { png, widthEmu, heightEmu } = await svgToPng(markup);
+    // Storage teklifinde: kalan içerik 2. sayfada başlasın (boş ara sayfa oluşturmadan).
+    return { png, drawingXml: drawingParagraph(widthEmu, heightEmu, { pageBreakAfter: true }) };
+  } catch (e) {
+    console.error('Depolama diyagramı üretilemedi, atlanıyor:', e);
+    return null;
+  }
 }

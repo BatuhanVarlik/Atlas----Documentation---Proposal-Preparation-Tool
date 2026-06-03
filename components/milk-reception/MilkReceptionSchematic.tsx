@@ -42,7 +42,6 @@ type TankerCip = {
 interface Props {
   standard: 'DIN' | 'SMS';
   waterInletSize: string;
-  fixedSmallSize: string;
   lines: LineData[];
   tankerCip: TankerCip | null;
 }

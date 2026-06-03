@@ -1,11 +1,12 @@
 import { prisma } from '@/lib/prisma';
-import { requireAuth, apiError, apiSuccess } from '@/lib/auth-middleware';
+import { requireRole, apiError, apiSuccess } from '@/lib/auth-middleware';
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function DELETE(_req: Request, { params }: Params) {
   try {
-    await requireAuth();
+    // Fiyatlandırmayı global etkilediğinden silme yetkili rollere kısıtlı.
+    await requireRole(['ADMIN', 'DEPARTMENT_MANAGER']);
     const { id } = await params;
     const existing = await prisma.customCatalogItem.findUnique({ where: { id } });
     if (!existing) return apiError('Ürün bulunamadı', 404);

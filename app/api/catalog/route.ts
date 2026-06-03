@@ -1,6 +1,9 @@
 import { prisma } from '@/lib/prisma';
-import { requireAuth, apiError, apiSuccess } from '@/lib/auth-middleware';
+import { requireAuth, requireRole, apiError, apiSuccess } from '@/lib/auth-middleware';
 import { createCustomCatalogSchema } from '@/lib/validations/customCatalog';
+
+// Özel katalog tüm modüllerin fiyatlandırmasını etkilediğinden yazma işlemleri yetkili rollere kısıtlı.
+const CATALOG_WRITE_ROLES = ['ADMIN', 'DEPARTMENT_MANAGER'];
 
 export async function GET() {
   try {
@@ -15,7 +18,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const user = await requireAuth();
+    const user = await requireRole(CATALOG_WRITE_ROLES);
     const body: unknown = await req.json();
     const parsed = createCustomCatalogSchema.safeParse(body);
     if (!parsed.success) return apiError('Geçersiz veri', 400, parsed.error.flatten());
