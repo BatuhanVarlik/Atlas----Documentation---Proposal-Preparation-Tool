@@ -68,6 +68,17 @@ function descCell(inner: string, w: number, bold = false, jc = 'left'): string {
     `<w:t xml:space="preserve">${inner}</w:t></w:r></w:p></w:tc>`
   );
 }
+// Mavi (lacivert) başlık hücresi — belgenin orijinal Hat tablosu başlığıyla aynı
+// (dolgu 1B2A52 + beyaz kalın metin). Reception'daki tablo başlık rengine uyar.
+const HEADER_FILL = '1B2A52';
+function descHeaderCell(inner: string, w: number, jc = 'left'): string {
+  return (
+    `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="${HEADER_FILL}"/><w:vAlign w:val="center"/></w:tcPr>` +
+    `<w:p><w:pPr><w:spacing w:after="31" w:line="259" w:lineRule="auto"/><w:jc w:val="${jc}"/></w:pPr>` +
+    `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="FFFFFF"/></w:rPr>` +
+    `<w:t xml:space="preserve">${inner}</w:t></w:r></w:p></w:tc>`
+  );
+}
 function descTable(grid: number[], rowsXml: string): string {
   return (
     `<w:tbl><w:tblPr><w:tblStyle w:val="KlavuzTablo1Ak"/><w:tblW w:w="0" w:type="auto"/>` +
@@ -87,13 +98,28 @@ function spacerP(): string {
 }
 
 /**
+ * Dinamik P&ID diyagram bölümü. generate-doc, şablon `hasDiagram` placeholder'ı
+ * içerdiğinde diyagramı (lib/docx/diagram.ts) üretip {@diagramXml} ile gömer.
+ * {@diagramXml} kendi başına bir paragrafta olmalı (docxtemplater raw-xml kuralı).
+ */
+function buildDiagramSection(): string {
+  return (
+    descHeading('{#hasDiagram}P&amp;ID Şematik Diyagram') +
+    '<w:p><w:pPr><w:spacing w:after="60"/><w:jc w:val="center"/></w:pPr>' +
+    '<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr><w:t>{@diagramXml}</w:t></w:r></w:p>' +
+    '<w:p><w:pPr><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr></w:pPr>' +
+    '<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr><w:t>{/hasDiagram}</w:t></w:r></w:p>'
+  );
+}
+
+/**
  * Equipment/Purpose/Quantity tablosu — tek satırlık docxtemplater döngü tablosu.
  * Adetler context'teki `equipment[]`'ten gelir; 0 olan kalemler listeye eklenmez
  * → satır otomatik gizlenir (koşullu satır). Hem Süt Alım hem Depolama kullanır.
  */
 function buildEquipmentTable(): string {
   const g = [3211, 4580, 1840];
-  const header = `<w:tr>${descCell('Equipment', g[0], true)}${descCell('Purpose', g[1], true)}${descCell('Quantity', g[2], true, 'center')}</w:tr>`;
+  const header = `<w:tr>${descHeaderCell('Equipment', g[0])}${descHeaderCell('Purpose', g[1])}${descHeaderCell('Quantity', g[2], 'center')}</w:tr>`;
   const loop = `<w:tr>${descCell('{#equipment}{name}', g[0])}${descCell('{purpose}', g[1])}${descCell('{quantity}{/equipment}', g[2], false, 'center')}</w:tr>`;
   return descTable(g, header + loop);
 }
@@ -105,21 +131,22 @@ function buildEquipmentTable(): string {
 function buildStorageDescription(): string {
   // Dolum Hatları
   const fG = [600, 3000, 2200, 1900, 1900];
-  const fHead = `<w:tr>${descCell('#', fG[0], true, 'center')}${descCell('Hat', fG[1], true)}${descCell('Kapasite (L/h)', fG[2], true, 'right')}${descCell('Vana Tipi', fG[3], true)}${descCell('Seçilen DN', fG[4], true)}</w:tr>`;
+  const fHead = `<w:tr>${descHeaderCell('#', fG[0], 'center')}${descHeaderCell('Hat', fG[1])}${descHeaderCell('Kapasite (L/h)', fG[2], 'right')}${descHeaderCell('Vana Tipi', fG[3])}${descHeaderCell('Seçilen DN', fG[4])}</w:tr>`;
   const fLoop = `<w:tr>${descCell('{#fillingLines}{sira}', fG[0], false, 'center')}${descCell('{name}', fG[1])}${descCell('{capacity}', fG[2], false, 'right')}${descCell('{valveType}', fG[3])}${descCell('{selectedDN}{/fillingLines}', fG[4])}</w:tr>`;
   // Boşaltım Hatları
   const dG = [600, 2600, 1800, 1300, 1900, 1400];
-  const dHead = `<w:tr>${descCell('#', dG[0], true, 'center')}${descCell('Hat', dG[1], true)}${descCell('Kapasite (L/h)', dG[2], true, 'right')}${descCell('Basınç (Bar)', dG[3], true, 'right')}${descCell('Pompa', dG[4], true)}${descCell('Flow Meter', dG[5], true)}</w:tr>`;
+  const dHead = `<w:tr>${descHeaderCell('#', dG[0], 'center')}${descHeaderCell('Hat', dG[1])}${descHeaderCell('Kapasite (L/h)', dG[2], 'right')}${descHeaderCell('Basınç (Bar)', dG[3], 'right')}${descHeaderCell('Pompa', dG[4])}${descHeaderCell('Flow Meter', dG[5])}</w:tr>`;
   const dLoop = `<w:tr>${descCell('{#dischargeLines}{sira}', dG[0], false, 'center')}${descCell('{name}', dG[1])}${descCell('{capacity}', dG[2], false, 'right')}${descCell('{pressure}', dG[3], false, 'right')}${descCell('{pumpModel}', dG[4])}${descCell('{flowMeterDN}{/dischargeLines}', dG[5])}</w:tr>`;
   // Tanklar
   const tG = [600, 3000, 1900, 2600, 1500];
-  const tHead = `<w:tr>${descCell('#', tG[0], true, 'center')}${descCell('Tank', tG[1], true)}${descCell('Hacim (L)', tG[2], true, 'right')}${descCell('Sensörler', tG[3], true)}${descCell('Agitatör', tG[4], true)}</w:tr>`;
+  const tHead = `<w:tr>${descHeaderCell('#', tG[0], 'center')}${descHeaderCell('Tank', tG[1])}${descHeaderCell('Hacim (L)', tG[2], 'right')}${descHeaderCell('Sensörler', tG[3])}${descHeaderCell('Agitatör', tG[4])}</w:tr>`;
   const tLoop = `<w:tr>${descCell('{#tanks}{sira}', tG[0], false, 'center')}${descCell('{name}', tG[1])}${descCell('{volume}', tG[2], false, 'right')}${descCell('{sensors}', tG[3])}${descCell('{agitatorLabel}{/tanks}', tG[4])}</w:tr>`;
   return (
     descHeading('Dolum Hatları') + descTable(fG, fHead + fLoop) + spacerP() +
     descHeading('Boşaltım Hatları') + descTable(dG, dHead + dLoop) + spacerP() +
     descHeading('Tanklar') + descTable(tG, tHead + tLoop) + spacerP() +
-    descHeading('Ekipman') + buildEquipmentTable()
+    descHeading('Ekipman') + buildEquipmentTable() + spacerP() +
+    buildDiagramSection()
   );
 }
 
@@ -239,6 +266,17 @@ function convertMilk(xml: string): string {
     xml = xml.slice(0, s) + slice + xml.slice(e);
   }
 
+  // Örnek diyagram görselini (DESCRIPTION içindeki statik "Diyagram") dinamik diyagram
+  // bölümüyle ({#hasDiagram}{@diagramXml}{/hasDiagram}) değiştir.
+  {
+    const dIdx = xml.indexOf('name="Diyagram"');
+    if (dIdx < 0) throw new Error('[Diyagram] örnek diyagram bulunamadı');
+    const pStart = xml.lastIndexOf('<w:p ', dIdx);
+    const pEnd = xml.indexOf('</w:p>', dIdx) + 6;
+    xml = xml.slice(0, pStart) + buildDiagramSection() + xml.slice(pEnd);
+    console.log('  ✓ Örnek diyagram → dinamik {#hasDiagram}{@diagramXml} bölümü');
+  }
+
   return stripHighlight(xml);
 }
 
@@ -278,6 +316,8 @@ const MILK_MOCK = {
   ],
   tankerCip: { capacity: '30.000', pressure: '2', dn: '76 SMS (3")', pumpModel: 'W+22/20' },
   pricing: { currency: 'EURO', totalPrice: '2.765.000' },
+  hasDiagram: true,
+  diagramXml: '<w:p><w:r><w:t>DIAGRAM</w:t></w:r></w:p>',
 };
 
 const STORAGE_MOCK = {
@@ -302,6 +342,8 @@ const STORAGE_MOCK = {
     { name: 'Sensors', purpose: 'To monitor process parameters such as level, pressure, and temperature.', quantity: 5 },
   ],
   pricing: { currency: 'EURO', totalPrice: '2.300.000' },
+  hasDiagram: true,
+  diagramXml: '<w:p><w:r><w:t>DIAGRAM</w:t></w:r></w:p>',
 };
 
 function renderTest(buffer: Buffer, mock: unknown, label: string): void {
