@@ -365,6 +365,7 @@ function strictXmlCheck(xmlText: string, label: string): void {
   } catch {
     return; // parser yoksa atla
   }
+  if (!DOMParser) return;
   try {
     // Namespace/well-formedness hataları parseFromString sırasında ParseError fırlatır.
     new DOMParser({ onError: () => {} }).parseFromString(xmlText, 'text/xml');
