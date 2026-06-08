@@ -30,6 +30,15 @@ interface ModuleData {
   tankerCipPumpKw: number | null;
   tankerCipPumpImpellerSize: number | null;
 
+  // Teklif (commercial) bilgileri
+  quotationNo: string | null;
+  customerContactPerson: string | null;
+  deliveryWeeks: number | null;
+  deliveryPlace: string | null;
+  offerValidityDays: number | null;
+  degasserCount: number;
+  sensorCount: number;
+
   createdAt: Date | string;
   updatedAt: Date | string;
   creator: { id: string; name: string };
@@ -59,6 +68,14 @@ export default function MilkReceptionDetailClient({ module }: Props) {
   const [tankerPumpModel, setTankerPumpModel] = useState(module.tankerCipPumpModel ?? '');
   const [tankerPumpKw, setTankerPumpKw] = useState<number | null>(module.tankerCipPumpKw);
   const [tankerPumpImpeller, setTankerPumpImpeller] = useState<number | null>(module.tankerCipPumpImpellerSize);
+
+  // Teklif (commercial) bilgileri — doküman için
+  const [contactPerson, setContactPerson] = useState(module.customerContactPerson ?? '');
+  const [deliveryWeeks, setDeliveryWeeks] = useState<number | null>(module.deliveryWeeks);
+  const [deliveryPlace, setDeliveryPlace] = useState(module.deliveryPlace ?? 'Customer Factory');
+  const [offerValidityDays, setOfferValidityDays] = useState<number | null>(module.offerValidityDays ?? 30);
+  const [degasserCount, setDegasserCount] = useState<number>(module.degasserCount ?? 0);
+  const [sensorCount, setSensorCount] = useState<number>(module.sensorCount ?? 0);
 
   // Lines
   const [lines, setLines] = useState<ReceptionLine[]>(module.receptionLines);
@@ -165,6 +182,12 @@ export default function MilkReceptionDetailClient({ module }: Props) {
           tankerCipPumpModel: hasTankerCip ? (tankerPumpModel || null) : null,
           tankerCipPumpKw: hasTankerCip ? tankerPumpKw : null,
           tankerCipPumpImpellerSize: hasTankerCip ? tankerPumpImpeller : null,
+          customerContactPerson: contactPerson || null,
+          deliveryWeeks,
+          deliveryPlace: deliveryPlace || null,
+          offerValidityDays,
+          degasserCount,
+          sensorCount,
         }),
       });
       const json = await res.json();
@@ -248,6 +271,68 @@ export default function MilkReceptionDetailClient({ module }: Props) {
         </div>
         <p className="text-[11px] text-slate-500 mt-3">
           Sistem sabitleri (otomatik): Panel (hat sayısı kadar) · Degazör (her hatta — Air Exhaust ESV DN25/SMS25, LSH, LSL, Butterfly outlet ESV) · Flow Meter electromagnetic Krohne · Temperature sensor PT100 · Water inlet valve SW-CIP41.
+        </p>
+      </Card>
+
+      {/* Teklif Bilgileri (doküman) */}
+      <Card title="Teklif Bilgileri (Doküman)">
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Teklif No (otomatik)">
+            <input value={module.quotationNo ?? '—'} readOnly className={`${inputCls} bg-slate-100 text-slate-500`} />
+          </Field>
+          <Field label="Müşteri İlgili Kişisi">
+            <input
+              value={contactPerson}
+              onChange={(e) => setContactPerson(e.target.value)}
+              placeholder="Mrs Jane Doe"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Teslim Yeri">
+            <input value={deliveryPlace} onChange={(e) => setDeliveryPlace(e.target.value)} className={inputCls} />
+          </Field>
+        </div>
+        <div className="grid grid-cols-4 gap-3 mt-3">
+          <Field label="Teslim Süresi (hafta)">
+            <input
+              type="number"
+              min={0}
+              value={deliveryWeeks ?? ''}
+              onChange={(e) => setDeliveryWeeks(e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0))}
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Teklif Geçerliliği (gün)">
+            <input
+              type="number"
+              min={0}
+              value={offerValidityDays ?? ''}
+              onChange={(e) => setOfferValidityDays(e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0))}
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Degazör Adedi">
+            <input
+              type="number"
+              min={0}
+              value={degasserCount}
+              onChange={(e) => setDegasserCount(Math.max(0, Number(e.target.value) || 0))}
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Sensör Adedi">
+            <input
+              type="number"
+              min={0}
+              value={sensorCount}
+              onChange={(e) => setSensorCount(Math.max(0, Number(e.target.value) || 0))}
+              className={inputCls}
+            />
+          </Field>
+        </div>
+        <p className="text-[11px] text-slate-500 mt-3">
+          Bu alanlar yeni teklif belgesindeki (HEM-PROJECT-NO) kapak/teslimat ve Equipment tablosu için kullanılır.
+          Equipment adetlerinden Filter Unit / PHE / Vana otomatik hesaplanır; Degazör ve Sensör buradan girilir.
         </p>
       </Card>
 

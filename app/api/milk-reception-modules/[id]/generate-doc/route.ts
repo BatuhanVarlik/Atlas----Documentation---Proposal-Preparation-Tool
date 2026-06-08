@@ -38,7 +38,12 @@ export async function POST(req: Request, { params }: Params) {
     const templatePath = path.join(process.cwd(), 'public', template.filepath);
     const customItems = await getCustomPricingItems();
     const baseContext = buildMilkReceptionContext(module, customItems);
-    const diagram = await renderMilkReceptionDiagram(module);
+    // Diyagramı yalnızca şablon referans veriyorsa üret/göm (yeni HEM-PROJECT-NO şablonu
+    // diyagram içermez — aksi halde belgeye sahipsiz/orphan media eklenirdi).
+    const usesDiagram =
+      Array.isArray(template.placeholders) &&
+      (template.placeholders as string[]).some((p) => typeof p === 'string' && p.includes('hasDiagram'));
+    const diagram = usesDiagram ? await renderMilkReceptionDiagram(module) : null;
     const context = { ...baseContext, hasDiagram: !!diagram, diagramXml: diagram?.drawingXml ?? '' };
     const media = diagram ? [{ relId: DIAGRAM_REL_ID, filename: DIAGRAM_FILENAME, data: diagram.png }] : [];
     const docBuffer = renderTemplateWithMedia(templatePath, context, media);

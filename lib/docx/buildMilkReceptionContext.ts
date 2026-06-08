@@ -44,6 +44,14 @@ interface ModuleForDoc {
   tankerCipPumpImpellerSize: number | null;
   priceMultiplier: number;
   priceOverrides: unknown;
+  // Teklif (commercial) bilgileri — yeni teklif şablonu (HEM-PROJECT-NO)
+  quotationNo: string | null;
+  customerContactPerson: string | null;
+  deliveryWeeks: number | null;
+  deliveryPlace: string | null;
+  offerValidityDays: number | null;
+  degasserCount: number;
+  sensorCount: number;
   createdAt: Date | string;
   creator: { name: string };
   receptionLines: ReceptionLine[];
@@ -151,6 +159,7 @@ export function buildMilkReceptionContext(module: ModuleForDoc, customItems: Pri
   return {
     module: {
       name: module.name,
+      nameUpper: module.name.toUpperCase(),
       customerName: module.customerName ?? '',
       projectCode: module.projectCode ?? '',
       standard: module.standard,
@@ -160,6 +169,17 @@ export function buildMilkReceptionContext(module: ModuleForDoc, customItems: Pri
       waterInletSize: largestSize,
     },
     creator: { name: module.creator.name },
+    // Teklif (commercial) bilgileri — HEM-PROJECT-NO şablonu için
+    quotation: {
+      no: module.quotationNo ?? '',
+      date: new Date(module.createdAt).toLocaleDateString('tr-TR'),
+      contactPerson: module.customerContactPerson ?? '',
+      deliveryWeeks: module.deliveryWeeks != null ? String(module.deliveryWeeks) : '—',
+      deliveryPlace: module.deliveryPlace ?? 'Customer Factory',
+      offerValidityDays: module.offerValidityDays != null ? String(module.offerValidityDays) : '30',
+    },
+    degasserCount: module.degasserCount ?? 0,
+    sensorCount: module.sensorCount ?? 0,
     receptionLines: lines.map((line, i) => {
       const calc = lineCalcs.find((c) => c.lineId === line.id);
       return {

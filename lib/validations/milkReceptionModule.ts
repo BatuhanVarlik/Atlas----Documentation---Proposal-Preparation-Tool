@@ -24,6 +24,15 @@ export const updateMilkReceptionModuleSchema = z.object({
   tankerCipPumpModel: z.string().max(255).nullable().optional(),
   tankerCipPumpKw: z.number().positive().nullable().optional(),
   tankerCipPumpImpellerSize: z.number().positive().nullable().optional(),
+
+  // Teklif (commercial) bilgileri — HEM-PROJECT-NO şablonu için
+  quotationNo: z.string().max(50).nullable().optional(),
+  customerContactPerson: z.string().max(255).nullable().optional(),
+  deliveryWeeks: z.number().int().min(0).max(520).nullable().optional(),
+  deliveryPlace: z.string().max(255).nullable().optional(),
+  offerValidityDays: z.number().int().min(0).max(3650).nullable().optional(),
+  degasserCount: z.number().int().min(0).max(99).optional(),
+  sensorCount: z.number().int().min(0).max(999).optional(),
 });
 
 export const setLineCountSchema = z.object({
