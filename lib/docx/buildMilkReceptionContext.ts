@@ -50,8 +50,6 @@ interface ModuleForDoc {
   deliveryWeeks: number | null;
   deliveryPlace: string | null;
   offerValidityDays: number | null;
-  degasserCount: number;
-  sensorCount: number;
   createdAt: Date | string;
   creator: { name: string };
   receptionLines: ReceptionLine[];
@@ -156,6 +154,24 @@ export function buildMilkReceptionContext(module: ModuleForDoc, customItems: Pri
   }));
   const pricingTotals = summarizePricingWithOverrides(canonicalRows, overrides, multiplier);
 
+  // === Ekipman özet tablosu (DESCRIPTION → Equipment/Quantity) ===
+  // Adetler sistemin kendi kurallarından türetilir; kullanıcıdan istenmez.
+  // Degazör: her hatta 1 + (varsa) Tanker CIP'te 1 — milkReceptionPricing ile aynı.
+  const degasserCount = lines.length + (module.hasTankerCip ? 1 : 0);
+  // Sensör: PT100 sıcaklık, termometre, manometre/transmitter ve flowmetre kalemleri
+  // ("pressure, temperature, and flow rate") — fiyatlandırma satırlarından sayılır.
+  const SENSOR_ITEMTYPE = /PT100|Bimethal|A300G|PI1700|Krohne|Optiflux|Optimass/i;
+  const sensorCount = pricingRows
+    .filter((r) => SENSOR_ITEMTYPE.test(r.itemType))
+    .reduce((s, r) => s + r.quantity, 0);
+  const equipment = [
+    { name: 'Valves', purpose: 'To control and direct the product flow throughout the process line.', quantity: pricingTotals.valveCount },
+    { name: 'Degasser', purpose: 'To continuously remove dissolved air from the milk without introducing additional air.', quantity: degasserCount },
+    { name: 'Filter Unit', purpose: 'To remove unwanted particles and impurities from the milk.', quantity: lines.reduce((s, l) => s + l.filterUnitCount, 0) },
+    { name: 'Plate Heat Exchanger', purpose: 'To cool raw milk from 10°C down to 4°C.', quantity: lines.filter((l) => l.hasPhe).length },
+    { name: 'Sensors', purpose: 'To monitor process parameters such as pressure, temperature, and flow rate.', quantity: sensorCount },
+  ].filter((e) => e.quantity > 0);
+
   return {
     module: {
       name: module.name,
@@ -178,8 +194,7 @@ export function buildMilkReceptionContext(module: ModuleForDoc, customItems: Pri
       deliveryPlace: module.deliveryPlace ?? 'Customer Factory',
       offerValidityDays: module.offerValidityDays != null ? String(module.offerValidityDays) : '30',
     },
-    degasserCount: module.degasserCount ?? 0,
-    sensorCount: module.sensorCount ?? 0,
+    equipment,
     receptionLines: lines.map((line, i) => {
       const calc = lineCalcs.find((c) => c.lineId === line.id);
       return {

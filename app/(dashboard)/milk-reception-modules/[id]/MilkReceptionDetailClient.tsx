@@ -36,8 +36,6 @@ interface ModuleData {
   deliveryWeeks: number | null;
   deliveryPlace: string | null;
   offerValidityDays: number | null;
-  degasserCount: number;
-  sensorCount: number;
 
   createdAt: Date | string;
   updatedAt: Date | string;
@@ -74,8 +72,6 @@ export default function MilkReceptionDetailClient({ module }: Props) {
   const [deliveryWeeks, setDeliveryWeeks] = useState<number | null>(module.deliveryWeeks);
   const [deliveryPlace, setDeliveryPlace] = useState(module.deliveryPlace ?? 'Customer Factory');
   const [offerValidityDays, setOfferValidityDays] = useState<number | null>(module.offerValidityDays ?? 30);
-  const [degasserCount, setDegasserCount] = useState<number>(module.degasserCount ?? 0);
-  const [sensorCount, setSensorCount] = useState<number>(module.sensorCount ?? 0);
 
   // Lines
   const [lines, setLines] = useState<ReceptionLine[]>(module.receptionLines);
@@ -186,8 +182,6 @@ export default function MilkReceptionDetailClient({ module }: Props) {
           deliveryWeeks,
           deliveryPlace: deliveryPlace || null,
           offerValidityDays,
-          degasserCount,
-          sensorCount,
         }),
       });
       const json = await res.json();
@@ -292,7 +286,7 @@ export default function MilkReceptionDetailClient({ module }: Props) {
             <input value={deliveryPlace} onChange={(e) => setDeliveryPlace(e.target.value)} className={inputCls} />
           </Field>
         </div>
-        <div className="grid grid-cols-4 gap-3 mt-3">
+        <div className="grid grid-cols-3 gap-3 mt-3">
           <Field label="Teslim Süresi (hafta)">
             <input
               type="number"
@@ -311,28 +305,11 @@ export default function MilkReceptionDetailClient({ module }: Props) {
               className={inputCls}
             />
           </Field>
-          <Field label="Degazör Adedi">
-            <input
-              type="number"
-              min={0}
-              value={degasserCount}
-              onChange={(e) => setDegasserCount(Math.max(0, Number(e.target.value) || 0))}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Sensör Adedi">
-            <input
-              type="number"
-              min={0}
-              value={sensorCount}
-              onChange={(e) => setSensorCount(Math.max(0, Number(e.target.value) || 0))}
-              className={inputCls}
-            />
-          </Field>
         </div>
         <p className="text-[11px] text-slate-500 mt-3">
-          Bu alanlar yeni teklif belgesindeki (HEM-PROJECT-NO) kapak/teslimat ve Equipment tablosu için kullanılır.
-          Equipment adetlerinden Filter Unit / PHE / Vana otomatik hesaplanır; Degazör ve Sensör buradan girilir.
+          Bu alanlar yeni teklif belgesindeki (HEM-PROJECT-NO) kapak ve teslimat bilgileri için kullanılır.
+          Equipment tablosundaki adetler (Vana, Degazör, Filter Unit, PHE, Sensör) sistem tarafından otomatik
+          hesaplanır; adedi 0 olan kalem belgede gösterilmez.
         </p>
       </Card>
 

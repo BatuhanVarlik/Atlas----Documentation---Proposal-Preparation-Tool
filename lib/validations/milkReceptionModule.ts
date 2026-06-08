@@ -31,8 +31,6 @@ export const updateMilkReceptionModuleSchema = z.object({
   deliveryWeeks: z.number().int().min(0).max(520).nullable().optional(),
   deliveryPlace: z.string().max(255).nullable().optional(),
   offerValidityDays: z.number().int().min(0).max(3650).nullable().optional(),
-  degasserCount: z.number().int().min(0).max(99).optional(),
-  sensorCount: z.number().int().min(0).max(999).optional(),
 });
 
 export const setLineCountSchema = z.object({

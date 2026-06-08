@@ -58,6 +58,31 @@ function regionBetween(xml: string, startAnchor: string, endAnchor: string, labe
   return [s, e];
 }
 
+/**
+ * Düzensiz orijinal Equipment/Purpose/Quantity tablosunun yerine tek satırlık
+ * docxtemplater döngü tablosu üretir. Adetler context'teki `equipment[]`'ten gelir;
+ * 0 olan kalemler listeye eklenmez → satır otomatik gizlenir (koşullu satır).
+ */
+function buildEquipmentTable(): string {
+  const grid = [3211, 4580, 1840];
+  const rpr = (bold: boolean) =>
+    `<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>${bold ? '<w:b/>' : ''}</w:rPr>`;
+  const cell = (inner: string, w: number, bold = false, jc = 'left') =>
+    `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>` +
+    `<w:p><w:pPr><w:spacing w:after="31" w:line="259" w:lineRule="auto"/><w:jc w:val="${jc}"/></w:pPr>` +
+    `<w:r>${rpr(bold)}<w:t xml:space="preserve">${inner}</w:t></w:r></w:p></w:tc>`;
+  const header =
+    `<w:tr>${cell('Equipment', grid[0], true)}${cell('Purpose', grid[1], true)}${cell('Quantity', grid[2], true, 'center')}</w:tr>`;
+  const loop =
+    `<w:tr>${cell('{#equipment}{name}', grid[0])}${cell('{purpose}', grid[1])}${cell('{quantity}{/equipment}', grid[2], false, 'center')}</w:tr>`;
+  return (
+    `<w:tbl><w:tblPr><w:tblStyle w:val="KlavuzTablo1Ak"/><w:tblW w:w="0" w:type="auto"/>` +
+    `<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>` +
+    `<w:tblGrid>${grid.map((w) => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>` +
+    `${header}${loop}</w:tbl>`
+  );
+}
+
 /** Bir metni içeren paragrafın [start,end) indekslerini döndürür. */
 function paragraphRange(xml: string, anchor: string, label: string): [number, number] {
   const idx = xml.indexOf(anchor);
@@ -130,39 +155,17 @@ function convertDocumentXml(xml: string): string {
     console.log('  ✓ Hat tablosu: satır döngüsü kuruldu ({#receptionLines}…{/receptionLines})');
   }
 
-  // 8) Equipment / Quantity tablosu — yalnızca adetler (Valves, Degasser, Filter, PHE)
+  // 8) Equipment / Quantity tablosu — düzensiz orijinali (Valves satırı iki ayrı tablo
+  //    parçasına bölünmüş) tek temiz döngü tablosuyla değiştir. Adetler context'te
+  //    (equipment[]) hesaplanır; 0 olanlar listeye girmez → koşullu satır.
   {
-    const [s, e] = regionBetween(
-      xml,
-      'To control and direct',
-      'RAW MILK TRUCKS CIP STATION',
-      'Ekipman adetleri',
-    );
-    let slice = xml.slice(s, e);
-    slice = replaceYellowRunsInRegion(
-      slice,
-      ['{valveCount}', '{degasserCount}', '{totals.filterUnitTotal}', '{totals.pheCount}'],
-      'Ekipman adetleri',
-    );
-    xml = xml.slice(0, s) + slice + xml.slice(e);
-  }
-
-  // 9) Sensors satırı — adet hücresi boş; {sensorCount} run'ı enjekte et
-  {
-    const a = xml.indexOf('To monitor process');
-    const rowStart = xml.lastIndexOf('<w:tr', a);
-    const rowEnd = xml.indexOf('</w:tr>', a) + 7;
-    let row = xml.slice(rowStart, rowEnd);
-    // Son hücrenin boş paragrafına run ekle (</w:pPr></w:p></w:tc></w:tr> sonundaki son </w:p>)
-    const lastTcStart = row.lastIndexOf('<w:tc>');
-    let lastTc = row.slice(lastTcStart);
-    const runXml =
-      '<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr>' +
-      '<w:t xml:space="preserve">{sensorCount}</w:t></w:r>';
-    lastTc = lastTc.replace('</w:p>', `${runXml}</w:p>`);
-    row = row.slice(0, lastTcStart) + lastTc;
-    xml = xml.slice(0, rowStart) + row + xml.slice(rowEnd);
-    console.log('  ✓ Sensors adedi: boş hücreye {sensorCount} eklendi');
+    const headerIdx = xml.indexOf('>Equipment<');
+    const cipIdx = xml.indexOf('RAW MILK TRUCKS CIP STATION');
+    const eqStart = xml.lastIndexOf('<w:tbl>', headerIdx);
+    const eqEnd = xml.lastIndexOf('</w:tbl>', cipIdx) + '</w:tbl>'.length;
+    if (headerIdx < 0 || cipIdx < 0 || eqStart < 0) throw new Error('[Ekipman] tablo sınırları bulunamadı');
+    xml = xml.slice(0, eqStart) + buildEquipmentTable() + xml.slice(eqEnd);
+    console.log('  ✓ Ekipman tablosu: tek döngü tablosuna ({#equipment}) yeniden inşa edildi');
   }
 
   // 10) Teslim süresi "Can be delivered within -- weeks" — yalnızca "--"
@@ -210,10 +213,12 @@ const MOCK = {
     { sira: 1, name: 'Raw Milk Reception 1', capacity: '30.000', pressure: '2', dn: '76 SMS (3")', pumpModel: 'W+35/55' },
     { sira: 2, name: 'Raw Milk Reception 2', capacity: '20.000', pressure: '2', dn: '63 SMS (2"1/2)', pumpModel: 'W+22/20' },
   ],
-  valveCount: 13,
-  degasserCount: 1,
-  sensorCount: 4,
-  totals: { filterUnitTotal: 2, pheCount: 1 },
+  equipment: [
+    { name: 'Valves', purpose: 'To control and direct the product flow throughout the process line.', quantity: 13 },
+    { name: 'Degasser', purpose: 'To continuously remove dissolved air from the milk without introducing additional air.', quantity: 1 },
+    { name: 'Filter Unit', purpose: 'To remove unwanted particles and impurities from the milk.', quantity: 2 },
+    { name: 'Sensors', purpose: 'To monitor process parameters such as pressure, temperature, and flow rate.', quantity: 4 },
+  ],
   tankerCip: { capacity: '30.000', pressure: '2', dn: '76 SMS (3")', pumpModel: 'W+22/20' },
   pricing: { currency: 'EURO', totalPrice: '2.765.000' },
 };
