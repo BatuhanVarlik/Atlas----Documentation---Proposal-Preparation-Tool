@@ -77,6 +77,12 @@ export interface ModuleForDoc {
   priceMultiplier: number;
   priceOverrides: unknown;
   status: string;
+  // Teklif (commercial) bilgileri — HEM-PROJECT-NO şablonu için
+  quotationNo: string | null;
+  customerContactPerson: string | null;
+  deliveryWeeks: number | null;
+  deliveryPlace: string | null;
+  offerValidityDays: number | null;
   createdAt: Date | string;
   creator: { name: string };
   valveCluster: {
@@ -207,9 +213,32 @@ export function buildTemplateContext(module: ModuleForDoc, customItems: PricingI
   ];
   const pricingTotals = summarizePricingWithOverrides(canonicalRows, overrides, multiplier);
 
+  // === Ekipman özet tablosu (DESCRIPTION → Equipment/Quantity) ===
+  // Adetler sistemin kendi kurallarından türetilir; 0 olan kalem listeye girmez (koşullu satır).
+  const agitatorCount = module.tanks.filter((t) => t.hasAgitator).length;
+  const flowMeterCount = dl.filter((l) => l.hasFlowMeter).length;
+  const pumpCount =
+    dl.filter((l) => l.pumpModel).length +
+    module.tanks.filter((t) => t.cipReturnPumpModel).length +
+    (module.tankCipReturnPumpModel ? 1 : 0);
+  const sensorCount =
+    module.tanks.reduce(
+      (s, t) => s + [t.hasLSH, t.hasLSM, t.hasLSL, t.hasTT, t.hasPT].filter(Boolean).length,
+      0,
+    ) + dl.filter((l) => l.hasPressureTransmitter).length;
+  const equipment = [
+    { name: 'Valves', purpose: 'To control and direct the product flow throughout the process line.', quantity: pricingTotals.valveCount },
+    { name: 'Storage Tanks', purpose: 'To store the product under hygienic conditions.', quantity: module.tanks.length },
+    { name: 'Agitators', purpose: 'To keep the product homogeneous inside the tanks.', quantity: agitatorCount },
+    { name: 'Pumps', purpose: 'To transfer the product through the process lines.', quantity: pumpCount },
+    { name: 'Flow Meters', purpose: 'To measure the product flow rate.', quantity: flowMeterCount },
+    { name: 'Sensors', purpose: 'To monitor process parameters such as level, pressure, and temperature.', quantity: sensorCount },
+  ].filter((e) => e.quantity > 0);
+
   return {
     module: {
       name: module.name,
+      nameUpper: module.name.toUpperCase(),
       customerName: module.customerName ?? '',
       projectCode: module.projectCode ?? '',
       standard: module.standard,
@@ -228,6 +257,16 @@ export function buildTemplateContext(module: ModuleForDoc, customItems: PricingI
       createdDate: new Date(module.createdAt).toLocaleDateString('tr-TR'),
     },
     creator: { name: module.creator.name },
+    // Teklif (commercial) bilgileri — HEM-PROJECT-NO şablonu için
+    quotation: {
+      no: module.quotationNo ?? '',
+      date: new Date(module.createdAt).toLocaleDateString('tr-TR'),
+      contactPerson: module.customerContactPerson ?? '',
+      deliveryWeeks: module.deliveryWeeks != null ? String(module.deliveryWeeks) : '—',
+      deliveryPlace: module.deliveryPlace ?? 'Customer Factory',
+      offerValidityDays: module.offerValidityDays != null ? String(module.offerValidityDays) : '30',
+    },
+    equipment,
     calc: {
       selectedDN: calc?.selectedDN.dn ?? '—',
       selectedInner: calc?.selectedDN.inner != null ? String(calc.selectedDN.inner) : '—',

@@ -101,6 +101,13 @@ model Module {
   priceMultiplier Float @default(1)
   priceOverrides  Json?   // { [rowKey]: number } — satır bazında manuel birim net fiyat
 
+  // === Teklif (commercial) bilgileri — yeni teklif şablonu (HEM-PROJECT-NO) için ===
+  quotationNo           String?  // örn. HEM-2026-001 (oluşturmada otomatik üretilir)
+  customerContactPerson String?  // mektup: "For the Attention of ___"
+  deliveryWeeks         Int?     // "Can be delivered within X weeks"
+  deliveryPlace         String?  @default("Customer Factory")
+  offerValidityDays     Int?     @default(30) // Offer validity + bağlayıcı kabul süresi
+
   creatorId  String
   reviewerId String?
   createdAt  DateTime  @default(now())

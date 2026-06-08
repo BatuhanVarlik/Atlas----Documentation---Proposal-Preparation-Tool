@@ -28,6 +28,13 @@ export const updateModuleSchema = z.object({
   status: z
     .enum(['DRAFT', 'IN_PROGRESS', 'REVIEW', 'APPROVED', 'DOCUMENT_GENERATED', 'ARCHIVED', 'CANCELLED'])
     .optional(),
+
+  // Teklif (commercial) bilgileri — HEM-PROJECT-NO şablonu için
+  quotationNo: z.string().max(50).nullable().optional(),
+  customerContactPerson: z.string().max(255).nullable().optional(),
+  deliveryWeeks: z.number().int().min(0).max(520).nullable().optional(),
+  deliveryPlace: z.string().max(255).nullable().optional(),
+  offerValidityDays: z.number().int().min(0).max(3650).nullable().optional(),
 });
 
 export type CreateModuleInput = z.infer<typeof createModuleSchema>;

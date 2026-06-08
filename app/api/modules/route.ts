@@ -48,9 +48,18 @@ export async function POST(request: Request) {
       return apiError('Geçersiz veri', 400, parsed.error.flatten());
     }
 
+    // Teklif No otomatik üret: HEM-YYYY-NNN (yıl bazında sıralı)
+    const year = new Date().getFullYear();
+    const prefix = `HEM-${year}-`;
+    const countThisYear = await prisma.module.count({
+      where: { quotationNo: { startsWith: prefix } },
+    });
+    const quotationNo = `${prefix}${String(countThisYear + 1).padStart(3, '0')}`;
+
     const moduleRecord = await prisma.module.create({
       data: {
         ...parsed.data,
+        quotationNo,
         creatorId: user.id,
         status: 'DRAFT',
       },

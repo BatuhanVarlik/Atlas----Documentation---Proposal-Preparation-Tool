@@ -87,6 +87,12 @@ interface Module {
   tankCipReturnPumpModel: string | null;
   tankCipReturnPumpKw: number | null;
   tankCipReturnPumpImpellerSize: number | null;
+  // Teklif (commercial) bilgileri
+  quotationNo: string | null;
+  customerContactPerson: string | null;
+  deliveryWeeks: number | null;
+  deliveryPlace: string | null;
+  offerValidityDays: number | null;
   status: 'DRAFT' | 'IN_PROGRESS' | 'REVIEW' | 'APPROVED' | 'DOCUMENT_GENERATED' | 'ARCHIVED' | 'CANCELLED';
   selectedDN: string | null;
   createdAt: Date | string;
@@ -133,6 +139,11 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
   const [name, setName] = useState(module.name);
   const [customerName, setCustomerName] = useState(module.customerName ?? '');
   const [projectCode, setProjectCode] = useState(module.projectCode ?? '');
+  // Teklif (commercial) bilgileri — doküman için
+  const [contactPerson, setContactPerson] = useState(module.customerContactPerson ?? '');
+  const [deliveryWeeks, setDeliveryWeeks] = useState<number | null>(module.deliveryWeeks);
+  const [deliveryPlace, setDeliveryPlace] = useState(module.deliveryPlace ?? 'Customer Factory');
+  const [offerValidityDays, setOfferValidityDays] = useState<number | null>(module.offerValidityDays ?? 30);
   const [standard, setStandard] = useState(module.standard);
   const [productType, setProductType] = useState(module.productType);
   const initialValveType =
@@ -255,6 +266,10 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
           waterInletValveType: waterInletValveType || null,
           tankCipInletValveType: tankCipInletValveType || null,
           tankCipInletDiameter: hasTankCipInlet ? (tankCipInletDiameter || null) : null,
+          customerContactPerson: contactPerson || null,
+          deliveryWeeks,
+          deliveryPlace: deliveryPlace || null,
+          offerValidityDays,
         }),
       });
       const json = await res.json();
@@ -349,6 +364,64 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+          </div>
+
+          {/* Teklif Bilgileri (doküman) */}
+          <div className="pt-3 border-t border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 mb-2">Teklif Bilgileri (Doküman)</p>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Teklif No (otomatik)</label>
+                <input
+                  value={module.quotationNo ?? '—'}
+                  readOnly
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono bg-slate-100 text-slate-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Müşteri İlgili Kişisi</label>
+                <input
+                  value={contactPerson}
+                  onChange={(e) => setContactPerson(e.target.value)}
+                  placeholder="örn: Mrs Jane Doe"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Teslim Yeri</label>
+                <input
+                  value={deliveryPlace}
+                  onChange={(e) => setDeliveryPlace(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Teslim Süresi (hafta)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={deliveryWeeks ?? ''}
+                  onChange={(e) => setDeliveryWeeks(e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Teklif Geçerliliği (gün)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={offerValidityDays ?? ''}
+                  onChange={(e) => setOfferValidityDays(e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-2">
+              Equipment tablosundaki adetler (Vana, Tank, Agitatör, Pompa, Flow Meter, Sensör) sistem tarafından
+              otomatik hesaplanır; adedi 0 olan kalem belgede gösterilmez.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
