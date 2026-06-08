@@ -300,6 +300,16 @@ function convertStorage(xml: string): string {
 }
 
 // ---------- Render-test mock'ları ----------
+// Gerçekçi diyagram XML'i — a:/pic:/wp:/r: prefix'leri kullanır ki render sonrası
+// strict XML kontrolü kök namespace eksikliğini yakalayabilsin.
+const MOCK_DIAGRAM =
+  '<w:p><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+  '<wp:extent cx="100" cy="100"/><wp:docPr id="2" name="Diyagram"/>' +
+  '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+  '<pic:pic><pic:nvPicPr><pic:cNvPr id="2" name="d"/><pic:cNvPicPr/></pic:nvPicPr>' +
+  '<pic:blipFill><a:blip r:embed="rIdDiagram1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+  '<pic:spPr/></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+
 const MILK_MOCK = {
   quotation: { no: 'HEM-2026-001', date: '08.06.2026', contactPerson: 'Mrs Jane Doe', deliveryWeeks: '16', deliveryPlace: 'Customer Factory', offerValidityDays: '30' },
   module: { name: 'Raw Milk Reception', nameUpper: 'RAW MILK RECEPTION', customerName: 'ABC Süt A.Ş.' },
@@ -317,7 +327,7 @@ const MILK_MOCK = {
   tankerCip: { capacity: '30.000', pressure: '2', dn: '76 SMS (3")', pumpModel: 'W+22/20' },
   pricing: { currency: 'EURO', totalPrice: '2.765.000' },
   hasDiagram: true,
-  diagramXml: '<w:p><w:r><w:t>DIAGRAM</w:t></w:r></w:p>',
+  diagramXml: MOCK_DIAGRAM,
 };
 
 const STORAGE_MOCK = {
@@ -343,15 +353,34 @@ const STORAGE_MOCK = {
   ],
   pricing: { currency: 'EURO', totalPrice: '2.300.000' },
   hasDiagram: true,
-  diagramXml: '<w:p><w:r><w:t>DIAGRAM</w:t></w:r></w:p>',
+  diagramXml: MOCK_DIAGRAM,
 };
+
+// document.xml'i strict XML parser'la doğrular (kök namespace eksikliği, dengesiz
+// etiket vb. → Word'ün "belge açılamadı" hatasını build-time'da yakalar).
+function strictXmlCheck(xmlText: string, label: string): void {
+  let DOMParser: (new (opts?: unknown) => { parseFromString: (s: string, t: string) => unknown }) | undefined;
+  try {
+    DOMParser = (require('@xmldom/xmldom') as { DOMParser: typeof DOMParser }).DOMParser;
+  } catch {
+    return; // parser yoksa atla
+  }
+  try {
+    // Namespace/well-formedness hataları parseFromString sırasında ParseError fırlatır.
+    new DOMParser({ onError: () => {} }).parseFromString(xmlText, 'text/xml');
+  } catch (e) {
+    throw new Error(`[${label}] document.xml geçersiz XML: ${(e instanceof Error ? e.message : String(e)).slice(0, 160)}`);
+  }
+}
 
 function renderTest(buffer: Buffer, mock: unknown, label: string): void {
   const zip = new PizZip(buffer);
   const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, parser: dotNotationParser, nullGetter: () => '' });
   doc.render(mock as Record<string, unknown>);
-  doc.getZip().generate({ type: 'nodebuffer' });
-  console.log(`  ✓ render-test geçti: ${label}`);
+  const out = doc.getZip();
+  out.generate({ type: 'nodebuffer' });
+  strictXmlCheck((out.file('word/document.xml') as { asText: () => string }).asText(), label);
+  console.log(`  ✓ render-test geçti (XML doğrulandı): ${label}`);
 }
 
 async function upsertTemplate(opts: { name: string; description: string; filename: string; buffer: Buffer; moduleType: string }): Promise<void> {
@@ -375,11 +404,24 @@ async function upsertTemplate(opts: { name: string; description: string; filenam
   }
 }
 
+// Diyagram çizimi a:/pic: prefix'leri kullanır. HEM-PROJECT-NO kök <w:document>'i
+// bunları (orijinal görseller satır-içi tanımladığı için) köke EKLEMEZ; biz gömünce
+// "prefix is non-null and namespace is null" → bozuk .docx olur. Köke ekleyerek çözeriz.
+function ensureDrawingNamespaces(xml: string): string {
+  return xml.replace(/<w:document\b([^>]*)>/, (_m, attrs: string) => {
+    let add = '';
+    if (!/\sxmlns:a=/.test(attrs)) add += ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"';
+    if (!/\sxmlns:pic=/.test(attrs)) add += ' xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
+    if (add) console.log('  ✓ Kök namespace eklendi:' + add.replace(/="[^"]*"/g, ''));
+    return `<w:document${attrs}${add}>`;
+  });
+}
+
 function buildVariant(srcBuf: Buffer, convert: (xml: string) => string): Buffer {
   const zip = new PizZip(srcBuf);
   const docXml = zip.file('word/document.xml')?.asText();
   if (!docXml) throw new Error('word/document.xml okunamadı');
-  zip.file('word/document.xml', convert(docXml));
+  zip.file('word/document.xml', ensureDrawingNamespaces(convert(docXml)));
   return zip.generate({ type: 'nodebuffer' }) as Buffer;
 }
 
