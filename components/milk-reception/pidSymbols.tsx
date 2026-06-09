@@ -120,6 +120,8 @@ export function SquareCheckValve({
   return (
     <g>
       <rect x={cx - s} y={cy - s} width={s * 2} height={s * 2} fill="white" stroke={color} strokeWidth="1.8" />
+      {/* Köşegenin altında kalan alt-sağ üçgen dolu (akış yönü göstergesi) */}
+      <polygon points={`${cx + s},${cy - s} ${cx + s},${cy + s} ${cx - s},${cy + s}`} fill={color} />
       {/* Köşegen: sağ üst köşeden sol alt köşeye */}
       <line x1={cx + s} y1={cy - s} x2={cx - s} y2={cy + s} stroke={color} strokeWidth="1.4" />
       {label && (
@@ -378,28 +380,24 @@ export function MilkClarifier({
   color?: string;
   bypassLabel?: string;
 }) {
+  // Düzgün eşkenar üçgen: tepe noktası (cx, cy) yukarıda — proses hattı buraya temas eder;
+  // taban aşağıda. Yükseklik = taban × √3/2.
+  const b = 30;
+  const h = (b * Math.sqrt(3)) / 2;
+  const baseY = cy + h;
   return (
     <g>
-      {/* Trapezoid gövde (separatör tipi) */}
       <polygon
-        points={`${cx - 13},${cy - 14} ${cx + 13},${cy - 14} ${cx + 16},${cy + 14} ${cx - 16},${cy + 14}`}
+        points={`${cx},${cy} ${cx + b / 2},${baseY} ${cx - b / 2},${baseY}`}
         fill="white"
         stroke={color}
         strokeWidth="1.4"
       />
-      {/* Dönen disk — iç yatay çizgiler */}
-      <line x1={cx - 12} y1={cy - 6} x2={cx + 12} y2={cy - 6} stroke={color} strokeWidth="0.8" />
-      <line x1={cx - 13} y1={cy} x2={cx + 13} y2={cy} stroke={color} strokeWidth="0.8" />
-      <line x1={cx - 14} y1={cy + 6} x2={cx + 14} y2={cy + 6} stroke={color} strokeWidth="0.8" />
-      {/* Üst mil (rotor) */}
-      <line x1={cx} y1={cy - 14} x2={cx} y2={cy - 20} stroke={color} strokeWidth="1.4" />
-      <circle cx={cx} cy={cy - 23} r="2.5" fill={color} />
-
-      <text x={cx} y={cy + 24} fontSize="7" textAnchor="middle" fill={PID_COLORS.label} fontWeight="600">
+      <text x={cx} y={baseY + 11} fontSize="7" textAnchor="middle" fill={PID_COLORS.label} fontWeight="600">
         Clarifier
       </text>
       {bypassLabel && (
-        <text x={cx} y={cy + 32} fontSize="5.5" textAnchor="middle" fill={PID_COLORS.muted}>
+        <text x={cx} y={baseY + 19} fontSize="5.5" textAnchor="middle" fill={PID_COLORS.muted}>
           Bypass: {bypassLabel}
         </text>
       )}
@@ -421,19 +419,19 @@ export function FlowMeter({
 }) {
   return (
     <g>
-      {/* Dikdörtgen gövde */}
-      <rect x={cx - 12} y={cy - 9} width="24" height="18" fill="white" stroke={color} strokeWidth="1.4" />
+      {/* Dikdörtgen gövde (küçük) */}
+      <rect x={cx - 9} y={cy - 6.5} width="18" height="13" fill="white" stroke={color} strokeWidth="1.3" />
       {/* İç bobinler (iki yan çizgi) */}
-      <line x1={cx - 8} y1={cy - 9} x2={cx - 8} y2={cy + 9} stroke={color} strokeWidth="0.8" />
-      <line x1={cx + 8} y1={cy - 9} x2={cx + 8} y2={cy + 9} stroke={color} strokeWidth="0.8" />
+      <line x1={cx - 6} y1={cy - 6.5} x2={cx - 6} y2={cy + 6.5} stroke={color} strokeWidth="0.7" />
+      <line x1={cx + 6} y1={cy - 6.5} x2={cx + 6} y2={cy + 6.5} stroke={color} strokeWidth="0.7" />
       {/* Üst yandan FT bubble bağlantısı */}
-      <line x1={cx} y1={cy - 9} x2={cx} y2={cy - 16} stroke={color} strokeWidth="1" />
-      <InstrumentBubble cx={cx} cy={cy - 26} topText="FT" type="local" r={10} />
-      <text x={cx} y={cy + 18} fontSize="6.5" textAnchor="middle" fill={PID_COLORS.label} fontWeight="600">
+      <line x1={cx} y1={cy - 6.5} x2={cx} y2={cy - 12} stroke={color} strokeWidth="1" />
+      <InstrumentBubble cx={cx} cy={cy - 20} topText="FT" type="local" r={8} />
+      <text x={cx} y={cy + 15} fontSize="6" textAnchor="middle" fill={PID_COLORS.label} fontWeight="600">
         Krohne
       </text>
       {size && (
-        <text x={cx} y={cy + 26} fontSize="5.5" textAnchor="middle" fill={PID_COLORS.muted}>
+        <text x={cx} y={cy + 22} fontSize="5.5" textAnchor="middle" fill={PID_COLORS.muted}>
           {size}
         </text>
       )}

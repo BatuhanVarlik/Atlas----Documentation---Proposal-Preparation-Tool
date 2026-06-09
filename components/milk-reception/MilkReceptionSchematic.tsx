@@ -60,7 +60,7 @@ const W = {
   clarifier: 50,
   phe: 80,
   pt100: 26,
-  flowMeter: 32,
+  flowMeter: 24,
   sampling: 28,
   outlet: 22,
   check: 22,
@@ -326,7 +326,7 @@ function ReceptionLineRow({
               <MilkClarifier
                 key={it.id}
                 cx={it.cx}
-                cy={y - 4}
+                cy={y}
                 bypassLabel={line.clarifierBypassValveType ?? undefined}
               />
             );

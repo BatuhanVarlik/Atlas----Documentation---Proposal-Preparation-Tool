@@ -195,7 +195,7 @@ export function ModuleSchematic({
               tankAreaWidth={tankAreaWidth}
               fixedValves={fixedFillingValves}
               hasPump={false}
-              fixedLabels={['Drain', 'Lkg', 'CIP↩']}
+              fixedLabels={['CIP↩', 'Drain', 'Lkg']}
               fixedSide="end"
               arrowDirection="right"
               branch
@@ -206,8 +206,10 @@ export function ModuleSchematic({
         {/* Boşaltım hatları */}
         {dischargeLines.map((line, idx) => {
           const y = lineStartY + (fillingLines.length + idx) * lineGap;
-          const labels = ['CIP→', 'Lkg'];
+          // CIP geri dönüş vanası üçlü grubun EN SONUNDA (sağda)
+          const labels = ['Lkg'];
           if (fixedDischargeValves === 3) labels.push('Su');
+          labels.push('CIP→');
           return (
             <LineRow
               key={`dl-${idx}`}
@@ -253,7 +255,9 @@ export function ModuleSchematic({
               fixedSide="end"
               arrowDirection="right"
               spacing={42}
-              pumpGap={36}
+              branch
+              // Pompayı boşaltım hatlarıyla aynı X'e hizala → pompa çekvalften önce gelir (swap)
+              pumpX={leftPad + tankAreaWidth + 32}
             />
           );
         })}
@@ -325,6 +329,7 @@ function LineRow({
   branch = false,
   spacing = 22,
   pumpGap = 14,
+  pumpX: pumpXOverride,
 }: {
   y: number;
   label: string;
@@ -346,6 +351,8 @@ function LineRow({
   spacing?: number;
   /** son sabit vana ile pompa arası yatay mesafe */
   pumpGap?: number;
+  /** pompa X'ini doğrudan ver (hat bağımsız hizalama için; verilirse pumpGap yok sayılır) */
+  pumpX?: number;
 }) {
   const lineStartX = labelPad - 4;
   const tankAreaEnd = leftPad + tankAreaWidth;
@@ -365,8 +372,11 @@ function LineRow({
   const cipReturnIdx = branch ? fixedLabels.slice(0, fixedValves).findIndex((l) => l.includes('CIP')) : -1;
   const cipReturnCx = cipReturnIdx >= 0 ? fixedX + cipReturnIdx * spacing : null;
 
-  const pumpX = (fixedSide === 'end' ? fixedRightEdge : tankAreaEnd + 18) + pumpGap;
-  const lineEndX = hasPump ? pumpX + 16 : (fixedSide === 'end' ? fixedRightEdge + 14 : tankAreaEnd + 26);
+  const pumpX = pumpXOverride ?? ((fixedSide === 'end' ? fixedRightEdge : tankAreaEnd + 18) + pumpGap);
+  // Çizgi/ok hem pompayı hem de sabit vanaların en sağını (örn. pompadan sonraki Çek) geçmeli
+  const lineEndX = hasPump
+    ? Math.max(pumpX + 16, fixedSide === 'end' ? fixedRightEdge + 14 : 0)
+    : (fixedSide === 'end' ? fixedRightEdge + 14 : tankAreaEnd + 26);
 
   return (
     <g>
@@ -496,7 +506,13 @@ function Valve({ cx, cy, color, small = false, check = false }: { cx: number; cy
   return (
     <g>
       <rect x={cx - s} y={cy - s} width={s * 2} height={s * 2} fill="white" stroke={color} strokeWidth="1.8" />
-      {check && <line x1={cx + s} y1={cy - s} x2={cx - s} y2={cy + s} stroke={color} strokeWidth="1.4" />}
+      {check && (
+        <>
+          {/* Köşegenin altında kalan alt-sağ üçgen dolu (akış yönü göstergesi) */}
+          <polygon points={`${cx + s},${cy - s} ${cx + s},${cy + s} ${cx - s},${cy + s}`} fill={color} />
+          <line x1={cx + s} y1={cy - s} x2={cx - s} y2={cy + s} stroke={color} strokeWidth="1.4" />
+        </>
+      )}
     </g>
   );
 }
