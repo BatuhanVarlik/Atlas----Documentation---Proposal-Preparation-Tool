@@ -195,7 +195,7 @@ export function ModuleSchematic({
               tankAreaWidth={tankAreaWidth}
               fixedValves={fixedFillingValves}
               hasPump={false}
-              fixedLabels={['CIP↩', 'Drain', 'Lkg']}
+              fixedLabels={['Lkg', 'Drain', 'CIP↩']}
               fixedSide="end"
               arrowDirection="right"
               branch
@@ -206,10 +206,10 @@ export function ModuleSchematic({
         {/* Boşaltım hatları */}
         {dischargeLines.map((line, idx) => {
           const y = lineStartY + (fillingLines.length + idx) * lineGap;
-          // CIP geri dönüş vanası üçlü grubun EN SONUNDA (sağda)
-          const labels = ['Lkg'];
+          // CIP geri dönüş vanası grubun en başında (Lkg ile yer değiştirildi)
+          const labels = ['CIP→'];
           if (fixedDischargeValves === 3) labels.push('Su');
-          labels.push('CIP→');
+          labels.push('Lkg');
           return (
             <LineRow
               key={`dl-${idx}`}
@@ -254,7 +254,9 @@ export function ModuleSchematic({
               fixedLabels={['Drain', 'Çek']}
               fixedSide="end"
               arrowDirection="right"
-              spacing={42}
+              // Drain'i sola al (pompa ile üst üste binmesin), Çek pompanın sağında kalsın
+              fixedStartX={leftPad + tankAreaWidth}
+              spacing={64}
               branch
               // Pompayı boşaltım hatlarıyla aynı X'e hizala → pompa çekvalften önce gelir (swap)
               pumpX={leftPad + tankAreaWidth + 32}
@@ -330,6 +332,7 @@ function LineRow({
   spacing = 22,
   pumpGap = 14,
   pumpX: pumpXOverride,
+  fixedStartX,
 }: {
   y: number;
   label: string;
@@ -353,6 +356,8 @@ function LineRow({
   pumpGap?: number;
   /** pompa X'ini doğrudan ver (hat bağımsız hizalama için; verilirse pumpGap yok sayılır) */
   pumpX?: number;
+  /** ilk sabit vananın X'i (fixedSide varsayılan konumunu ezer) */
+  fixedStartX?: number;
 }) {
   const lineStartX = labelPad - 4;
   const tankAreaEnd = leftPad + tankAreaWidth;
@@ -361,7 +366,7 @@ function LineRow({
   const fixedAreaWidth = Math.max(fixedValves - 1, 0) * spacing;
   const startFixedX = labelPad + 18;
   const endFixedX = tankAreaEnd + 22;
-  const fixedX = fixedSide === 'start' ? startFixedX : endFixedX;
+  const fixedX = fixedStartX ?? (fixedSide === 'start' ? startFixedX : endFixedX);
   const fixedRightEdge = fixedX + fixedAreaWidth;
 
   const branchOffset = 20; // hat ile yukarı/aşağı taşınan vana merkezi arası dikey mesafe
@@ -404,14 +409,17 @@ function LineRow({
           Yatay başlık CIP vanası hizasında, her tank vanasına kısa düşüşle iner. */}
       {cipReturnCx != null && connectedCount > 0 && (() => {
         const vy = y - branchOffset;
+        // Vanaya 45° eğik giriş: dikey düşüş kadar yatay kaydır → gri (dik) hatla üst üste binmez.
+        const drop = (y - 5.5) - vy;
         const xs = Array.from({ length: connectedCount }, (_, i) => tankCenterX(i));
-        const headerMin = Math.min(cipReturnCx, ...xs);
-        const headerMax = Math.max(cipReturnCx, ...xs);
+        const startXs = xs.map((tx) => tx - drop);
+        const headerMin = Math.min(cipReturnCx, ...startXs);
+        const headerMax = Math.max(cipReturnCx, ...startXs);
         return (
           <g>
             <line x1={headerMin} y1={vy} x2={headerMax} y2={vy} stroke={cipReturnColor} strokeWidth="1" strokeDasharray="3 2" />
             {xs.map((tx, i) => (
-              <line key={`cipret-${i}`} x1={tx} y1={vy} x2={tx} y2={y - 5.5} stroke={cipReturnColor} strokeWidth="1" strokeDasharray="3 2" />
+              <line key={`cipret-${i}`} x1={tx - drop} y1={vy} x2={tx} y2={y - 5.5} stroke={cipReturnColor} strokeWidth="1" strokeDasharray="3 2" />
             ))}
           </g>
         );

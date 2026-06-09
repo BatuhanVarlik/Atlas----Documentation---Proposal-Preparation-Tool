@@ -319,7 +319,7 @@ function ReceptionLineRow({
           case 'filter-1':
           case 'filter-2': {
             const micron = it.id === 'filter-1' ? '500 µ' : '200 µ';
-            return <InlineFilter key={it.id} cx={it.cx} cy={y + 8} label={micron} />;
+            return <InlineFilter key={it.id} cx={it.cx} cy={y} label={micron} />;
           }
           case 'clarifier':
             return (

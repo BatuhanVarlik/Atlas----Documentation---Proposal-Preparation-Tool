@@ -232,27 +232,26 @@ export function InlineFilter({
   color?: string;
   label?: string;
 }) {
+  // Kare gövde; içi sol-alttan sağ-üste ("/" yönü) paralel kalın çizgilerle taranmış.
+  const s = 11; // yarı-kenar → 22×22 kare
+  const clipId = `filt-${Math.round(cx)}-${Math.round(cy)}`;
+  const offsets: number[] = [];
+  for (let o = -2 * s; o <= 2 * s; o += 5) offsets.push(o);
   return (
     <g>
-      {/* Dikey kapsül */}
-      <rect x={cx - 9} y={cy - 22} width="18" height="44" rx="9" fill="white" stroke={color} strokeWidth="1.4" />
-      {/* İç eleman (filtre madyası — diyagonal çizgiler) */}
-      {[0, 1, 2, 3, 4, 5].map((i) => (
-        <line
-          key={i}
-          x1={cx - 7}
-          y1={cy - 18 + i * 7}
-          x2={cx + 7}
-          y2={cy - 15 + i * 7}
-          stroke="#cbd5e1"
-          strokeWidth="0.8"
-        />
-      ))}
-      {/* Tahliye (drain) */}
-      <line x1={cx} y1={cy + 22} x2={cx} y2={cy + 28} stroke={color} strokeWidth="1.2" />
-      <line x1={cx - 4} y1={cy + 28} x2={cx + 4} y2={cy + 28} stroke={color} strokeWidth="1.4" />
+      <defs>
+        <clipPath id={clipId}>
+          <rect x={cx - s} y={cy - s} width={s * 2} height={s * 2} />
+        </clipPath>
+      </defs>
+      <rect x={cx - s} y={cy - s} width={s * 2} height={s * 2} fill="white" stroke={color} strokeWidth="1.6" />
+      <g clipPath={`url(#${clipId})`}>
+        {offsets.map((o) => (
+          <line key={o} x1={cx - s + o} y1={cy + s} x2={cx + s + o} y2={cy - s} stroke={color} strokeWidth="2" />
+        ))}
+      </g>
       {label && (
-        <text x={cx} y={cy + 38} fontSize="7" textAnchor="middle" fill={PID_COLORS.label} fontWeight="600">
+        <text x={cx} y={cy + s + 11} fontSize="7" textAnchor="middle" fill={PID_COLORS.label} fontWeight="600">
           {label}
         </text>
       )}
