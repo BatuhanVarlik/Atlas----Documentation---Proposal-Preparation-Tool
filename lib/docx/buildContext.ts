@@ -223,16 +223,19 @@ export function buildTemplateContext(module: ModuleForDoc, customItems: PricingI
     (module.tankCipReturnPumpModel ? 1 : 0);
   const sensorCount =
     module.tanks.reduce(
-      (s, t) => s + [t.hasLSH, t.hasLSM, t.hasLSL, t.hasTT, t.hasPT].filter(Boolean).length,
+      (s, t) => s + [t.hasLSH, t.hasLSM, t.hasLSL, t.hasTT, t.hasPT, t.hasProximitySwitch].filter(Boolean).length,
       0,
     ) + dl.filter((l) => l.hasPressureTransmitter).length;
+  // CIP spray ball: her tankta bir adet (statik/döner) — storageInstruments ile aynı.
+  const cipBallCount = module.tanks.length;
   const equipment = [
     { name: 'Valves', purpose: 'To control and direct the product flow throughout the process line.', quantity: pricingTotals.valveCount },
     { name: 'Storage Tanks', purpose: 'To store the product under hygienic conditions.', quantity: module.tanks.length },
     { name: 'Agitators', purpose: 'To keep the product homogeneous inside the tanks.', quantity: agitatorCount },
+    { name: 'CIP Spray Balls', purpose: 'To clean the tank interior during the CIP cycle.', quantity: cipBallCount },
     { name: 'Pumps', purpose: 'To transfer the product through the process lines.', quantity: pumpCount },
     { name: 'Flow Meters', purpose: 'To measure the product flow rate.', quantity: flowMeterCount },
-    { name: 'Sensors', purpose: 'To monitor process parameters such as level, pressure, and temperature.', quantity: sensorCount },
+    { name: 'Sensors', purpose: 'To monitor process parameters such as level, pressure, temperature, and position.', quantity: sensorCount },
   ].filter((e) => e.quantity > 0);
 
   return {

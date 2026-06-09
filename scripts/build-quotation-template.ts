@@ -245,20 +245,22 @@ function applyCommonOps(xml: string): string {
     console.log('  ✓ Teslimat/Geçerlilik bloğu temiz tabloya dönüştürüldü');
   }
 
-  // 8) "3. PRICING" başlığına pageBreakBefore + keepNext → başlık fiyatlarla aynı
-  //    sayfada. pageBreakBefore zaten sayfa başındaysa boş sayfa EKLEMEZ (güvenli;
-  //    storage'da diyagram pageBreakAfter ile çakışmaz).
-  {
-    const i = xml.indexOf('3. PRICING');
-    if (i < 0) throw new Error('[PRICING] başlık bulunamadı');
-    const ps = xml.lastIndexOf('<w:p ', i);
-    const pe = xml.indexOf('</w:p>', i) + 6;
-    const para = xml.slice(ps, pe).replace('<w:pPr>', '<w:pPr><w:pageBreakBefore/><w:keepNext/>');
-    xml = xml.slice(0, ps) + para + xml.slice(pe);
-    console.log('  ✓ 3. PRICING: pageBreakBefore + keepNext');
-  }
-
   return xml;
+}
+
+// "3. PRICING" başlığının sayfa özelliklerini ayarlar. pageBreak yalnızca Süt Alım'da
+// true: milk diyagramı sayfa kırmaz, PRICING'i taze sayfaya almak için gerekir. Depolama'da
+// diyagram zaten pageBreakAfter ile kırıyor; PRICING'e de pageBreakBefore koyunca aradaki
+// boş paragraflar tek başına bir sayfada kalıp BOŞ SAYFA oluşturuyordu → storage'da false.
+function setPricingPageProps(xml: string, pageBreak: boolean): string {
+  const i = xml.indexOf('3. PRICING');
+  if (i < 0) throw new Error('[PRICING] başlık bulunamadı');
+  const ps = xml.lastIndexOf('<w:p ', i);
+  const pe = xml.indexOf('</w:p>', i) + 6;
+  const props = (pageBreak ? '<w:pageBreakBefore/>' : '') + '<w:keepNext/>';
+  const para = xml.slice(ps, pe).replace('<w:pPr>', `<w:pPr>${props}`);
+  console.log(`  ✓ 3. PRICING: ${pageBreak ? 'pageBreakBefore + ' : ''}keepNext`);
+  return xml.slice(0, ps) + para + xml.slice(pe);
 }
 
 function stripHighlight(xml: string): string {
@@ -322,6 +324,7 @@ function convertMilk(xml: string): string {
     console.log('  ✓ Örnek diyagram → dinamik {#hasDiagram}{@diagramXml} bölümü');
   }
 
+  xml = setPricingPageProps(xml, true); // milk diyagramı sayfa kırmaz → PRICING'i taze sayfaya al
   return stripHighlight(xml);
 }
 
@@ -341,6 +344,7 @@ function convertStorage(xml: string): string {
     console.log('  ✓ DESCRIPTION gövdesi depolama tablolarıyla değiştirildi');
   }
 
+  xml = setPricingPageProps(xml, false); // diyagram zaten pageBreakAfter → ikinci kırılma boş sayfa yapardı
   return stripHighlight(xml);
 }
 

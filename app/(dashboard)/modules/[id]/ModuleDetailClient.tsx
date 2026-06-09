@@ -245,7 +245,11 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
     cipReturnValveType !== initialCipReturnValveType ||
     waterInletValveType !== initialWaterInletValveType ||
     tankCipInletValveType !== initialTankCipInletValveType ||
-    tankCipInletDiameter !== initialTankCipInletDiameter;
+    tankCipInletDiameter !== initialTankCipInletDiameter ||
+    contactPerson !== (module.customerContactPerson ?? '') ||
+    deliveryWeeks !== module.deliveryWeeks ||
+    deliveryPlace !== (module.deliveryPlace ?? 'Customer Factory') ||
+    offerValidityDays !== (module.offerValidityDays ?? 30);
 
   async function handleSave() {
     setSaving(true);
