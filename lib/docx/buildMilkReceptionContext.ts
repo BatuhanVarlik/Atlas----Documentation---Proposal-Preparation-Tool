@@ -164,11 +164,16 @@ export function buildMilkReceptionContext(module: ModuleForDoc, customItems: Pri
   const sensorCount = pricingRows
     .filter((r) => SENSOR_ITEMTYPE.test(r.itemType))
     .reduce((s, r) => s + r.quantity, 0);
+  const clarifierCount = lines.filter((l) => l.hasMilkClarifier).length;
+  const pumpCount =
+    lines.filter((l) => l.pumpModel).length + (module.hasTankerCip && module.tankerCipPumpModel ? 1 : 0);
   const equipment = [
     { name: 'Valves', purpose: 'To control and direct the product flow throughout the process line.', quantity: pricingTotals.valveCount },
     { name: 'Degasser', purpose: 'To continuously remove dissolved air from the milk without introducing additional air.', quantity: degasserCount },
     { name: 'Filter Unit', purpose: 'To remove unwanted particles and impurities from the milk.', quantity: lines.reduce((s, l) => s + l.filterUnitCount, 0) },
+    { name: 'Milk Clarifier', purpose: 'To remove impurities and standardize the milk by centrifugal separation.', quantity: clarifierCount },
     { name: 'Plate Heat Exchanger', purpose: 'To cool raw milk from 10°C down to 4°C.', quantity: lines.filter((l) => l.hasPhe).length },
+    { name: 'Pumps', purpose: 'To transfer the milk through the process lines.', quantity: pumpCount },
     { name: 'Sensors', purpose: 'To monitor process parameters such as pressure, temperature, and flow rate.', quantity: sensorCount },
   ].filter((e) => e.quantity > 0);
 

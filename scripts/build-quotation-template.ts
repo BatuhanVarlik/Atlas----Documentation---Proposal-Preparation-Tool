@@ -103,9 +103,15 @@ function spacerP(): string {
  * {@diagramXml} kendi başına bir paragrafta olmalı (docxtemplater raw-xml kuralı).
  */
 function buildDiagramSection(): string {
+  // Başlığa w:keepNext → görselle aynı sayfada kalır (büyük görsel alta sığmazsa
+  // başlık öksüz kalmaz, ikisi birlikte sonraki sayfaya geçer).
+  const heading =
+    '<w:p><w:pPr><w:keepNext/><w:keepLines/><w:spacing w:before="160" w:after="60"/></w:pPr>' +
+    '<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>' +
+    '<w:t xml:space="preserve">{#hasDiagram}P&amp;ID Şematik Diyagram</w:t></w:r></w:p>';
   return (
-    descHeading('{#hasDiagram}P&amp;ID Şematik Diyagram') +
-    '<w:p><w:pPr><w:spacing w:after="60"/><w:jc w:val="center"/></w:pPr>' +
+    heading +
+    '<w:p><w:pPr><w:keepNext/><w:spacing w:after="60"/><w:jc w:val="center"/></w:pPr>' +
     '<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr><w:t>{@diagramXml}</w:t></w:r></w:p>' +
     '<w:p><w:pPr><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr></w:pPr>' +
     '<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr><w:t>{/hasDiagram}</w:t></w:r></w:p>'
