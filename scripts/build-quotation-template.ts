@@ -98,26 +98,24 @@ function spacerP(): string {
 }
 
 /**
- * Teslimat/Geçerlilik bloğu — temiz, kenarlıksız 2 sütunlu tablo (etiket | değer).
- * Orijinalde etiketler 1 sütunlu tabloda iç içe ("ESTIMATED DELIVERY WEEK:DELIVERY
- * PLACE:"), değerler altta serbest paragraflarda duruyordu → "sarkık" görünüyordu.
+ * Teslimat/Geçerlilik bloğu — etiket [tab] değer şeklinde hizalı paragraflar.
+ * Orijinalde etiketler 1 sütunlu tabloda iç içe, değerler altta serbest paragraflarda
+ * ("sarkık") duruyordu. TABLO KULLANMIYORUZ: belge sonunda tablo, Word'ün eklediği
+ * zorunlu boş paragraf + sayfa taşması yüzünden fazladan boş sayfa oluşturuyordu.
  */
-function buildDeliveryTable(): string {
-  const g = [3600, 6000];
-  const cell = (text: string, w: number, bold: boolean) =>
-    `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>` +
-    `<w:p><w:pPr><w:spacing w:after="40" w:line="259" w:lineRule="auto"/></w:pPr>` +
-    `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>${bold ? '<w:b/>' : ''}<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>` +
-    `<w:t xml:space="preserve">${text}</w:t></w:r></w:p></w:tc>`;
-  const row = (l: string, v: string) => `<w:tr>${cell(l, g[0], true)}${cell(v, g[1], false)}</w:tr>`;
-  const noBorders = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map((b) => `<w:${b} w:val="nil"/>`).join('');
+function buildDeliveryBlock(): string {
+  const tabStop = 3800; // twips — değerlerin hizalanacağı konum
+  const line = (label: string, value: string) =>
+    `<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="${tabStop}"/></w:tabs>` +
+    `<w:spacing w:after="40" w:line="259" w:lineRule="auto"/></w:pPr>` +
+    `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>` +
+    `<w:t xml:space="preserve">${label}</w:t></w:r>` +
+    `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>` +
+    `<w:tab/><w:t xml:space="preserve">${value}</w:t></w:r></w:p>`;
   return (
-    `<w:tbl><w:tblPr><w:tblW w:w="9600" w:type="dxa"/><w:tblBorders>${noBorders}</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr>` +
-    `<w:tblGrid><w:gridCol w:w="${g[0]}"/><w:gridCol w:w="${g[1]}"/></w:tblGrid>` +
-    row('ESTIMATED DELIVERY WEEK:', 'Can be delivered within {quotation.deliveryWeeks} weeks') +
-    row('DELIVERY PLACE:', '{quotation.deliveryPlace}') +
-    row('OFFER VALIDITY DAYS:', '{quotation.offerValidityDays} days') +
-    '</w:tbl>'
+    line('ESTIMATED DELIVERY WEEK:', 'Can be delivered within {quotation.deliveryWeeks} weeks') +
+    line('DELIVERY PLACE:', '{quotation.deliveryPlace}') +
+    line('OFFER VALIDITY DAYS:', '{quotation.offerValidityDays} days')
   );
 }
 
@@ -241,8 +239,8 @@ function applyCommonOps(xml: string): string {
     const tblStart = xml.lastIndexOf('<w:tbl>', wi);
     const blockEnd = xml.indexOf('</w:p>', di) + 6;
     if (tblStart < 0 || blockEnd < 6) throw new Error('[Teslimat bloğu] tablo/paragraf sınırı bulunamadı');
-    xml = xml.slice(0, tblStart) + buildDeliveryTable() + xml.slice(blockEnd);
-    console.log('  ✓ Teslimat/Geçerlilik bloğu temiz tabloya dönüştürüldü');
+    xml = xml.slice(0, tblStart) + buildDeliveryBlock() + xml.slice(blockEnd);
+    console.log('  ✓ Teslimat/Geçerlilik bloğu hizalı paragraflara dönüştürüldü');
   }
 
   return xml;
