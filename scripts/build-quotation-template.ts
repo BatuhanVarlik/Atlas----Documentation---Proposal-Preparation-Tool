@@ -98,6 +98,30 @@ function spacerP(): string {
 }
 
 /**
+ * Teslimat/Geçerlilik bloğu — temiz, kenarlıksız 2 sütunlu tablo (etiket | değer).
+ * Orijinalde etiketler 1 sütunlu tabloda iç içe ("ESTIMATED DELIVERY WEEK:DELIVERY
+ * PLACE:"), değerler altta serbest paragraflarda duruyordu → "sarkık" görünüyordu.
+ */
+function buildDeliveryTable(): string {
+  const g = [3600, 6000];
+  const cell = (text: string, w: number, bold: boolean) =>
+    `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>` +
+    `<w:p><w:pPr><w:spacing w:after="40" w:line="259" w:lineRule="auto"/></w:pPr>` +
+    `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>${bold ? '<w:b/>' : ''}<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>` +
+    `<w:t xml:space="preserve">${text}</w:t></w:r></w:p></w:tc>`;
+  const row = (l: string, v: string) => `<w:tr>${cell(l, g[0], true)}${cell(v, g[1], false)}</w:tr>`;
+  const noBorders = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map((b) => `<w:${b} w:val="nil"/>`).join('');
+  return (
+    `<w:tbl><w:tblPr><w:tblW w:w="9600" w:type="dxa"/><w:tblBorders>${noBorders}</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr>` +
+    `<w:tblGrid><w:gridCol w:w="${g[0]}"/><w:gridCol w:w="${g[1]}"/></w:tblGrid>` +
+    row('ESTIMATED DELIVERY WEEK:', 'Can be delivered within {quotation.deliveryWeeks} weeks') +
+    row('DELIVERY PLACE:', '{quotation.deliveryPlace}') +
+    row('OFFER VALIDITY DAYS:', '{quotation.offerValidityDays} days') +
+    '</w:tbl>'
+  );
+}
+
+/**
  * Dinamik P&ID diyagram bölümü. generate-doc, şablon `hasDiagram` placeholder'ı
  * içerdiğinde diyagramı (lib/docx/diagram.ts) üretip {@diagramXml} ile gömer.
  * {@diagramXml} kendi başına bir paragrafta olmalı (docxtemplater raw-xml kuralı).
@@ -182,9 +206,7 @@ function applyCommonOps(xml: string): string {
   // 3) Toplam fiyat
   xml = replaceTextNode(xml, /2\.765\.000/, '{pricing.totalPrice}', 'Toplam fiyat');
 
-  // 4) Teslimat yeri / geçerlilik / revizyon tarihi
-  xml = replaceTextNode(xml, /Customer Factory\s*/, '{quotation.deliveryPlace}', 'Teslim yeri');
-  xml = replaceTextNode(xml, /30 days/, '{quotation.offerValidityDays} days', 'Teklif geçerliliği');
+  // 4) Revizyon tarihi (teslim yeri/geçerlilik değerleri aşağıda temiz tabloya taşınır)
   xml = replaceTextNode(xml, /01\/07\/2025/, '{quotation.date}', 'Revizyon tarihi');
 
   // 5) Müşteri ilgili kişisi — paragraf "For the Attention of Mr|s Customer Contact |Person"
@@ -210,13 +232,30 @@ function applyCommonOps(xml: string): string {
     xml = xml.slice(0, s) + slice + xml.slice(e);
   }
 
-  // 7) Teslim süresi "Can be delivered within -- weeks" — yalnızca "--"
+  // 7) Teslimat/Geçerlilik bloğu → temiz 2 sütunlu tablo. Orijinalde etiketler
+  //    1 sütunlu tabloda iç içe, değerler altta serbest paragraflarda ("sarkık").
   {
-    const [s, e] = paragraphRange(xml, 'Can be delivered within', 'Teslim süresi');
-    let slice = xml.slice(s, e);
-    slice = slice.replace(/<w:t[^>]*>--<\/w:t>/, '<w:t xml:space="preserve">{quotation.deliveryWeeks}</w:t>');
-    xml = xml.slice(0, s) + slice + xml.slice(e);
-    console.log('  ✓ Teslim süresi: "--" → {quotation.deliveryWeeks}');
+    const wi = xml.indexOf('DELIVERY WEEK');
+    const di = xml.indexOf('30 days');
+    if (wi < 0 || di < 0) throw new Error('[Teslimat bloğu] sınır bulunamadı');
+    const tblStart = xml.lastIndexOf('<w:tbl>', wi);
+    const blockEnd = xml.indexOf('</w:p>', di) + 6;
+    if (tblStart < 0 || blockEnd < 6) throw new Error('[Teslimat bloğu] tablo/paragraf sınırı bulunamadı');
+    xml = xml.slice(0, tblStart) + buildDeliveryTable() + xml.slice(blockEnd);
+    console.log('  ✓ Teslimat/Geçerlilik bloğu temiz tabloya dönüştürüldü');
+  }
+
+  // 8) "3. PRICING" başlığına pageBreakBefore + keepNext → başlık fiyatlarla aynı
+  //    sayfada. pageBreakBefore zaten sayfa başındaysa boş sayfa EKLEMEZ (güvenli;
+  //    storage'da diyagram pageBreakAfter ile çakışmaz).
+  {
+    const i = xml.indexOf('3. PRICING');
+    if (i < 0) throw new Error('[PRICING] başlık bulunamadı');
+    const ps = xml.lastIndexOf('<w:p ', i);
+    const pe = xml.indexOf('</w:p>', i) + 6;
+    const para = xml.slice(ps, pe).replace('<w:pPr>', '<w:pPr><w:pageBreakBefore/><w:keepNext/>');
+    xml = xml.slice(0, ps) + para + xml.slice(pe);
+    console.log('  ✓ 3. PRICING: pageBreakBefore + keepNext');
   }
 
   return xml;
