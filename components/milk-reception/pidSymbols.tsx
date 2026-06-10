@@ -381,7 +381,7 @@ export function MilkClarifier({
 }) {
   // Düzgün eşkenar üçgen: tepe noktası (cx, cy) yukarıda — proses hattı buraya temas eder;
   // taban aşağıda. Yükseklik = taban × √3/2.
-  const b = 30;
+  const b = 40;
   const h = (b * Math.sqrt(3)) / 2;
   const baseY = cy + h;
   return (
