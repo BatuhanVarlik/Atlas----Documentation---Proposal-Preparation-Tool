@@ -29,14 +29,23 @@ export async function DELETE(_req: Request, { params }: Params) {
     const template = await prisma.documentTemplate.findUnique({ where: { id } });
     if (!template) return apiError('Şablon bulunamadı', 404);
 
-    // Dosyayı diskten sil
-    try {
-      await unlink(path.join(process.cwd(), 'public', template.filepath));
-    } catch {
-      // Dosya zaten yoksa devam et
-    }
+    // Bu şablonla üretilmiş belgeler FK ile bağlı → önce onları sil, yoksa
+    // documentTemplate.delete kısıtlamaya takılıp "silinmiyor" hatası verir.
+    const [storageDocs, milkDocs] = await Promise.all([
+      prisma.generatedDocument.findMany({ where: { templateId: id }, select: { filepath: true } }),
+      prisma.milkReceptionGeneratedDocument.findMany({ where: { templateId: id }, select: { filepath: true } }),
+    ]);
 
-    await prisma.documentTemplate.delete({ where: { id } });
+    await prisma.$transaction([
+      prisma.generatedDocument.deleteMany({ where: { templateId: id } }),
+      prisma.milkReceptionGeneratedDocument.deleteMany({ where: { templateId: id } }),
+      prisma.documentTemplate.delete({ where: { id } }),
+    ]);
+
+    // Diskten dosyaları sil (şablon + üretilmiş belgeler) — best-effort
+    const files = [template.filepath, ...storageDocs.map((d) => d.filepath), ...milkDocs.map((d) => d.filepath)];
+    await Promise.all(files.map((fp) => unlink(path.join(process.cwd(), 'public', fp)).catch(() => {})));
+
     return apiSuccess(null, 'Şablon silindi');
   } catch (e: unknown) {
     if (e instanceof Error && 'status' in e) return apiError(e.message, (e as { status: number }).status);

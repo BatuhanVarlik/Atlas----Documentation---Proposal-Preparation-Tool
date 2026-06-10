@@ -65,8 +65,16 @@ export function ModuleSchematic({
   const lineStartY = tankAreaTop + tankH + 44;
 
   const tanksCount = tanks.length;
+  // Hatlara bağlı tank sayısı, eklenmiş tank sayısından fazlaysa eksik tanklar "ham"
+  // (boş) görselle gösterilir → diyagram her zaman gerçek bağlı tank sayısını yansıtır.
+  const maxConnected = Math.max(
+    0,
+    ...fillingLines.map((l) => l.connectedTankCount),
+    ...dischargeLines.map((l) => l.connectedTankCount),
+  );
+  const displayTankCount = Math.max(tanksCount, maxConnected);
   const totalLines = fillingLines.length + dischargeLines.length + tankCipLineCount;
-  const tankAreaWidth = Math.max(tanksCount, 1) * tankSpacing;
+  const tankAreaWidth = Math.max(displayTankCount, 1) * tankSpacing;
   const width = leftPad + tankAreaWidth + rightFixedPad;
   const manifoldBottom = lineStartY + Math.max(totalLines, 1) * lineGap;
   const height = manifoldBottom + 60;
@@ -99,8 +107,9 @@ export function ModuleSchematic({
           </linearGradient>
         </defs>
 
-        {/* Tanklar */}
-        {tanks.map((t, i) => {
+        {/* Tanklar — displayTankCount kadar; gerçek tank yoksa (t undefined) ham/boş görsel */}
+        {Array.from({ length: displayTankCount }).map((_, i) => {
+          const t = tanks[i]; // undefined → ham (placeholder) tank
           const cx = tankCenterX(i);
           const top = tankAreaTop;
           const bodyTop = top + 10;
@@ -145,7 +154,7 @@ export function ModuleSchematic({
               />
 
               {/* Agitatör: üst apex dışında dikey motor kutusu + tavanı delen mil + iki oval pervane */}
-              {t.hasAgitator && (
+              {t?.hasAgitator && (
                 <g>
                   <rect x={cx - 5} y={top - 21} width="10" height="13" rx="1" fill="#cbd5e1" stroke="#475569" strokeWidth="1" />
                   <line x1={cx} y1={top - 8} x2={cx} y2={bodyTop + 16} stroke="#334155" strokeWidth="1.6" />
@@ -154,20 +163,26 @@ export function ModuleSchematic({
                 </g>
               )}
 
-              {/* Tank etiketi — beyaz hâle (mil üzerinde okunur kalsın) */}
-              <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 1} textAnchor="middle" stroke="white" strokeWidth="3" fontSize="11" fontWeight="700">{t.name}</text>
-              <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 1} textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="700">{t.name}</text>
-              <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 13} textAnchor="middle" stroke="white" strokeWidth="3" fontSize="8.5" fontWeight="500">{t.volume.toLocaleString('tr-TR')} L</text>
-              <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 13} textAnchor="middle" fill="#475569" fontSize="8.5" fontWeight="500">{t.volume.toLocaleString('tr-TR')} L</text>
+              {/* Tank etiketi — gerçek tankta isim+hacim; ham tankta soluk "Tank" yer tutucusu */}
+              {t ? (
+                <>
+                  <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 1} textAnchor="middle" stroke="white" strokeWidth="3" fontSize="11" fontWeight="700">{t.name}</text>
+                  <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 1} textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="700">{t.name}</text>
+                  <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 13} textAnchor="middle" stroke="white" strokeWidth="3" fontSize="8.5" fontWeight="500">{t.volume.toLocaleString('tr-TR')} L</text>
+                  <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 13} textAnchor="middle" fill="#475569" fontSize="8.5" fontWeight="500">{t.volume.toLocaleString('tr-TR')} L</text>
+                </>
+              ) : (
+                <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 4} textAnchor="middle" fill="#94a3b8" fontSize="9" fontWeight="600" fontStyle="italic">Tank</text>
+              )}
 
               {/* Yan sensörler (sağ gövde, yatay): LSH üst · LSM orta · LSL alt */}
-              {t.hasLSH && <TankSensor wx={rightWall} wy={bodyTop + 14} bx={rightWall + 17} by={bodyTop + 14} label="LSH" />}
-              {t.hasLSM && <TankSensor wx={rightWall} wy={bodyTop + 32} bx={rightWall + 17} by={bodyTop + 32} label="LSM" />}
-              {t.hasLSL && <TankSensor wx={rightWall} wy={bodyBottom - 14} bx={rightWall + 17} by={bodyBottom - 14} label="LSL" />}
+              {t?.hasLSH && <TankSensor wx={rightWall} wy={bodyTop + 14} bx={rightWall + 17} by={bodyTop + 14} label="LSH" />}
+              {t?.hasLSM && <TankSensor wx={rightWall} wy={bodyTop + 32} bx={rightWall + 17} by={bodyTop + 32} label="LSM" />}
+              {t?.hasLSL && <TankSensor wx={rightWall} wy={bodyBottom - 14} bx={rightWall + 17} by={bodyBottom - 14} label="LSL" />}
 
               {/* Alt konik sensörleri (çapraz dışa-aşağı): sol PT (basınç) · sağ TT (sıcaklık) */}
-              {t.hasPT && <TankSensor wx={cx - 16} wy={bodyBottom + 5} bx={cx - 30} by={bottomApex + 13} label="PT" />}
-              {t.hasTT && <TankSensor wx={cx + 16} wy={bodyBottom + 5} bx={cx + 30} by={bottomApex + 13} label="TT" />}
+              {t?.hasPT && <TankSensor wx={cx - 16} wy={bodyBottom + 5} bx={cx - 30} by={bottomApex + 13} label="PT" />}
+              {t?.hasTT && <TankSensor wx={cx + 16} wy={bodyBottom + 5} bx={cx + 30} by={bottomApex + 13} label="TT" />}
 
               {/* Tank → manifold düşüş hattı — düz (kesiksiz) çizgi. Mavi CIP hattı bu çizgiye
                   değmesin diye mavi tarafına boşluk konur (header'da kesinti + eğik girişler kısa). */}
@@ -196,7 +211,7 @@ export function ModuleSchematic({
               labelPad={labelPad}
               leftPad={leftPad}
               tankCenterX={tankCenterX}
-              connectedCount={Math.min(line.connectedTankCount, tanksCount)}
+              connectedCount={Math.min(line.connectedTankCount, displayTankCount)}
               tankAreaWidth={tankAreaWidth}
               fixedValves={fixedFillingValves}
               hasPump={false}
@@ -225,7 +240,7 @@ export function ModuleSchematic({
               labelPad={labelPad}
               leftPad={leftPad}
               tankCenterX={tankCenterX}
-              connectedCount={Math.min(line.connectedTankCount, tanksCount)}
+              connectedCount={Math.min(line.connectedTankCount, displayTankCount)}
               tankAreaWidth={tankAreaWidth}
               fixedValves={fixedDischargeValves}
               hasPump={!!line.hasPump}
@@ -252,7 +267,7 @@ export function ModuleSchematic({
               labelPad={labelPad}
               leftPad={leftPad}
               tankCenterX={tankCenterX}
-              connectedCount={tanksCount}
+              connectedCount={displayTankCount}
               tankAreaWidth={tankAreaWidth}
               fixedValves={2}
               hasPump={!!tankCipReturn?.hasPump}
