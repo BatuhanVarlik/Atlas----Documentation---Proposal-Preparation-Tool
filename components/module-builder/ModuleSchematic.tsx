@@ -211,10 +211,10 @@ export function ModuleSchematic({
         {/* Boşaltım hatları */}
         {dischargeLines.map((line, idx) => {
           const y = lineStartY + (fillingLines.length + idx) * lineGap;
-          // CIP geri dönüş vanası grubun en başında (Lkg ile yer değiştirildi)
-          const labels = ['CIP→'];
+          // Lkg başta, CIP geri dönüş vanası grubun en sonunda (Boşaltım'da CIP↔Lkg yer değişti)
+          const labels = ['Lkg'];
           if (fixedDischargeValves === 3) labels.push('Su');
-          labels.push('Lkg');
+          labels.push('CIP→');
           return (
             <LineRow
               key={`dl-${idx}`}
@@ -381,6 +381,9 @@ function LineRow({
   const cipReturnColor = '#2563eb';
   const cipReturnIdx = branch ? fixedLabels.slice(0, fixedValves).findIndex((l) => l.includes('CIP')) : -1;
   const cipReturnCx = cipReturnIdx >= 0 ? fixedX + cipReturnIdx * spacing : null;
+  // Mavi dağıtım hattı CIP vanasından DEĞİL, Lkg vanasından başlar (kullanıcı isteği).
+  const lkgIdx = branch ? fixedLabels.slice(0, fixedValves).findIndex((l) => l === 'Lkg') : -1;
+  const lkgCx = lkgIdx >= 0 ? fixedX + lkgIdx * spacing : null;
 
   const pumpX = pumpXOverride ?? ((fixedSide === 'end' ? fixedRightEdge : tankAreaEnd + 18) + pumpGap);
   // Çizgi/ok hem pompayı hem de sabit vanaların en sağını (örn. pompadan sonraki Çek) geçmeli
@@ -410,18 +413,21 @@ function LineRow({
       {/* Manifold çizgisi */}
       <line x1={lineStartX} y1={y} x2={lineEndX} y2={y} stroke={color} strokeWidth="2.8" strokeLinecap="round" />
 
-      {/* CIP geri dönüş hattı — CIP vanasından tank altındaki vanalara ince mavi kesikli dağıtım.
-          Yatay başlık CIP vanası hizasında, her tank vanasına kısa düşüşle iner. */}
+      {/* Mavi kesikli dağıtım — Lkg vanasından başlar, tank altındaki vanalara dağılır.
+          Lkg vanasından yukarı header'a dik bağlantı + 45° eğik girişlerle tank vanalarına iner. */}
       {cipReturnCx != null && connectedCount > 0 && (() => {
         const vy = y - branchOffset;
         // Vanaya 45° eğik giriş: dikey düşüş kadar yatay kaydır → gri (dik) hatla üst üste binmez.
         const drop = (y - 5.5) - vy;
+        const anchorCx = lkgCx ?? cipReturnCx; // dağıtım Lkg vanasından başlar
         const xs = Array.from({ length: connectedCount }, (_, i) => tankCenterX(i));
         const startXs = xs.map((tx) => tx - drop);
-        const headerMin = Math.min(cipReturnCx, ...startXs);
-        const headerMax = Math.max(cipReturnCx, ...startXs);
+        const headerMin = Math.min(anchorCx, ...startXs);
+        const headerMax = Math.max(anchorCx, ...startXs);
         return (
           <g>
+            {/* Lkg vanasından header'a dik bağlantı */}
+            <line x1={anchorCx} y1={y - 4.5} x2={anchorCx} y2={vy} stroke={cipReturnColor} strokeWidth="1" strokeDasharray="3 2" />
             <line x1={headerMin} y1={vy} x2={headerMax} y2={vy} stroke={cipReturnColor} strokeWidth="1" strokeDasharray="3 2" />
             {xs.map((tx, i) => (
               <line key={`cipret-${i}`} x1={tx - drop} y1={vy} x2={tx} y2={y - 5.5} stroke={cipReturnColor} strokeWidth="1" strokeDasharray="3 2" />
