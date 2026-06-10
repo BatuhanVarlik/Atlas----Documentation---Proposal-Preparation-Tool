@@ -179,7 +179,16 @@ interface StorageModuleForDiagram {
   tankCipReturnManifoldExists: boolean;
   tankCipReturnLineCount: number;
   tankCipReturnPumpModel: string | null;
-  tanks: Array<{ name: string; volume: number }>;
+  tanks: Array<{
+    name: string;
+    volume: number;
+    hasAgitator?: boolean;
+    hasLSH?: boolean;
+    hasLSM?: boolean;
+    hasLSL?: boolean;
+    hasTT?: boolean;
+    hasPT?: boolean;
+  }>;
   valveCluster: { fillingLines: StorageLine[]; dischargeLines: StorageLine[] } | null;
 }
 
@@ -205,7 +214,16 @@ export async function renderStorageDiagram(module: StorageModuleForDiagram): Pro
       : null;
 
     const props = {
-      tanks: module.tanks.map((t) => ({ name: t.name, volume: t.volume })),
+      tanks: module.tanks.map((t) => ({
+        name: t.name,
+        volume: t.volume,
+        hasAgitator: t.hasAgitator,
+        hasLSH: t.hasLSH,
+        hasLSM: t.hasLSM,
+        hasLSL: t.hasLSL,
+        hasTT: t.hasTT,
+        hasPT: t.hasPT,
+      })),
       fillingLines: fl.map((l) => ({ name: l.name, capacity: l.capacity, connectedTankCount: l.connectedTankCount })),
       dischargeLines: dl.map((l) => ({ name: l.name, capacity: l.capacity, connectedTankCount: l.connectedTankCount, hasPump: !!l.pumpModel })),
       fixedFillingValves: FIXED_FILLING,

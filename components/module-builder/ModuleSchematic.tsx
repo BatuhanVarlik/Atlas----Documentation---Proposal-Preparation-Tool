@@ -1,4 +1,13 @@
-type Tank = { name: string; volume: number };
+type Tank = {
+  name: string;
+  volume: number;
+  hasAgitator?: boolean;
+  hasLSH?: boolean;
+  hasLSM?: boolean;
+  hasLSL?: boolean;
+  hasTT?: boolean;
+  hasPT?: boolean;
+};
 type FLine = { name: string; capacity: number; connectedTankCount: number };
 type DLine = {
   name: string;
@@ -45,8 +54,8 @@ export function ModuleSchematic({
   // Layout sabitleri
   const tankW = 64;
   const tankH = 84;
-  const tankGap = 22;
-  const tankAreaTop = 36;
+  const tankGap = 44;                    // yan sensörlere yer aç
+  const tankAreaTop = 48;                // üstte agitatör motor kutusuna yer
   const tankSpacing = tankW + tankGap;
   const labelPad = 100;                 // sol etiket alanı
   const preFixedPad = 100;              // boşaltım hattındaki sabit vana grubu için
@@ -96,25 +105,16 @@ export function ModuleSchematic({
           const top = tankAreaTop;
           const bodyTop = top + 10;
           const bodyBottom = top + tankH - 10;
+          const bottomApex = top + tankH;
+          const rightWall = cx + tankW / 2;
           return (
             <g key={i}>
-              {/* Üst kapak (yarım elips) */}
+              {/* Üst konik tepe (apex yukarıda) — alt konikle birebir simetrik */}
               <path
-                d={`M ${cx - tankW / 2} ${bodyTop} A ${tankW / 2} 10 0 0 1 ${cx + tankW / 2} ${bodyTop} Z`}
+                d={`M ${cx - tankW / 2} ${bodyTop} L ${cx} ${top} L ${cx + tankW / 2} ${bodyTop} Z`}
                 fill="url(#tank-cap)"
                 stroke="#64748b"
                 strokeWidth="1"
-              />
-              {/* Manhole — üst kapağın ortasında */}
-              <rect
-                x={cx - 4}
-                y={top - 2}
-                width="8"
-                height="6"
-                rx="1"
-                fill="#475569"
-                stroke="#334155"
-                strokeWidth="0.8"
               />
               {/* Gövde — paslanmaz gradient */}
               <rect
@@ -126,9 +126,9 @@ export function ModuleSchematic({
                 stroke="#64748b"
                 strokeWidth="1"
               />
-              {/* Konik alt (V şeklinde) */}
+              {/* Alt konik taban (apex aşağıda) */}
               <path
-                d={`M ${cx - tankW / 2} ${bodyBottom} L ${cx} ${top + tankH} L ${cx + tankW / 2} ${bodyBottom} Z`}
+                d={`M ${cx - tankW / 2} ${bodyBottom} L ${cx} ${bottomApex} L ${cx + tankW / 2} ${bodyBottom} Z`}
                 fill="url(#tank-cap)"
                 stroke="#64748b"
                 strokeWidth="1"
@@ -143,31 +143,36 @@ export function ModuleSchematic({
                 strokeWidth="1.5"
                 opacity="0.7"
               />
-              {/* Tank etiketi — koyu metin, açık tank üzerinde */}
-              <text
-                x={cx}
-                y={bodyTop + (bodyBottom - bodyTop) / 2 - 1}
-                textAnchor="middle"
-                fill="#0f172a"
-                fontSize="11"
-                fontWeight="700"
-              >
-                {t.name}
-              </text>
-              <text
-                x={cx}
-                y={bodyTop + (bodyBottom - bodyTop) / 2 + 12}
-                textAnchor="middle"
-                fill="#475569"
-                fontSize="8.5"
-                fontWeight="500"
-              >
-                {t.volume.toLocaleString('tr-TR')} L
-              </text>
+
+              {/* Agitatör: üst apex dışında dikey motor kutusu + tavanı delen mil + iki oval pervane */}
+              {t.hasAgitator && (
+                <g>
+                  <rect x={cx - 5} y={top - 21} width="10" height="13" rx="1" fill="#cbd5e1" stroke="#475569" strokeWidth="1" />
+                  <line x1={cx} y1={top - 8} x2={cx} y2={bodyTop + 16} stroke="#334155" strokeWidth="1.6" />
+                  <ellipse cx={cx - 5} cy={bodyTop + 16} rx="5" ry="2.6" fill="white" stroke="#334155" strokeWidth="1.2" />
+                  <ellipse cx={cx + 5} cy={bodyTop + 16} rx="5" ry="2.6" fill="white" stroke="#334155" strokeWidth="1.2" />
+                </g>
+              )}
+
+              {/* Tank etiketi — beyaz hâle (mil üzerinde okunur kalsın) */}
+              <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 1} textAnchor="middle" stroke="white" strokeWidth="3" fontSize="11" fontWeight="700">{t.name}</text>
+              <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 1} textAnchor="middle" fill="#0f172a" fontSize="11" fontWeight="700">{t.name}</text>
+              <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 13} textAnchor="middle" stroke="white" strokeWidth="3" fontSize="8.5" fontWeight="500">{t.volume.toLocaleString('tr-TR')} L</text>
+              <text x={cx} y={bodyTop + (bodyBottom - bodyTop) / 2 + 13} textAnchor="middle" fill="#475569" fontSize="8.5" fontWeight="500">{t.volume.toLocaleString('tr-TR')} L</text>
+
+              {/* Yan sensörler (sağ gövde, yatay): LSH üst · LSM orta · LSL alt */}
+              {t.hasLSH && <TankSensor wx={rightWall} wy={bodyTop + 14} bx={rightWall + 17} by={bodyTop + 14} label="LSH" />}
+              {t.hasLSM && <TankSensor wx={rightWall} wy={bodyTop + 32} bx={rightWall + 17} by={bodyTop + 32} label="LSM" />}
+              {t.hasLSL && <TankSensor wx={rightWall} wy={bodyBottom - 14} bx={rightWall + 17} by={bodyBottom - 14} label="LSL" />}
+
+              {/* Alt konik sensörleri (çapraz dışa-aşağı): sol PT (basınç) · sağ TT (sıcaklık) */}
+              {t.hasPT && <TankSensor wx={cx - 16} wy={bodyBottom + 5} bx={cx - 30} by={bottomApex + 13} label="PT" />}
+              {t.hasTT && <TankSensor wx={cx + 16} wy={bodyBottom + 5} bx={cx + 30} by={bottomApex + 13} label="TT" />}
+
               {/* Tank → manifold düşüş hattı (proses çıkışı) */}
               <line
                 x1={cx}
-                y1={top + tankH}
+                y1={bottomApex}
                 x2={cx}
                 y2={manifoldBottom - lineGap / 2}
                 stroke="#94a3b8"
@@ -521,6 +526,20 @@ function Valve({ cx, cy, color, small = false, check = false }: { cx: number; cy
           <line x1={cx + s} y1={cy - s} x2={cx - s} y2={cy + s} stroke={color} strokeWidth="1.4" />
         </>
       )}
+    </g>
+  );
+}
+
+// Tank sensörü — Reception InstrumentBubble görünümü (uçta yuvarlak + iç çizgi),
+// daha küçük yuvarlak. (wx,wy) tank duvarındaki bağlantı; (bx,by) bubble merkezi.
+function TankSensor({ wx, wy, bx, by, label, r = 8 }: { wx: number; wy: number; bx: number; by: number; label: string; r?: number }) {
+  const c = '#475569';
+  return (
+    <g>
+      <line x1={wx} y1={wy} x2={bx} y2={by} stroke={c} strokeWidth="1" />
+      <circle cx={bx} cy={by} r={r} fill="white" stroke={c} strokeWidth="1.2" />
+      <line x1={bx - r} y1={by} x2={bx + r} y2={by} stroke={c} strokeWidth="0.7" />
+      <text x={bx} y={by - 1.5} fontSize="6" textAnchor="middle" fill="#1e293b" fontWeight="700">{label}</text>
     </g>
   );
 }

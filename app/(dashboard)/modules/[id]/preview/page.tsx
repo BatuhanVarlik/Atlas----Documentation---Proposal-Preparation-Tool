@@ -292,7 +292,16 @@ export default async function ModulePreviewPage({ params }: Props) {
       {(hasLines || moduleData.tanks.length > 0) && (
         <Collapsible title="Şematik Diyagram" subtitle="Vana / Pompa / Hat görünümü" defaultOpen>
           <ModuleSchematic
-            tanks={moduleData.tanks.map((t) => ({ name: t.name, volume: t.volume }))}
+            tanks={moduleData.tanks.map((t) => ({
+              name: t.name,
+              volume: t.volume,
+              hasAgitator: t.hasAgitator,
+              hasLSH: t.hasLSH,
+              hasLSM: t.hasLSM,
+              hasLSL: t.hasLSL,
+              hasTT: t.hasTT,
+              hasPT: t.hasPT,
+            }))}
             fillingLines={fl.map((l) => ({
               name: l.name,
               capacity: l.capacity,
