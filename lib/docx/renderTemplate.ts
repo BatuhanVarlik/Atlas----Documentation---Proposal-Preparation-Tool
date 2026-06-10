@@ -98,9 +98,28 @@ export function renderTemplateWithMedia(
     for (const m of media) {
       outZip.file(`word/media/${m.filename}`, m.data);
     }
+
+    // 4) Gömülen drawing a:/pic: prefix'lerini kullanır. Kök <w:document> bunları (özellikle
+    //    UI'dan yüklenen şablonlarda) tanımlamayabilir → "prefix is non-null and namespace is
+    //    null" → Word açamaz. Kökte garanti et.
+    ensureDrawingNamespaces(outZip);
   }
 
   return outZip.generate({ type: 'nodebuffer' }) as Buffer;
+}
+
+/** word/document.xml kök öğesine eksikse xmlns:a ve xmlns:pic ekler (çizim gömme için gerekli). */
+function ensureDrawingNamespaces(zip: PizZip): void {
+  const path = 'word/document.xml';
+  const xml = zip.file(path)?.asText();
+  if (!xml) return;
+  const fixed = xml.replace(/<w:document\b([^>]*)>/, (_m, attrs: string) => {
+    let add = '';
+    if (!/\sxmlns:a=/.test(attrs)) add += ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"';
+    if (!/\sxmlns:pic=/.test(attrs)) add += ' xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
+    return `<w:document${attrs}${add}>`;
+  });
+  if (fixed !== xml) zip.file(path, fixed);
 }
 
 export function renderTemplate(templatePath: string, context: unknown): Buffer {
