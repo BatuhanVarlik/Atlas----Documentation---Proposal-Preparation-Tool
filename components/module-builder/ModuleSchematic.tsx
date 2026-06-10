@@ -78,6 +78,17 @@ export function ModuleSchematic({
   const dischargeColor = '#f97316'; // orange
   const tankCipColor = '#a855f7';   // purple
 
+  // Tankın gri (düz) düşüş hattının, mavi CIP dağıtım hatlarıyla temas ettiği y-bantları.
+  // Bu bantlarda gri hat kesikli çizilir → mavi ile düz birleşmez (kullanıcı isteği).
+  // Mavi yalnızca Dolum/Boşaltım hatlarında var (Tank CIP dönüş hattında yok).
+  const grayDashBands = Array.from(
+    { length: fillingLines.length + dischargeLines.length },
+    (_, k) => {
+      const yl = lineStartY + k * lineGap;
+      return [yl - 21, yl - 4] as [number, number];
+    },
+  );
+
   return (
     <div className="w-full">
       <svg
@@ -169,16 +180,19 @@ export function ModuleSchematic({
               {t.hasPT && <TankSensor wx={cx - 16} wy={bodyBottom + 5} bx={cx - 30} by={bottomApex + 13} label="PT" />}
               {t.hasTT && <TankSensor wx={cx + 16} wy={bodyBottom + 5} bx={cx + 30} by={bottomApex + 13} label="TT" />}
 
-              {/* Tank → manifold düşüş hattı (proses çıkışı) */}
-              <line
-                x1={cx}
-                y1={bottomApex}
-                x2={cx}
-                y2={manifoldBottom - lineGap / 2}
-                stroke="#94a3b8"
-                strokeWidth="1.2"
-                strokeDasharray="3 3"
-              />
+              {/* Tank → manifold düşüş hattı — düz çizgi; mavi CIP hattıyla temas bantlarında kesikli */}
+              {grayDropSegments(bottomApex, manifoldBottom - lineGap / 2, grayDashBands).map((sg, k) => (
+                <line
+                  key={`gd-${k}`}
+                  x1={cx}
+                  y1={sg.s}
+                  x2={cx}
+                  y2={sg.e}
+                  stroke="#94a3b8"
+                  strokeWidth="1.2"
+                  strokeDasharray={sg.dashed ? '3 3' : undefined}
+                />
+              ))}
             </g>
           );
         })}
@@ -426,8 +440,7 @@ function LineRow({
         const headerMax = Math.max(anchorCx, ...startXs);
         return (
           <g>
-            {/* Lkg vanasından header'a dik bağlantı */}
-            <line x1={anchorCx} y1={y - 4.5} x2={anchorCx} y2={vy} stroke={cipReturnColor} strokeWidth="1" strokeDasharray="3 2" />
+            {/* Lkg vanası artık yukarı dallandığı için header doğrudan ondan başlar (ek bağlantı yok) */}
             <line x1={headerMin} y1={vy} x2={headerMax} y2={vy} stroke={cipReturnColor} strokeWidth="1" strokeDasharray="3 2" />
             {xs.map((tx, i) => (
               <line key={`cipret-${i}`} x1={tx - drop} y1={vy} x2={tx} y2={y - 5.5} stroke={cipReturnColor} strokeWidth="1" strokeDasharray="3 2" />
@@ -448,8 +461,8 @@ function LineRow({
         const cx = fixedX + i * spacing;
         const valveS = 4.5; // küçük vana yarı-kenarı (Valve small)
 
-        // CIP → ince hatla yukarı, etiket vananın üstünde
-        if (branch && lbl.includes('CIP')) {
+        // Lkg → ince hatla yukarı (eskiden CIP böyleydi), etiket vananın üstünde
+        if (branch && lbl === 'Lkg') {
           const vy = y - branchOffset;
           return (
             <g key={`fx-${i}`}>
@@ -476,7 +489,7 @@ function LineRow({
           );
         }
 
-        // Hat üzerinde kalanlar (Lkg / Su / Çek)
+        // Hat üzerinde kalanlar (CIP / Su / Çek) — çizgisiz, hat ile aynı hizada
         return (
           <g key={`fx-${i}`}>
             <Valve cx={cx} cy={y} color={color} small check={lbl === 'Çek'} />
@@ -548,4 +561,25 @@ function TankSensor({ wx, wy, bx, by, label, r = 8 }: { wx: number; wy: number; 
       <text x={bx} y={by - 1.5} fontSize="6" textAnchor="middle" fill="#1e293b" fontWeight="700">{label}</text>
     </g>
   );
+}
+
+// Gri düşüş hattını [start,end] aralığında, verilen kesikli bantlara göre düz/kesikli
+// segmentlere böler (bantlar sıralı ve çakışmasız varsayılır).
+function grayDropSegments(
+  start: number,
+  end: number,
+  bands: Array<[number, number]>,
+): Array<{ s: number; e: number; dashed: boolean }> {
+  const segs: Array<{ s: number; e: number; dashed: boolean }> = [];
+  let cur = start;
+  for (const [bs, be] of bands) {
+    if (bs > end) break;
+    if (be <= cur) continue;
+    if (bs > cur) segs.push({ s: cur, e: bs, dashed: false });
+    const de = Math.min(be, end);
+    segs.push({ s: Math.max(bs, cur), e: de, dashed: true });
+    cur = de;
+  }
+  if (cur < end) segs.push({ s: cur, e: end, dashed: false });
+  return segs;
 }
