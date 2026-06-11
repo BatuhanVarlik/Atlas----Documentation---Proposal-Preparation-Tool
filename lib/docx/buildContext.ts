@@ -240,6 +240,9 @@ export function buildTemplateContext(module: ModuleForDoc, customItems: PricingI
   ].filter((e) => e.quantity > 0);
 
   return {
+    // Birleşik şablon koşulları: Depolama bölümleri görünür, Süt Alım gizli.
+    isReception: false,
+    isStorage: true,
     module: {
       name: module.name,
       nameUpper: module.name.toUpperCase(),

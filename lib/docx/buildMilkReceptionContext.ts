@@ -178,6 +178,9 @@ export function buildMilkReceptionContext(module: ModuleForDoc, customItems: Pri
   ].filter((e) => e.quantity > 0);
 
   return {
+    // Birleşik şablon koşulları: Süt Alım bölümleri görünür, Depolama gizli.
+    isReception: true,
+    isStorage: false,
     module: {
       name: module.name,
       nameUpper: module.name.toUpperCase(),

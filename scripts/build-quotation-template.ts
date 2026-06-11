@@ -16,8 +16,7 @@ import { prisma } from '../lib/prisma';
 import { extractPlaceholders, dotNotationParser } from '../lib/docx/renderTemplate';
 
 const SOURCE = 'public/HEM-PROJECT-NO.docx';
-const OUT_FILENAME_MILK = 'apv-teklif-genel.docx';
-const OUT_FILENAME_STORAGE = 'apv-teklif-genel-depolama.docx';
+const OUT_FILENAME_UNIFIED = 'apv-teklif-birlesik.docx';
 
 // ---------- Düşük seviyeli yardımcılar ----------
 
@@ -50,13 +49,6 @@ function replaceYellowRunsInRegion(region: string, tags: string[], label: string
   }
   console.log(`  ✓ ${label}: ${tags.length} sarı run dolduruldu → ${tags.join(', ')}`);
   return out;
-}
-
-function regionBetween(xml: string, startAnchor: string, endAnchor: string, label: string): [number, number] {
-  const s = xml.indexOf(startAnchor);
-  const e = xml.indexOf(endAnchor, s + startAnchor.length);
-  if (s < 0 || e < 0) throw new Error(`[${label}] aralık bulunamadı (${startAnchor} … ${endAnchor})`);
-  return [s, e];
 }
 
 // Belgenin tablo stiline (KlavuzTablo1Ak, Times New Roman) uyan ortak inşa yardımcıları.
@@ -152,28 +144,77 @@ function buildEquipmentTable(): string {
   return descTable(g, header + loop);
 }
 
-/**
- * Depolama (STORAGE) DESCRIPTION gövdesi: Dolum Hatları + Boşaltım Hatları + Tanklar
- * + Equipment tabloları. Her tablo docxtemplater döngüsü; context buildContext.ts'ten gelir.
- */
-function buildStorageDescription(): string {
-  // Dolum Hatları
-  const fG = [600, 3000, 2200, 1900, 1900];
-  const fHead = `<w:tr>${descHeaderCell('#', fG[0], 'center')}${descHeaderCell('Hat', fG[1])}${descHeaderCell('Kapasite (L/h)', fG[2], 'right')}${descHeaderCell('Vana Tipi', fG[3])}${descHeaderCell('Seçilen DN', fG[4])}</w:tr>`;
-  const fLoop = `<w:tr>${descCell('{#fillingLines}{sira}', fG[0], false, 'center')}${descCell('{name}', fG[1])}${descCell('{capacity}', fG[2], false, 'right')}${descCell('{valveType}', fG[3])}${descCell('{selectedDN}{/fillingLines}', fG[4])}</w:tr>`;
-  // Boşaltım Hatları
-  const dG = [600, 2600, 1800, 1300, 1900, 1400];
-  const dHead = `<w:tr>${descHeaderCell('#', dG[0], 'center')}${descHeaderCell('Hat', dG[1])}${descHeaderCell('Kapasite (L/h)', dG[2], 'right')}${descHeaderCell('Basınç (Bar)', dG[3], 'right')}${descHeaderCell('Pompa', dG[4])}${descHeaderCell('Flow Meter', dG[5])}</w:tr>`;
-  const dLoop = `<w:tr>${descCell('{#dischargeLines}{sira}', dG[0], false, 'center')}${descCell('{name}', dG[1])}${descCell('{capacity}', dG[2], false, 'right')}${descCell('{pressure}', dG[3], false, 'right')}${descCell('{pumpModel}', dG[4])}${descCell('{flowMeterDN}{/dischargeLines}', dG[5])}</w:tr>`;
-  // Tanklar
-  const tG = [600, 3000, 1900, 2600, 1500];
-  const tHead = `<w:tr>${descHeaderCell('#', tG[0], 'center')}${descHeaderCell('Tank', tG[1])}${descHeaderCell('Hacim (L)', tG[2], 'right')}${descHeaderCell('Sensörler', tG[3])}${descHeaderCell('Agitatör', tG[4])}</w:tr>`;
-  const tLoop = `<w:tr>${descCell('{#tanks}{sira}', tG[0], false, 'center')}${descCell('{name}', tG[1])}${descCell('{volume}', tG[2], false, 'right')}${descCell('{sensors}', tG[3])}${descCell('{agitatorLabel}{/tanks}', tG[4])}</w:tr>`;
+// ---------- DESCRIPTION tabloları (modül-spesifik) ----------
+// Süt Alım: hat tablosu (# | Hat | Kapasite | Basınç | Hesaplanan DN | Pompa)
+function buildReceptionLinesTable(): string {
+  const g = [600, 2600, 1800, 1300, 1900, 1400];
+  const head = `<w:tr>${descHeaderCell('#', g[0], 'center')}${descHeaderCell('Hat', g[1])}${descHeaderCell('Kapasite (L/h)', g[2], 'right')}${descHeaderCell('Basınç (Bar)', g[3], 'right')}${descHeaderCell('Hesaplanan DN', g[4])}${descHeaderCell('Pompa', g[5])}</w:tr>`;
+  const loop = `<w:tr>${descCell('{#receptionLines}{sira}', g[0], false, 'center')}${descCell('{name}', g[1])}${descCell('{capacity}', g[2], false, 'right')}${descCell('{pressure}', g[3], false, 'right')}${descCell('{dn}', g[4])}${descCell('{pumpModel}{/receptionLines}', g[5])}</w:tr>`;
+  return descTable(g, head + loop);
+}
+// Süt Alım: Tanker CIP istasyonu — 2 sütun (etiket | değer)
+function buildTankerCipTable(): string {
+  const g = [3400, 6200];
+  const row = (l: string, v: string) => `<w:tr>${descCell(l, g[0], true)}${descCell(v, g[1])}</w:tr>`;
+  return descTable(
+    g,
+    row('Kapasite (L/h)', '{tankerCip.capacity}') +
+      row('Basınç (Bar)', '{tankerCip.pressure}') +
+      row('Hesaplanan CIP Çapı', '{tankerCip.dn}') +
+      row('Pompa', '{tankerCip.pumpModel}'),
+  );
+}
+// Depolama: Dolum Hatları
+function buildFillingTable(): string {
+  const g = [600, 3000, 2200, 1900, 1900];
+  const head = `<w:tr>${descHeaderCell('#', g[0], 'center')}${descHeaderCell('Hat', g[1])}${descHeaderCell('Kapasite (L/h)', g[2], 'right')}${descHeaderCell('Vana Tipi', g[3])}${descHeaderCell('Seçilen DN', g[4])}</w:tr>`;
+  const loop = `<w:tr>${descCell('{#fillingLines}{sira}', g[0], false, 'center')}${descCell('{name}', g[1])}${descCell('{capacity}', g[2], false, 'right')}${descCell('{valveType}', g[3])}${descCell('{selectedDN}{/fillingLines}', g[4])}</w:tr>`;
+  return descTable(g, head + loop);
+}
+// Depolama: Boşaltım Hatları
+function buildDischargeTable(): string {
+  const g = [600, 2600, 1800, 1300, 1900, 1400];
+  const head = `<w:tr>${descHeaderCell('#', g[0], 'center')}${descHeaderCell('Hat', g[1])}${descHeaderCell('Kapasite (L/h)', g[2], 'right')}${descHeaderCell('Basınç (Bar)', g[3], 'right')}${descHeaderCell('Pompa', g[4])}${descHeaderCell('Flow Meter', g[5])}</w:tr>`;
+  const loop = `<w:tr>${descCell('{#dischargeLines}{sira}', g[0], false, 'center')}${descCell('{name}', g[1])}${descCell('{capacity}', g[2], false, 'right')}${descCell('{pressure}', g[3], false, 'right')}${descCell('{pumpModel}', g[4])}${descCell('{flowMeterDN}{/dischargeLines}', g[5])}</w:tr>`;
+  return descTable(g, head + loop);
+}
+// Depolama: Tanklar
+function buildTanksTable(): string {
+  const g = [600, 3000, 1900, 2600, 1500];
+  const head = `<w:tr>${descHeaderCell('#', g[0], 'center')}${descHeaderCell('Tank', g[1])}${descHeaderCell('Hacim (L)', g[2], 'right')}${descHeaderCell('Sensörler', g[3])}${descHeaderCell('Agitatör', g[4])}</w:tr>`;
+  const loop = `<w:tr>${descCell('{#tanks}{sira}', g[0], false, 'center')}${descCell('{name}', g[1])}${descCell('{volume}', g[2], false, 'right')}${descCell('{sensors}', g[3])}${descCell('{agitatorLabel}{/tanks}', g[4])}</w:tr>`;
+  return descTable(g, head + loop);
+}
+
+// docxtemplater blok koşulu: başlık metninin başına {#name} koyar (paragraphLoop blok olarak işler).
+function condHeading(name: string, headingText: string): string {
+  return descHeading(`{#${name}}${headingText}`);
+}
+function condEnd(name: string): string {
   return (
-    descHeading('Dolum Hatları') + descTable(fG, fHead + fLoop) + spacerP() +
-    descHeading('Boşaltım Hatları') + descTable(dG, dHead + dLoop) + spacerP() +
-    descHeading('Tanklar') + descTable(tG, tHead + tLoop) + spacerP() +
+    '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr>' +
+    `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr><w:t>{/${name}}</w:t></w:r></w:p>`
+  );
+}
+
+/**
+ * Birleşik (tek) şablonun DESCRIPTION gövdesi. Modül-spesifik bölümler {#isReception}/
+ * {#isStorage} ile koşullu; Equipment ve diyagram ortaktır (koşulsuz). Hangi modül
+ * seçiliyse context o bayrağı true verir → yalnızca ilgili bölümler render olur.
+ */
+function buildUnifiedDescription(): string {
+  return (
+    // Süt Alım: hat tablosu
+    condHeading('isReception', 'Süt Alım Hatları') + buildReceptionLinesTable() + condEnd('isReception') + spacerP() +
+    // Depolama: dolum + boşaltım + tank tabloları
+    condHeading('isStorage', 'Dolum Hatları') + buildFillingTable() + spacerP() +
+      descHeading('Boşaltım Hatları') + buildDischargeTable() + spacerP() +
+      descHeading('Tanklar') + buildTanksTable() + condEnd('isStorage') + spacerP() +
+    // Ortak: Equipment
     descHeading('Ekipman') + buildEquipmentTable() + spacerP() +
+    // Süt Alım: Tanker CIP istasyonu
+    condHeading('isReception', 'Raw Milk Trucks CIP Station') + buildTankerCipTable() + condEnd('isReception') + spacerP() +
+    // Ortak: diyagram
     buildDiagramSection()
   );
 }
@@ -267,82 +308,25 @@ function stripHighlight(xml: string): string {
   return xml.replace(/<w:highlight w:val="yellow"\/>/g, '');
 }
 
-// ---------- Süt Alım varyantı ----------
-function convertMilk(xml: string): string {
-  console.log('\n[Süt Alım] dönüşüm:');
+// ---------- Birleşik (tek) şablon ----------
+function convertUnified(xml: string): string {
+  console.log('\n[Birleşik] dönüşüm:');
   xml = applyCommonOps(xml);
 
-  // Hat (DESCRIPTION) tablosu → satır döngüsü ({#receptionLines}…{/receptionLines})
-  {
-    const idx = xml.indexOf('Raw Milk Reception 1');
-    const rowStart = xml.lastIndexOf('<w:tr', idx);
-    const rowEnd = xml.indexOf('</w:tr>', idx) + 7;
-    let row = xml.slice(rowStart, rowEnd);
-    row = row.replace('<w:t>Raw Milk Reception 1</w:t>', '<w:t xml:space="preserve">{name}</w:t>');
-    row = row.replace('<w:t>1</w:t>', '<w:t xml:space="preserve">{#receptionLines}{sira}</w:t>');
-    row = row.replace('<w:t>30.000</w:t>', '<w:t xml:space="preserve">{capacity}</w:t>');
-    row = row.replace('<w:t>2</w:t>', '<w:t xml:space="preserve">{pressure}</w:t>');
-    row = row.replace('<w:t>76 SMS (3")</w:t>', '<w:t xml:space="preserve">{dn}</w:t>');
-    row = row.replace('<w:t>W+35/55</w:t>', '<w:t xml:space="preserve">{pumpModel}{/receptionLines}</w:t>');
-    xml = xml.slice(0, rowStart) + row + xml.slice(rowEnd);
-    console.log('  ✓ Hat tablosu: satır döngüsü kuruldu ({#receptionLines})');
-  }
-
-  // Equipment tablosu → tek döngü tablosu ({#equipment}, koşullu satır)
-  {
-    const headerIdx = xml.indexOf('>Equipment<');
-    const cipIdx = xml.indexOf('RAW MILK TRUCKS CIP STATION');
-    const eqStart = xml.lastIndexOf('<w:tbl>', headerIdx);
-    const eqEnd = xml.lastIndexOf('</w:tbl>', cipIdx) + '</w:tbl>'.length;
-    if (headerIdx < 0 || cipIdx < 0 || eqStart < 0) throw new Error('[Ekipman] tablo sınırları bulunamadı');
-    xml = xml.slice(0, eqStart) + buildEquipmentTable() + xml.slice(eqEnd);
-    console.log('  ✓ Ekipman tablosu: {#equipment} döngüsüne yeniden inşa edildi');
-  }
-
-  // Tanker CIP tablosu — Kapasite / Basınç / CIP Çapı / Pompa
-  {
-    const [s, e] = regionBetween(xml, 'RAW MILK TRUCKS CIP STATION', '3. PRICING', 'Tanker CIP');
-    let slice = xml.slice(s, e);
-    slice = replaceYellowRunsInRegion(
-      slice,
-      ['{tankerCip.capacity}', '{tankerCip.pressure}', '{tankerCip.dn}', '{tankerCip.pumpModel}'],
-      'Tanker CIP',
-    );
-    xml = xml.slice(0, s) + slice + xml.slice(e);
-  }
-
-  // Örnek diyagram görselini (DESCRIPTION içindeki statik "Diyagram") dinamik diyagram
-  // bölümüyle ({#hasDiagram}{@diagramXml}{/hasDiagram}) değiştir.
-  {
-    const dIdx = xml.indexOf('name="Diyagram"');
-    if (dIdx < 0) throw new Error('[Diyagram] örnek diyagram bulunamadı');
-    const pStart = xml.lastIndexOf('<w:p ', dIdx);
-    const pEnd = xml.indexOf('</w:p>', dIdx) + 6;
-    xml = xml.slice(0, pStart) + buildDiagramSection() + xml.slice(pEnd);
-    console.log('  ✓ Örnek diyagram → dinamik {#hasDiagram}{@diagramXml} bölümü');
-  }
-
-  xml = setPricingPageProps(xml, true); // milk diyagramı sayfa kırmaz → PRICING'i taze sayfaya al
-  return stripHighlight(xml);
-}
-
-// ---------- Depolama varyantı ----------
-function convertStorage(xml: string): string {
-  console.log('\n[Depolama] dönüşüm:');
-  xml = applyCommonOps(xml);
-
-  // DESCRIPTION gövdesini (modül başlığından "3. PRICING"e kadar — Hat tablosu, Equipment,
-  // Tanker CIP) depolama tablolarıyla (Dolum/Boşaltım/Tank + Equipment) tamamen değiştir.
+  // DESCRIPTION gövdesini (modül başlığından "3. PRICING"e kadar) birleşik koşullu içerikle
+  // (Süt Alım + Depolama bölümleri + ortak Equipment/diyagram) tamamen değiştir.
   {
     const titleIdx = xml.indexOf('{module.nameUpper}');
     const descStart = xml.indexOf('</w:p>', titleIdx) + 6;
     const [pricingStart] = paragraphRange(xml, '3. PRICING', 'PRICING');
-    if (titleIdx < 0 || descStart < 6 || pricingStart < 0) throw new Error('[Depolama] DESCRIPTION sınırları bulunamadı');
-    xml = xml.slice(0, descStart) + spacerP() + buildStorageDescription() + spacerP() + xml.slice(pricingStart);
-    console.log('  ✓ DESCRIPTION gövdesi depolama tablolarıyla değiştirildi');
+    if (titleIdx < 0 || descStart < 6 || pricingStart < 0) throw new Error('[Birleşik] DESCRIPTION sınırları bulunamadı');
+    xml = xml.slice(0, descStart) + spacerP() + buildUnifiedDescription() + spacerP() + xml.slice(pricingStart);
+    console.log('  ✓ DESCRIPTION birleşik (koşullu) içerikle değiştirildi');
   }
 
-  xml = setPricingPageProps(xml, false); // diyagram zaten pageBreakAfter → ikinci kırılma boş sayfa yapardı
+  // Storage diyagramı pageBreakAfter ile kırar; Süt Alım büyük diyagramı zaten taşar →
+  // keepNext yeterli (pageBreakBefore koyarsak storage'da fazladan boş sayfa olur).
+  xml = setPricingPageProps(xml, false);
   return stripHighlight(xml);
 }
 
@@ -358,6 +342,8 @@ const MOCK_DIAGRAM =
   '<pic:spPr/></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
 
 const MILK_MOCK = {
+  isReception: true,
+  isStorage: false,
   quotation: { no: 'HEM-2026-001', date: '08.06.2026', contactPerson: 'Mrs Jane Doe', deliveryWeeks: '16', deliveryPlace: 'Customer Factory', offerValidityDays: '30' },
   module: { name: 'Raw Milk Reception', nameUpper: 'RAW MILK RECEPTION', customerName: 'ABC Süt A.Ş.' },
   creator: { name: 'Elvan Gürsu' },
@@ -378,6 +364,8 @@ const MILK_MOCK = {
 };
 
 const STORAGE_MOCK = {
+  isReception: false,
+  isStorage: true,
   quotation: { no: 'HEM-2026-002', date: '08.06.2026', contactPerson: 'Mrs Jane Doe', deliveryWeeks: '18', deliveryPlace: 'Customer Factory', offerValidityDays: '30' },
   module: { name: 'Raw Milk Storage', nameUpper: 'RAW MILK STORAGE', customerName: 'ABC Süt A.Ş.' },
   creator: { name: 'Elvan Gürsu' },
@@ -479,30 +467,32 @@ async function main() {
   const outDir = path.join(root, 'public', 'uploads', 'templates');
   fs.mkdirSync(outDir, { recursive: true });
 
-  // Süt Alım varyantı
-  const milkBuf = buildVariant(srcBuf, convertMilk);
-  console.log('\nDoğrulama:');
-  renderTest(milkBuf, MILK_MOCK, 'Süt Alım');
-  fs.writeFileSync(path.join(outDir, OUT_FILENAME_MILK), milkBuf);
-
-  // Depolama varyantı
-  const storageBuf = buildVariant(srcBuf, convertStorage);
-  renderTest(storageBuf, STORAGE_MOCK, 'Depolama');
-  fs.writeFileSync(path.join(outDir, OUT_FILENAME_STORAGE), storageBuf);
+  // Tek (birleşik) şablon — aynı .docx hem Süt Alım hem Depolama; modül-spesifik bölümler
+  // {#isReception}/{#isStorage} ile koşullu. İki context ile de render-test edilir.
+  const unifiedBuf = buildVariant(srcBuf, convertUnified);
+  console.log('\nDoğrulama (tek şablon · iki modül context\'i):');
+  renderTest(unifiedBuf, MILK_MOCK, 'Birleşik · Süt Alım');
+  renderTest(unifiedBuf, STORAGE_MOCK, 'Birleşik · Depolama');
+  fs.writeFileSync(path.join(outDir, OUT_FILENAME_UNIFIED), unifiedBuf);
 
   await upsertTemplate({
-    name: 'APV Hemisan Teklif (HEM-PROJECT-NO)',
-    description: 'Tam teklif belgesi — Süt Alım (kapak mektubu, genel bilgi, açıklama, fiyatlandırma).',
-    filename: OUT_FILENAME_MILK, buffer: milkBuf, moduleType: 'MILK_RECEPTION',
+    name: 'APV Hemisan Teklif (Birleşik)',
+    description: 'Tek teklif belgesi — Süt Alım + Depolama (modüle göre koşullu bölümler).',
+    filename: OUT_FILENAME_UNIFIED, buffer: unifiedBuf, moduleType: 'GENERIC',
   });
-  await upsertTemplate({
-    name: 'APV Hemisan Teklif (HEM-PROJECT-NO) — Depolama',
-    description: 'Tam teklif belgesi — Depolama (dolum/boşaltım hatları, tanklar, ekipman).',
-    filename: OUT_FILENAME_STORAGE, buffer: storageBuf, moduleType: 'STORAGE',
+
+  // Eski iki ayrı şablonu pasifleştir (artık tek birleşik şablon kullanılıyor; silmek yerine
+  // pasifleştir → üretilmiş belge geçmişi FK'sı korunur, dialoglarda görünmez).
+  const deact = await prisma.documentTemplate.updateMany({
+    where: {
+      name: { in: ['APV Hemisan Teklif (HEM-PROJECT-NO)', 'APV Hemisan Teklif (HEM-PROJECT-NO) — Depolama'] },
+    },
+    data: { isActive: false },
   });
+  if (deact.count > 0) console.log(`  ✓ Eski ${deact.count} ayrı şablon pasifleştirildi`);
 
   await prisma.$disconnect();
-  console.log('\nTamamlandı. İki şablon (Süt Alım + Depolama) yazıldı ve aktif kaydedildi.');
+  console.log('\nTamamlandı. Tek birleşik şablon (GENERIC) yazıldı ve aktif kaydedildi.');
 }
 
 main().catch(async (e) => {
