@@ -234,6 +234,14 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
     } finally { setGenerating(false); }
   }
 
+  async function handleDeleteDoc(docId: string) {
+    if (!confirm('Bu belgeyi silmek istediğinize emin misiniz?')) return;
+    const res = await fetch(`/api/modules/${module.id}/documents/${docId}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) setDocs((prev) => prev.filter((d) => d.id !== docId));
+    else alert(json.error ?? 'Belge silinemedi');
+  }
+
   const isDirty =
     name !== module.name ||
     customerName !== (module.customerName ?? '') ||
@@ -746,6 +754,10 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
                     className="text-xs px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors">
                     İndir
                   </a>
+                  <button onClick={() => handleDeleteDoc(doc.id)}
+                    className="text-xs px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors">
+                    Sil
+                  </button>
                 </div>
               </li>
             ))}
