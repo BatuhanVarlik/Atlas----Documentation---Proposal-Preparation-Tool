@@ -9,11 +9,13 @@ export async function PATCH(req: Request, { params }: Params) {
   try {
     await requireRole(['ADMIN']);
     const { id } = await params;
-    const body = await req.json() as { isActive?: boolean };
-    const template = await prisma.documentTemplate.update({
-      where: { id },
-      data: { isActive: body.isActive },
-    });
+    const body = await req.json() as { isActive?: boolean; moduleType?: string };
+    const data: { isActive?: boolean; moduleType?: string } = {};
+    if (typeof body.isActive === 'boolean') data.isActive = body.isActive;
+    if (body.moduleType && ['MILK_RECEPTION', 'STORAGE', 'GENERIC'].includes(body.moduleType)) {
+      data.moduleType = body.moduleType;
+    }
+    const template = await prisma.documentTemplate.update({ where: { id }, data });
     return apiSuccess(template);
   } catch (e: unknown) {
     if (e instanceof Error && 'status' in e) return apiError(e.message, (e as { status: number }).status);

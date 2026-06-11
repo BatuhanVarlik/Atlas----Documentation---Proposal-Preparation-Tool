@@ -95,9 +95,9 @@ export default function MilkReceptionDetailClient({ module }: Props) {
   useEffect(() => {
     fetch('/api/templates').then((r) => r.json()).then((j) => {
       if (j.success) {
-        // Yalnızca MILK_RECEPTION şablonları (varsa) — yoksa hepsi gösterilir
+        // Süt Alım + Genel (GENERIC) şablonlar — yoksa hepsi gösterilir
         const all = (j.data as Template[]).filter((t) => t.isActive);
-        const milk = all.filter((t) => t.moduleType === 'MILK_RECEPTION');
+        const milk = all.filter((t) => t.moduleType === 'MILK_RECEPTION' || t.moduleType === 'GENERIC');
         setTemplates(milk.length > 0 ? milk : all);
       }
     });

@@ -25,6 +25,9 @@ export async function POST(req: Request) {
     const file = formData.get('file') as File | null;
     const name = (formData.get('name') as string | null)?.trim();
     const description = (formData.get('description') as string | null)?.trim() || null;
+    const reqType = (formData.get('moduleType') as string | null)?.trim();
+    // GENERIC = her iki modülde de görünür. Geçersiz/boş ise genel kabul edilir.
+    const moduleType = ['MILK_RECEPTION', 'STORAGE', 'GENERIC'].includes(reqType ?? '') ? (reqType as string) : 'GENERIC';
 
     if (!file || !name) return apiError('Dosya ve şablon adı gerekli');
     if (!file.name.endsWith('.docx')) return apiError('Yalnızca .docx dosyası yüklenebilir');
@@ -46,6 +49,7 @@ export async function POST(req: Request) {
         filename,
         filepath: `/uploads/templates/${filename}`,
         placeholders,
+        moduleType,
       },
     });
 

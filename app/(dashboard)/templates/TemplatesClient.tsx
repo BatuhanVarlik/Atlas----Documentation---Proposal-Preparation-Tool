@@ -12,8 +12,16 @@ interface Template {
   filepath: string;
   placeholders: unknown;
   isActive: boolean;
+  moduleType: string;
   createdAt: Date | string;
 }
+
+const MODULE_TYPES: Array<{ value: string; label: string }> = [
+  { value: 'GENERIC', label: 'Genel (her iki modül)' },
+  { value: 'MILK_RECEPTION', label: 'Süt Alım' },
+  { value: 'STORAGE', label: 'Depolama' },
+];
+const moduleTypeLabel = (v: string) => MODULE_TYPES.find((m) => m.value === v)?.label ?? v;
 
 interface Props {
   initialTemplates: Template[];
@@ -27,6 +35,7 @@ export default function TemplatesClient({ initialTemplates }: Props) {
   const [uploadError, setUploadError] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [moduleType, setModuleType] = useState('GENERIC');
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function handleUpload() {
@@ -39,6 +48,7 @@ export default function TemplatesClient({ initialTemplates }: Props) {
     fd.append('file', file);
     fd.append('name', name.trim());
     fd.append('description', description.trim());
+    fd.append('moduleType', moduleType);
 
     try {
       const res = await fetch('/api/templates', { method: 'POST', body: fd });
@@ -61,6 +71,15 @@ export default function TemplatesClient({ initialTemplates }: Props) {
     if (json.success) {
       setTemplates((prev) => prev.map((t) => t.id === id ? { ...t, isActive: !isActive } : t));
     }
+  }
+
+  async function handleSetModuleType(id: string, mt: string) {
+    setTemplates((prev) => prev.map((t) => t.id === id ? { ...t, moduleType: mt } : t)); // iyimser
+    await fetch(`/api/templates/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ moduleType: mt }),
+    });
   }
 
   async function handleDelete(id: string, name: string) {
@@ -105,6 +124,14 @@ export default function TemplatesClient({ initialTemplates }: Props) {
               <input value={description} onChange={(e) => setDescription(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Opsiyonel açıklama" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Modül Tipi</label>
+              <select value={moduleType} onChange={(e) => setModuleType(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {MODULE_TYPES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+              <p className="text-[11px] text-slate-500 mt-1">Hangi modülün &quot;Teklif Oluştur&quot; ekranında görüneceğini belirler. &quot;Genel&quot; her ikisinde görünür.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">.docx Dosyası *</label>
@@ -161,6 +188,14 @@ export default function TemplatesClient({ initialTemplates }: Props) {
                   )}
                 </div>
                 <div className="flex items-center gap-2 ml-4 shrink-0">
+                  <select
+                    value={t.moduleType}
+                    onChange={(e) => handleSetModuleType(t.id, e.target.value)}
+                    title="Modül tipi"
+                    className="text-xs px-2 py-1 border border-slate-300 text-slate-600 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {MODULE_TYPES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
                   <span className="text-xs text-slate-400">{formatDate(t.createdAt)}</span>
                   <button onClick={() => handleToggle(t.id, t.isActive)}
                     className="text-xs px-2.5 py-1 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">

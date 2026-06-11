@@ -197,9 +197,9 @@ export default function ModuleDetailClient({ module, userRole, userId }: Props) 
   useEffect(() => {
     fetch('/api/templates').then((r) => r.json()).then((j) => {
       if (j.success) {
-        // Yalnızca STORAGE şablonları (varsa) — yoksa hepsi gösterilir
+        // Depolama + Genel (GENERIC) şablonlar — yoksa hepsi gösterilir
         const all = (j.data as Template[]).filter((t) => t.isActive);
-        const storage = all.filter((t) => t.moduleType === 'STORAGE');
+        const storage = all.filter((t) => t.moduleType === 'STORAGE' || t.moduleType === 'GENERIC');
         setTemplates(storage.length > 0 ? storage : all);
       }
     });
