@@ -237,8 +237,9 @@ export async function renderStorageDiagram(module: StorageModuleForDiagram): Pro
 
     const markup = renderToStaticMarkup(React.createElement(ModuleSchematic, props));
     const { png, widthEmu, heightEmu } = await svgToPng(markup);
-    // Storage teklifinde: kalan içerik 2. sayfada başlasın (boş ara sayfa oluşturmadan).
-    return { png, drawingXml: drawingParagraph(widthEmu, heightEmu, { pageBreakAfter: true }) };
+    // Diyagram satır-içi; sayfa kırma YOK. PRICING kendi pageBreakBefore'u ile yeni sayfaya
+    // geçer (burada da kırarsak iki kırılma → aralarda boş sayfa olur).
+    return { png, drawingXml: drawingParagraph(widthEmu, heightEmu) };
   } catch (e) {
     console.error('Depolama diyagramı üretilemedi, atlanıyor:', e);
     return null;
