@@ -166,6 +166,7 @@ export function buildTemplateContext(module: ModuleForDoc, customItems: PricingI
           selectedDN: calc?.selectedDN.dn ?? null,
           tanks: module.tanks.map((t) => ({
             name: t.name,
+            volume: t.volume,
             hasLSH: t.hasLSH,
             hasLSM: t.hasLSM,
             hasLSL: t.hasLSL,

@@ -28,6 +28,7 @@ import { findValvePrice, type ControlUnit } from './valveMatcher';
 import { findBySizeTokens } from './catalogSizeMatcher';
 import { getOneSizeSmallerDN } from '@/lib/calc/selectDN';
 import { matchCustomItem } from './customCatalog';
+import { findIfmFlowMeter } from './flowMeter';
 
 // Sabit ürün kodları (katalogda eqNo ile birebir pinlenen kalemler).
 const EQ = {
@@ -299,28 +300,16 @@ export function buildMilkReceptionPricing(ctx: MilkReceptionPricingContext): MRP
     }
   }
 
-  // --- Flow meter (Krohne) her hatta 1 ---
-  // KROHNE ailesi: Optiflux 6050 (electromagnetic, DN50/DN65) + Optimass 6400 (Coriolis, SMS Ø25.4/38.1/50.8)
-  const krohneItems = getPricingDataset().items.filter(
-    (it) =>
-      it.subCategory === 'FLOW METER' &&
-      (it.productType.toUpperCase() === 'KROHNE' || /Optiflux|Optimass/i.test(it.techSpec)),
-  );
+  // --- Flow meter (IFM SMF) her hatta 1 ---
   for (const line of lines) {
     if (!line.dn) continue;
     // Flow meter hat çapından bir size küçük seçilir (akış hızını ölçüm için yükseltmek üzere).
     const fmSize = getOneSizeSmallerDN(line.dn, standard);
-    const { item, matchedToken } = findBySizeTokens(krohneItems, fmSize, standard);
-    const model = item && /Optimass/i.test(item.techSpec)
-      ? 'Krohne Optimass 6400'
-      : 'Krohne Optiflux 6050';
+    const { item, model } = findIfmFlowMeter(fmSize);
     rows.push(makeRow(
       'Ölçüm', `Flow Meter ${model} — ${line.name}`, model, fmSize, 1, !!item, item,
-      item ? undefined : `Krohne ${standard} ${fmSize} katalogda yok (Optiflux DN50/DN65, Optimass SMS Ø25/38/51 mevcut)`,
+      item ? undefined : 'IFM SMF flowmetre katalogda bulunamadı',
     ));
-    if (item && matchedToken) {
-      // gelecekte token debug için
-    }
   }
 
   // --- Sampling vanaları ---

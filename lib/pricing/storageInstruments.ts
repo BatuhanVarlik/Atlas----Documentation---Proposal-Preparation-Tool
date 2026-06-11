@@ -17,8 +17,8 @@
 //   • Tank gövdesi
 
 import { getPricingDataset, findItemByEqNo, type PricingItem } from './loader';
-import { findBySizeTokens } from './catalogSizeMatcher';
 import { matchCustomItem } from './customCatalog';
+import { findIfmFlowMeter } from './flowMeter';
 
 // Sabit ürün kodları (katalogda eqNo ile birebir pinlenen kalemler).
 const EQ = {
@@ -50,6 +50,7 @@ export interface StorageInstrumentContext {
   selectedDN?: string | null;
   tanks: Array<{
     name: string;
+    volume?: number | null;   // L — Tank Pressure Transmitter (PI1700) hacme göre seçim için
     hasLSH: boolean;
     hasLSM: boolean;
     hasLSL: boolean;
@@ -114,6 +115,26 @@ function findFixedItem(filterFn: (it: PricingItem) => boolean): PricingItem | nu
   return [...items].sort((a, b) => a.listPrice - b.listPrice)[0];
 }
 
+// Tank Pressure Transmitter: PI1700 Series, tank hacmine göre ölçüm aralığı.
+// Hacimden hidrostatik basınç tahmini (silindir H/D≈1.5, süt yoğ. 1030 kg/m³, P=ρgh) →
+// bu basıncı karşılayan en küçük aralık seçilir.
+const PI1700_RANGES: { eqNo: string; maxMbar: number }[] = [
+  { eqNo: 'PI1789', maxMbar: 100 },
+  { eqNo: 'PI1708', maxMbar: 250 },
+  { eqNo: 'PI1707', maxMbar: 1000 },
+  { eqNo: 'PI1706', maxMbar: 2500 },
+];
+
+function findTankPressureTransmitter(volumeL: number | null | undefined): PricingItem | null {
+  if (!volumeL || volumeL <= 0) return findItemByEqNo('PI1707'); // en yaygın aralık (varsayılan)
+  const vM3 = volumeL / 1000;
+  const d = Math.cbrt(vM3 / 1.178); // V = π/4·D²·H, H=1.5D → V=1.178·D³
+  const h = 1.5 * d;
+  const pMbar = (1030 * 9.81 * h) / 100; // Pa → mbar
+  const range = PI1700_RANGES.find((r) => pMbar <= r.maxMbar) ?? PI1700_RANGES[PI1700_RANGES.length - 1];
+  return findItemByEqNo(range.eqNo);
+}
+
 // ============ Asıl builder ============
 
 export function buildStorageInstrumentItems(ctx: StorageInstrumentContext): StorageInstrumentItem[] {
@@ -146,7 +167,8 @@ export function buildStorageInstrumentItems(ctx: StorageInstrumentContext): Stor
       rows.push(makeRow('Tank Sensörleri', `TT (Sıcaklık PT100) — ${tank.name}`, 'IFM PT100 TA2512', null, 1, !!tankTempSensor, tankTempSensor));
     }
     if (tank.hasPT) {
-      rows.push(makeRow('Tank Sensörleri', `PT (Basınç) — ${tank.name}`, 'PI1700 Pressure Transmitter', null, 1, !!pressTransmitter, pressTransmitter));
+      const tankPt = findTankPressureTransmitter(tank.volume); // hacme göre PI1700 aralığı
+      rows.push(makeRow('Tank Sensörleri', `PT (Basınç) — ${tank.name}`, tankPt ? `PI1700 ${tankPt.eqNo}` : 'PI1700', null, 1, !!tankPt, tankPt));
     }
     if (tank.hasProximitySwitch) {
       rows.push(makeRow('Tank Sensörleri', `Proximity Switch GI701S — ${tank.name}`, 'GI701S', null, 1, !!proxSwitch, proxSwitch));
@@ -177,22 +199,13 @@ export function buildStorageInstrumentItems(ctx: StorageInstrumentContext): Stor
     ));
   }
 
-  // --- Boşaltım hatları: Flow meter + PT ---
-  // KROHNE: Optiflux 6050 (electromagnetic, DN50/65) + Optimass 6400 (Coriolis, SMS Ø25/38/51)
-  const krohneItems = getPricingDataset().items.filter(
-    (it) =>
-      it.subCategory === 'FLOW METER' &&
-      (it.productType.toUpperCase() === 'KROHNE' || /Optiflux|Optimass/i.test(it.techSpec)),
-  );
+  // --- Boşaltım hatları: Flow meter (IFM SMF) + PT ---
   for (const line of dischargeLines) {
     if (line.hasFlowMeter && line.flowMeterSize) {
-      const { item } = findBySizeTokens(krohneItems, line.flowMeterSize, standard);
-      const model = item && /Optimass/i.test(item.techSpec)
-        ? 'Krohne Optimass 6400'
-        : 'Krohne Optiflux 6050';
+      const { item, model } = findIfmFlowMeter(line.flowMeterSize);
       rows.push(makeRow(
         'Ölçüm', `Flow Meter ${model} — ${line.name}`, model, line.flowMeterSize, 1, !!item, item,
-        item ? undefined : `Krohne ${standard} ${line.flowMeterSize} katalogda yok (Optiflux DN50/DN65, Optimass SMS Ø25/38/51 mevcut)`,
+        item ? undefined : 'IFM SMF flowmetre katalogda bulunamadı',
       ));
     }
     if (line.hasPressureTransmitter) {
