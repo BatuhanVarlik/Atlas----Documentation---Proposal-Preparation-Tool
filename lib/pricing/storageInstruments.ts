@@ -37,6 +37,8 @@ export interface StorageInstrumentItem {
 
 export interface StorageInstrumentContext {
   standard: 'DIN' | 'SMS';
+  /** Modülün seçilen hat çapı — agitatör (Static Mixer TPX) boyutunu belirler */
+  selectedDN?: string | null;
   tanks: Array<{
     name: string;
     hasLSH: boolean;
@@ -103,25 +105,32 @@ function findFixedItem(filterFn: (it: PricingItem) => boolean): PricingItem | nu
   return [...items].sort((a, b) => a.listPrice - b.listPrice)[0];
 }
 
-// Agitator: motor kW'a göre en uygun TPM modelini bulur
-function findAgitatorForKw(kw: number | null): PricingItem | null {
-  if (kw == null || kw <= 0) {
-    // Bilinmiyorsa en küçük TPM (TPM+1 7,5kW)
-    return findFixedItem((it) => /TPM\+1\s+Mixer/i.test(it.productType));
+// Hat çapı stringinden sayısal boyutu çıkar ("DN50" → 50, "63 SMS (2\"1/2)" → 63).
+function parseDnNumber(size: string | null, standard: 'DIN' | 'SMS'): number | null {
+  if (!size) return null;
+  if (standard === 'DIN') {
+    const m = size.match(/DN\s*(\d+)/i);
+    return m ? parseInt(m[1], 10) : null;
   }
-  let targetModel: RegExp;
-  if (kw <= 7.5) targetModel = /TPM\+1\s+Mixer/i;
-  else if (kw <= 15) targetModel = /TPM\+2\s+Mixer/i;
-  else targetModel = /TPM\+3\s+Mixer/i;
-  // Belirli kW'a en yakın eşleşme
-  const candidates = getPricingDataset().items.filter((it) => targetModel.test(it.productType));
+  const m = size.match(/^(\d+(?:[.,]\d+)?)\s*SMS/i);
+  return m ? parseFloat(m[1].replace(',', '.')) : null;
+}
+
+// Agitatör/Mixer: standart (SMS-DS / DIN TPX Mixer) + modül hat çapına en yakın Static Mixer TPX.
+// SMS büyük boyutlar techSpec'te "DS" der; bu yüzden boyut techSpec'teki "…mm" sayısından alınır.
+function findStaticMixer(standard: 'DIN' | 'SMS', selectedDN: string | null): PricingItem | null {
+  const productType = standard === 'DIN' ? 'DIN TPX Mixer' : 'SMS-DS TPX Mixer';
+  const candidates = getPricingDataset().items.filter(
+    (it) => it.productType === productType && /Static Mixer/i.test(it.machineType),
+  );
   if (candidates.length === 0) return null;
+  const target = parseDnNumber(selectedDN, standard);
+  if (target == null) return [...candidates].sort((a, b) => a.listPrice - b.listPrice)[0];
   let best: { item: PricingItem; diff: number } | null = null;
   for (const it of candidates) {
-    const m = it.techSpec.match(/(\d+(?:[.,]\d+)?)\s*kW/i);
+    const m = it.techSpec.match(/(\d+(?:\.\d+)?)\s*mm/i);
     if (!m) continue;
-    const itemKw = parseFloat(m[1].replace(',', '.'));
-    const diff = Math.abs(itemKw - kw);
+    const diff = Math.abs(parseFloat(m[1]) - target);
     if (!best || diff < best.diff) best = { item: it, diff };
   }
   return best?.item ?? candidates[0];
@@ -181,14 +190,13 @@ export function buildStorageInstrumentItems(ctx: StorageInstrumentContext): Stor
     }
   }
 
-  // --- Agitator (Mixer) ---
+  // --- Agitator (Static Mixer TPX) — standart + hat çapına göre; tüm tanklarda aynı ---
+  const mixer = findStaticMixer(standard, ctx.selectedDN ?? null);
   for (const tank of tanks) {
     if (!tank.hasAgitator) continue;
-    const item = findAgitatorForKw(tank.agitatorMotorKw);
-    const kwSpec = tank.agitatorMotorKw != null ? `${tank.agitatorMotorKw} kW` : 'kW belirsiz';
     rows.push(makeRow(
-      'Agitator', `Agitator — ${tank.name} (${kwSpec})`, 'TPM+ Venturi Mixer', null, 1, !!item, item,
-      item ? undefined : 'TPM serisinde uygun kW eşleşmesi bulunamadı',
+      'Agitator', `Static Mixer TPX — ${tank.name}`, 'Static Mixer TPX', ctx.selectedDN ?? null, 1, !!mixer, mixer,
+      mixer ? undefined : 'Static Mixer TPX katalogda bulunamadı',
     ));
   }
 

@@ -209,6 +209,7 @@ export default async function ModulePreviewPage({ params }: Props) {
   const instrumentRows = (moduleData.tanks.length > 0 || dl.length > 0)
     ? buildStorageInstrumentItems({
         standard: moduleData.standard as 'DIN' | 'SMS',
+        selectedDN: calc?.selectedDN.dn ?? null,
         tanks: moduleData.tanks.map((t) => ({
           name: t.name,
           hasLSH: t.hasLSH,
