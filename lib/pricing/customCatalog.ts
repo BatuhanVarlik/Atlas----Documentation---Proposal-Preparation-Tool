@@ -3,13 +3,14 @@
 import type { PricingItem } from './loader';
 import { findBySizeTokens, type Standard } from './catalogSizeMatcher';
 
-export const CUSTOM_KINDS = ['MILK_CLARIFIER', 'PHE', 'PUMP', 'OTHER'] as const;
+export const CUSTOM_KINDS = ['MILK_CLARIFIER', 'PHE', 'PUMP', 'AGITATOR', 'OTHER'] as const;
 export type CustomKind = (typeof CUSTOM_KINDS)[number];
 
 export const CUSTOM_KIND_LABELS: Record<CustomKind, string> = {
   MILK_CLARIFIER: 'Milk Clarifier (Separatör)',
   PHE: 'Plate Heat Exchanger (PHE)',
   PUMP: 'Pompa (W+ vb.)',
+  AGITATOR: 'Karıştırıcı (Agitator)',
   OTHER: 'Diğer',
 };
 

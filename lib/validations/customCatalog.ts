@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const createCustomCatalogSchema = z.object({
-  kind: z.enum(['MILK_CLARIFIER', 'PHE', 'PUMP', 'OTHER']),
+  kind: z.enum(['MILK_CLARIFIER', 'PHE', 'PUMP', 'AGITATOR', 'OTHER']),
   name: z.string().min(1, 'Ürün adı zorunludur').max(300),
   standard: z.enum(['', 'DIN', 'SMS']).default(''),
   size: z.string().max(60).nullable().optional(),

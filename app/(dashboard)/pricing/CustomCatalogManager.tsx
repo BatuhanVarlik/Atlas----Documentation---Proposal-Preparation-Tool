@@ -17,6 +17,7 @@ const KINDS: { value: string; label: string }[] = [
   { value: 'MILK_CLARIFIER', label: 'Milk Clarifier (Separatör)' },
   { value: 'PHE', label: 'Plate Heat Exchanger (PHE)' },
   { value: 'PUMP', label: 'Pompa (W+ vb.)' },
+  { value: 'AGITATOR', label: 'Karıştırıcı (Agitator)' },
   { value: 'OTHER', label: 'Diğer' },
 ];
 const KIND_LABEL: Record<string, string> = Object.fromEntries(KINDS.map((k) => [k.value, k.label]));

@@ -32,3 +32,8 @@ export interface PricingDataset {
 export function getPricingDataset(): PricingDataset {
   return data as PricingDataset;
 }
+
+/** Katalogda eqNo (ürün kodu) ile birebir kalem bulur. Belirli ürün pinlemek için. */
+export function findItemByEqNo(eqNo: string): PricingItem | null {
+  return getPricingDataset().items.find((it) => it.eqNo === eqNo) ?? null;
+}

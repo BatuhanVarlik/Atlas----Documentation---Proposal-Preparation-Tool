@@ -16,9 +16,18 @@
 //   • W+ pompalar (CIP return pump, discharge pump)
 //   • Tank gövdesi
 
-import { getPricingDataset, type PricingItem } from './loader';
+import { getPricingDataset, findItemByEqNo, type PricingItem } from './loader';
 import { findBySizeTokens } from './catalogSizeMatcher';
 import { matchCustomItem } from './customCatalog';
+
+// Sabit ürün kodları (katalogda eqNo ile birebir pinlenen kalemler).
+const EQ = {
+  HIGH_LEVEL: 'NVS-166/200-8/M/H/X/M12', // High Level Sensor (LSH/LSM)
+  LOW_LEVEL: 'LMT100',                    // IFM Low Level Sensor (LSL)
+  TANK_PT100: 'TA2512',                   // Tank sıcaklık sensörü PT100 (TT)
+  PROXIMITY: 'GI701S',                    // Inductive Safety Sensor
+  PROXIMITY_RELAY: 'G1501S',              // Proximity ile zorunlu Safety Relay
+} as const;
 
 export interface StorageInstrumentItem {
   category: string;
@@ -105,76 +114,44 @@ function findFixedItem(filterFn: (it: PricingItem) => boolean): PricingItem | nu
   return [...items].sort((a, b) => a.listPrice - b.listPrice)[0];
 }
 
-// Hat çapı stringinden sayısal boyutu çıkar ("DN50" → 50, "63 SMS (2\"1/2)" → 63).
-function parseDnNumber(size: string | null, standard: 'DIN' | 'SMS'): number | null {
-  if (!size) return null;
-  if (standard === 'DIN') {
-    const m = size.match(/DN\s*(\d+)/i);
-    return m ? parseInt(m[1], 10) : null;
-  }
-  const m = size.match(/^(\d+(?:[.,]\d+)?)\s*SMS/i);
-  return m ? parseFloat(m[1].replace(',', '.')) : null;
-}
-
-// Agitatör/Mixer: standart (SMS-DS / DIN TPX Mixer) + modül hat çapına en yakın Static Mixer TPX.
-// SMS büyük boyutlar techSpec'te "DS" der; bu yüzden boyut techSpec'teki "…mm" sayısından alınır.
-function findStaticMixer(standard: 'DIN' | 'SMS', selectedDN: string | null): PricingItem | null {
-  const productType = standard === 'DIN' ? 'DIN TPX Mixer' : 'SMS-DS TPX Mixer';
-  const candidates = getPricingDataset().items.filter(
-    (it) => it.productType === productType && /Static Mixer/i.test(it.machineType),
-  );
-  if (candidates.length === 0) return null;
-  const target = parseDnNumber(selectedDN, standard);
-  if (target == null) return [...candidates].sort((a, b) => a.listPrice - b.listPrice)[0];
-  let best: { item: PricingItem; diff: number } | null = null;
-  for (const it of candidates) {
-    const m = it.techSpec.match(/(\d+(?:\.\d+)?)\s*mm/i);
-    if (!m) continue;
-    const diff = Math.abs(parseFloat(m[1]) - target);
-    if (!best || diff < best.diff) best = { item: it, diff };
-  }
-  return best?.item ?? candidates[0];
-}
-
 // ============ Asıl builder ============
 
 export function buildStorageInstrumentItems(ctx: StorageInstrumentContext): StorageInstrumentItem[] {
   const rows: StorageInstrumentItem[] = [];
   const { standard, tanks, dischargeLines } = ctx;
+  const customItems = ctx.customItems ?? [];
+  const noMatchReason = 'Katalogda karşılığı yok — Özel Katalog\'a ekleyin veya elle fiyat girin';
 
-  // --- Tank sensörleri ---
-  // Conductive Level Switch NVS (en ucuz HIGH LEVEL SENSOR satırı)
-  const levelSwitch = findFixedItem(
-    (it) => it.subCategory === 'HIGH LEVEL SENSOR' && /Conductive Level Switch/i.test(it.techSpec),
-  );
-  const pt100Sensor = findFixedItem(
-    (it) => it.subCategory === 'Pt100' && /Temperature Sensor/i.test(it.techSpec) && !/Infrared/i.test(it.techSpec),
-  );
+  // --- Tank sensörleri (katalogda eqNo ile pinlenmiş kesin ürünler) ---
+  const highLevelSwitch = findItemByEqNo(EQ.HIGH_LEVEL);   // LSH / LSM
+  const lowLevelSwitch = findItemByEqNo(EQ.LOW_LEVEL);     // LSL (IFM LMT100)
+  const tankTempSensor = findItemByEqNo(EQ.TANK_PT100);    // TT (PT100 TA2512)
   const pressTransmitter = findFixedItem(
     (it) => it.subCategory === 'PRESSURE TRANSMITTER' && /PI1700/i.test(it.productType),
   );
-  const proxSwitch = findFixedItem(
-    (it) => it.subCategory === 'PROXIMITY SWITCH' && /Inductive Sensor/i.test(it.techSpec) && it.listPrice > 30,
-  );
+  const proxSwitch = findItemByEqNo(EQ.PROXIMITY);         // GI701S
+  const proxRelay = findItemByEqNo(EQ.PROXIMITY_RELAY);    // G1501S (zorunlu)
 
   for (const tank of tanks) {
     if (tank.hasLSH) {
-      rows.push(makeRow('Tank Sensörleri', `LSH — ${tank.name}`, 'Conductive Level Switch NVS', null, 1, !!levelSwitch, levelSwitch));
+      rows.push(makeRow('Tank Sensörleri', `LSH (High Level) — ${tank.name}`, 'NVS-166 High Level Sensor', null, 1, !!highLevelSwitch, highLevelSwitch));
     }
     if (tank.hasLSM) {
-      rows.push(makeRow('Tank Sensörleri', `LSM — ${tank.name}`, 'Conductive Level Switch NVS', null, 1, !!levelSwitch, levelSwitch));
+      rows.push(makeRow('Tank Sensörleri', `LSM (Mid Level) — ${tank.name}`, 'NVS-166 High Level Sensor', null, 1, !!highLevelSwitch, highLevelSwitch));
     }
     if (tank.hasLSL) {
-      rows.push(makeRow('Tank Sensörleri', `LSL — ${tank.name}`, 'Conductive Level Switch NVS', null, 1, !!levelSwitch, levelSwitch));
+      rows.push(makeRow('Tank Sensörleri', `LSL (Low Level) — ${tank.name}`, 'IFM LMT100 Low Level Sensor', null, 1, !!lowLevelSwitch, lowLevelSwitch));
     }
     if (tank.hasTT) {
-      rows.push(makeRow('Tank Sensörleri', `TT (Sıcaklık) — ${tank.name}`, 'IFM PT100', null, 1, !!pt100Sensor, pt100Sensor));
+      rows.push(makeRow('Tank Sensörleri', `TT (Sıcaklık PT100) — ${tank.name}`, 'IFM PT100 TA2512', null, 1, !!tankTempSensor, tankTempSensor));
     }
     if (tank.hasPT) {
       rows.push(makeRow('Tank Sensörleri', `PT (Basınç) — ${tank.name}`, 'PI1700 Pressure Transmitter', null, 1, !!pressTransmitter, pressTransmitter));
     }
     if (tank.hasProximitySwitch) {
-      rows.push(makeRow('Tank Sensörleri', `Proximity Switch — ${tank.name}`, 'Inductive Proximity', null, 1, !!proxSwitch, proxSwitch));
+      rows.push(makeRow('Tank Sensörleri', `Proximity Switch GI701S — ${tank.name}`, 'GI701S', null, 1, !!proxSwitch, proxSwitch));
+      // Proximity switch varsa Safety Relay G1501S zorunlu.
+      rows.push(makeRow('Tank Sensörleri', `Safety Relay G1501S (proximity zorunlu) — ${tank.name}`, 'G1501S', null, 1, !!proxRelay, proxRelay));
     }
   }
 
@@ -190,13 +167,13 @@ export function buildStorageInstrumentItems(ctx: StorageInstrumentContext): Stor
     }
   }
 
-  // --- Agitator (Static Mixer TPX) — standart + hat çapına göre; tüm tanklarda aynı ---
-  const mixer = findStaticMixer(standard, ctx.selectedDN ?? null);
+  // --- Agitator (Karıştırıcı) — katalogda yok; Özel Katalog'dan (AGITATOR) çekilir ---
   for (const tank of tanks) {
     if (!tank.hasAgitator) continue;
+    const item = matchCustomItem(customItems, 'AGITATOR', { standard });
     rows.push(makeRow(
-      'Agitator', `Static Mixer TPX — ${tank.name}`, 'Static Mixer TPX', ctx.selectedDN ?? null, 1, !!mixer, mixer,
-      mixer ? undefined : 'Static Mixer TPX katalogda bulunamadı',
+      'Agitator', `Karıştırıcı (Agitator) — ${tank.name}`, 'Agitator', null, 1, !!item, item,
+      item ? undefined : noMatchReason,
     ));
   }
 
@@ -226,8 +203,6 @@ export function buildStorageInstrumentItems(ctx: StorageInstrumentContext): Stor
   }
 
   // --- Katalogda karşılığı olmayan pompalar (Özel Katalog'dan çekilir, yoksa elle) ---
-  const customItems = ctx.customItems ?? [];
-  const noMatchReason = 'Katalogda karşılığı yok — Özel Katalog\'a ekleyin veya elle fiyat girin';
   for (const line of dischargeLines) {
     if (line.pumpModel) {
       const item = matchCustomItem(customItems, 'PUMP', { standard, nameContains: line.pumpModel });

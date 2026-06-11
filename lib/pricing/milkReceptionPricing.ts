@@ -23,11 +23,20 @@
 //   • Pompalar (W+ serisi modeller katalogda yok)
 //   • LSH / LSL level sensor (genel sınıfı: proximity ile yedeklenebilir)
 
-import { getPricingDataset, type PricingItem } from './loader';
+import { getPricingDataset, findItemByEqNo, type PricingItem } from './loader';
 import { findValvePrice, type ControlUnit } from './valveMatcher';
 import { findBySizeTokens } from './catalogSizeMatcher';
 import { getOneSizeSmallerDN } from '@/lib/calc/selectDN';
 import { matchCustomItem } from './customCatalog';
+
+// Sabit ürün kodları (katalogda eqNo ile birebir pinlenen kalemler).
+const EQ = {
+  LINE_PT100: 'TA2812',     // Hat/PHE sıcaklık sensörü PT100 (clamp bağlantılı)
+  THERMOMETER: '90000200',  // Bimethal Termometre
+  MANOMETER: '81432193',    // A300G.100 Manometre
+  PROXIMITY: 'GI701S',      // Inductive Safety Sensor
+  PROXIMITY_RELAY: 'G1501S',// Proximity ile zorunlu Safety Relay
+} as const;
 
 export interface MRPricedItem {
   /** Tablodaki gruplama etiketi (örn: "Vanalar", "Filter Ünite", "Sensörler") */
@@ -207,50 +216,46 @@ export function buildMilkReceptionPricing(ctx: MilkReceptionPricingContext): MRP
     }
   }
 
-  // --- Sensörler: hat başına PT100 ---
+  // --- Sensörler: hat başına PT100 (TA2812 — clamp bağlantılı, hat tipi) ---
   for (const line of lines) {
-    const pt100 = findFixedItem(
-      (it) => it.subCategory === 'Pt100' && /Temperature Sensor/i.test(it.techSpec) && !/Infrared/i.test(it.techSpec),
-    );
+    const pt100 = findItemByEqNo(EQ.LINE_PT100);
     rows.push(makeRow(
-      'Sensörler', `Sıcaklık Sensörü PT100 (hat) — ${line.name}`, 'IFM PT100', null, 1, !!pt100, pt100,
+      'Sensörler', `Sıcaklık Sensörü PT100 (hat) — ${line.name}`, 'IFM PT100 TA2812', null, 1, !!pt100, pt100,
     ));
   }
 
   // --- PHE içi sıcaklık + ice water sensörleri ---
   for (const line of lines) {
     if (!line.hasPhe) continue;
-    // PHE çıkış PT100 (sabit)
-    const phePt = findFixedItem(
-      (it) => it.subCategory === 'Pt100' && /Temperature Sensor/i.test(it.techSpec) && !/Infrared/i.test(it.techSpec),
-    );
+    // PHE çıkış PT100 (TA2812 — hat tipi)
+    const phePt = findItemByEqNo(EQ.LINE_PT100);
     rows.push(makeRow(
-      'PHE', `PHE çıkış PT100 — ${line.name}`, 'IFM PT100', null, 1, !!phePt, phePt,
+      'PHE', `PHE çıkış PT100 — ${line.name}`, 'IFM PT100 TA2812', null, 1, !!phePt, phePt,
     ));
 
     // Ice water giriş — kullanıcı seçimi
     if (line.pheIceWaterTempSensorType === 'PT100') {
       rows.push(makeRow(
-        'PHE', `Ice Water giriş PT100 — ${line.name}`, 'IFM PT100', null, 1, !!phePt, phePt,
+        'PHE', `Ice Water giriş PT100 — ${line.name}`, 'IFM PT100 TA2812', null, 1, !!phePt, phePt,
       ));
     } else if (line.pheIceWaterTempSensorType === 'THERMOMETER') {
-      const therm = findFixedItem((it) => it.subCategory === 'THERMOMETER' && /Bimethal/i.test(it.techSpec));
+      const therm = findItemByEqNo(EQ.THERMOMETER);
       rows.push(makeRow(
-        'PHE', `Ice Water giriş Termometre — ${line.name}`, 'Bimethal', null, 1, !!therm, therm,
+        'PHE', `Ice Water giriş Termometre — ${line.name}`, 'Bimethal 90000200', null, 1, !!therm, therm,
       ));
     }
 
     // Ice water dönüş termometresi (sabit)
-    const thermReturn = findFixedItem((it) => it.subCategory === 'THERMOMETER' && /Bimethal/i.test(it.techSpec));
+    const thermReturn = findItemByEqNo(EQ.THERMOMETER);
     rows.push(makeRow(
-      'PHE', `Ice Water dönüş Termometre — ${line.name}`, 'Bimethal', null, 1, !!thermReturn, thermReturn,
+      'PHE', `Ice Water dönüş Termometre — ${line.name}`, 'Bimethal 90000200', null, 1, !!thermReturn, thermReturn,
     ));
 
     // Ice water giriş basınç ölçer
     if (line.pheIceWaterPressureMeterType === 'MANOMETER') {
-      const m = findFixedItem((it) => it.subCategory === 'MANOMETER' && /A300G\.100/i.test(it.techSpec) && /Clamp/i.test(it.techSpec));
+      const m = findItemByEqNo(EQ.MANOMETER);
       rows.push(makeRow(
-        'PHE', `Ice Water giriş Manometer — ${line.name}`, 'A300G.100', null, 1, !!m, m,
+        'PHE', `Ice Water giriş Manometer — ${line.name}`, 'A300G.100 81432193', null, 1, !!m, m,
       ));
     } else if (line.pheIceWaterPressureMeterType === 'PRESSURE_TRANSMITTER') {
       const pt = findFixedItem((it) => it.subCategory === 'PRESSURE TRANSMITTER' && /PI1700/i.test(it.productType));
@@ -282,9 +287,9 @@ export function buildMilkReceptionPricing(ctx: MilkReceptionPricingContext): MRP
     // Filter ünite önü/arkası basınç ölçer (1 unit→2 adet, 2 unit→3 adet)
     const pmCount = line.filterUnitCount === 1 ? 2 : 3;
     if (line.pressureMeterType === 'MANOMETER') {
-      const m = findFixedItem((it) => it.subCategory === 'MANOMETER' && /A300G\.100/i.test(it.techSpec) && /Clamp/i.test(it.techSpec));
+      const m = findItemByEqNo(EQ.MANOMETER);
       rows.push(makeRow(
-        'Filter Ünite', `Filter Basınç Ölçer Manometer — ${line.name}`, 'A300G.100', null, pmCount, !!m, m,
+        'Filter Ünite', `Filter Basınç Ölçer Manometer — ${line.name}`, 'A300G.100 81432193', null, pmCount, !!m, m,
       ));
     } else {
       const pt = findFixedItem((it) => it.subCategory === 'PRESSURE TRANSMITTER' && /PI1700/i.test(it.productType));
@@ -351,13 +356,15 @@ export function buildMilkReceptionPricing(ctx: MilkReceptionPricingContext): MRP
     ));
   }
 
-  // --- Panel (proximity switch içerir) — hat sayısı kadar ---
+  // --- Panel (proximity switch içerir) — hat sayısı kadar + zorunlu Safety Relay ---
   if (lines.length > 0) {
-    const prox = findFixedItem(
-      (it) => it.subCategory === 'PROXIMITY SWITCH' && /Inductive Sensor/i.test(it.techSpec) && it.listPrice > 30,
-    );
+    const prox = findItemByEqNo(EQ.PROXIMITY);     // GI701S
+    const proxRelay = findItemByEqNo(EQ.PROXIMITY_RELAY); // G1501S (zorunlu)
     rows.push(makeRow(
-      'Ekipman', `CIP Paneli Proximity Switch × ${lines.length}`, 'Proximity Switch', null, lines.length, !!prox, prox,
+      'Ekipman', `CIP Paneli Proximity Switch GI701S × ${lines.length}`, 'GI701S', null, lines.length, !!prox, prox,
+    ));
+    rows.push(makeRow(
+      'Ekipman', `Safety Relay G1501S (proximity zorunlu) × ${lines.length}`, 'G1501S', null, lines.length, !!proxRelay, proxRelay,
     ));
   }
 
