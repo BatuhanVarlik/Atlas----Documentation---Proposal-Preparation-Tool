@@ -88,16 +88,16 @@ export default function PumpSelectionClient() {
             <label className="block text-xs font-medium text-slate-600 mb-1">Debi Q (m³/h)</label>
             <input type="number" step="0.1" value={q} onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && compute()}
-              className="w-full px-3 py-2.5 text-lg font-semibold border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full px-3 py-2.5 text-lg font-semibold bg-white text-slate-800 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Basınç (bar)</label>
             <input type="number" step="0.01" value={bar} onChange={(e) => setBar(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && compute()}
-              className="w-full px-3 py-2.5 text-lg font-semibold border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full px-3 py-2.5 text-lg font-semibold bg-white text-slate-800 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <button onClick={compute} disabled={loading}
-            className="px-6 py-2.5 bg-primary text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50">
+            className="px-6 py-2.5 bg-secondary hover:bg-secondary-container text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50">
             {loading ? 'Hesaplanıyor…' : 'Hesapla'}
           </button>
         </div>
@@ -106,7 +106,7 @@ export default function PumpSelectionClient() {
 
       {/* Ana öneri */}
       {best ? (
-        <div className="bg-[#13263f] text-white rounded-xl p-5">
+        <div className="bg-[#0a2147] text-white rounded-xl p-5">
           <div className="text-[11px] tracking-wide text-slate-300 font-semibold">ANA ÖNERİ</div>
           <h2 className="text-2xl font-bold mt-1">{best.name}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-4">
