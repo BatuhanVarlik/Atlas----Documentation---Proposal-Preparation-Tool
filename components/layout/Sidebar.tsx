@@ -64,6 +64,16 @@ function RevisionsIcon() {
   );
 }
 
+function PumpIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="13" r="6" />
+      <path d="M11 13V7a3 3 0 0 1 3-3h1M11 9h5" />
+      <path d="M17 19l3 3M19 17l3 3" />
+    </svg>
+  );
+}
+
 function PricingIcon() {
   return (
     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -88,6 +98,7 @@ const NAV_ITEMS = [
   { href: '/modules', label: 'Modüller', Icon: ModulesIcon },
   { href: '/revisions', label: 'Revizyon Geçmişi', Icon: RevisionsIcon },
   { href: '/pricing', label: 'Fiyat Kataloğu', Icon: PricingIcon },
+  { href: '/pump-selection', label: 'Pompa Seçimi', Icon: PumpIcon },
   { href: '/templates', label: 'Şablonlar', Icon: TemplatesIcon },
   { href: '/users', label: 'Kullanıcılar', Icon: UsersIcon },
 ];
