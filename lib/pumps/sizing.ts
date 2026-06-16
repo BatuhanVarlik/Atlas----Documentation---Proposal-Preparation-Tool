@@ -167,18 +167,17 @@ export function evaluate(p: Pump, q: number, target: number): PumpResult {
   const req = requiredImpeller(withKw, target);
   const calcD = req.calc;
 
-  // Bilgi amaçlı: hesaplanan çapa en yakın katalog impeller (seçim artık buna göre DEĞİL).
-  const nearest = withKw
+  // SEÇİM: hesaplanan çapı en yakın katalog impellerine YUVARLA (üste zorlamadan; alta da
+  // yuvarlanabilir). Örn. calc=163, impellerler 160/170 → 160; 160/165/170 → 165.
+  const selected = withKw
     .map((c) => ({ ...c, diffD: Math.abs(c.d - calcD) }))
     .sort((a, b) => a.diffD - b.diffD || a.kw - b.kw || a.d - b.d)[0];
 
-  // SEÇİM: hedef basıncı karşılayan en küçük impeller. kW çapla arttığı için bu, hedefi
-  // EN DÜŞÜK kW ile karşılayan impellerdir. (ok pompalarda target<=maxP → daima vardır.)
-  const safeList = withKw.filter((c) => c.p >= target).sort((a, b) => a.d - b.d || a.kw - b.kw);
-  const selected = safeList[0] ?? withKw.slice().sort((a, b) => b.p - a.p)[0];
+  // Bilgi amaçlı: hedef basıncı tam karşılayan en küçük (güvenli üst) impeller.
+  const safe = withKw.filter((c) => c.p >= target).sort((a, b) => a.d - b.d || a.kw - b.kw)[0] ?? null;
 
   const lowPressure = target < minP;
-  const mode = lowPressure ? 'Fazla basınç' : 'Uygun';
+  const mode = lowPressure ? 'Fazla basınç' : selected.p >= target ? 'Uygun' : 'Hedefin biraz altında';
 
   const margin = selected.p - target;
   const npsh = npshRange(p, selected.d, q);
@@ -188,13 +187,13 @@ export function evaluate(p: Pump, q: number, target: number): PumpResult {
     d: selected.d, p: selected.p, diff: Math.abs(margin), signed: margin, kw: selected.kw,
     npsh: npsh.design, npshText: npsh.text, minP, maxP,
     calcD,
-    nearestD: nearest.d, nearestP: nearest.p,
-    safeD: selected.d, safeP: selected.p,
+    nearestD: selected.d, nearestP: selected.p,
+    safeD: safe ? safe.d : null, safeP: safe ? safe.p : null,
     mode, lowPressure,
   };
 }
 
-// Karar mekanizması: ÖNCELİK EN DÜŞÜK kW (hedefi karşılayan seçilen impellerde).
+// Karar mekanizması: ÖNCELİK EN DÜŞÜK kW (yuvarlanarak seçilen impellerin kW'ı).
 // Skor mekanizması kaldırıldı. Eşit kW'da hedefe yakınlık, sonra küçük çap önceliklidir.
 export function rankResults(results: PumpResult[]): PumpResult[] {
   const ok = results.filter((r) => r.ok);

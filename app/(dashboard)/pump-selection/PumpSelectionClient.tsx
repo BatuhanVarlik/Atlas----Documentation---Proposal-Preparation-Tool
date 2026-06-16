@@ -34,7 +34,7 @@ function marginText(r: PumpDto): string {
 }
 function statusClass(r: PumpDto): string {
   if (!r.ok) return 'text-red-600';
-  if (r.lowPressure) return 'text-amber-600';
+  if (r.lowPressure || (r.signed ?? 0) < 0) return 'text-amber-600';
   return 'text-emerald-600';
 }
 
@@ -119,7 +119,7 @@ export default function PumpSelectionClient() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 text-xs">
             <div className="bg-white/10 rounded-lg p-3"><span className="text-slate-300">Margin:</span><br />{marginText(best)}</div>
             <div className="bg-white/10 rounded-lg p-3"><span className="text-slate-300">Durum:</span><br />{best.mode ?? '—'}</div>
-            <div className="bg-white/10 rounded-lg p-3"><span className="text-slate-300">Hesaba en yakın imp.:</span><br />{best.nearestD ?? '—'} mm</div>
+            <div className="bg-white/10 rounded-lg p-3"><span className="text-slate-300">Güvenli üst imp.:</span><br />{best.safeD ?? '—'} mm</div>
           </div>
         </div>
       ) : !loading && (
@@ -138,7 +138,7 @@ export default function PumpSelectionClient() {
                 <div key={r.name} className="border border-slate-200 rounded-lg p-3">
                   <div className="flex items-center justify-between">
                     <b className="text-sm text-slate-800">{i + 1}. {r.name}</b>
-                    <span className={`text-[11px] font-semibold ${r.lowPressure ? 'text-amber-600' : 'text-emerald-600'}`}>{r.mode}</span>
+                    <span className={`text-[11px] font-semibold ${statusClass(r)}`}>{r.mode}</span>
                   </div>
                   <div className="text-[11px] text-slate-500 mt-1">
                     {fmt(r.kw)} kW · Seçilen {r.d ?? '—'} mm · Hesaplanan {fmt(r.calcD, 1)} mm · NPSH {r.npshText} m · {fmt(r.p)} bar · {marginText(r)}
