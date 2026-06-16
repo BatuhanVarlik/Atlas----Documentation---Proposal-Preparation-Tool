@@ -171,19 +171,22 @@ export function evaluate(p: Pump, q: number, target: number): PumpResult {
   const req = requiredImpeller(withKw, target);
   const calcD = req.calc;
 
-  // Bilgi amaçlı: hesaplanan çapa en yakın katalog impeller.
-  const nearest = withKw
+  // SEÇİM: hesaplanan çapa EN YAKIN katalog impeller (ara impellerler dahil; alta da yuvarlanır).
+  // Örn. calc=166.5 → 165 (170 değil). Hiç impeller hesaba uymuyorsa en yakın yine seçilir.
+  const safe = withKw.filter((c) => c.p >= target).sort((a, b) => a.d - b.d || a.kw - b.kw)[0] ?? null;
+  const selected = withKw
     .map((c) => ({ ...c, diffD: Math.abs(c.d - calcD) }))
     .sort((a, b) => a.diffD - b.diffD || a.kw - b.kw || a.d - b.d)[0];
 
-  // SEÇİM: hedef basıncı KARŞILAYAN en küçük impeller (kW çapla arttığı için hedefi en düşük
-  // kW ile sağlayan nokta). Hiçbiri karşılamıyorsa (tolerans dahilinde) en büyük impeller = sınırda.
-  const safe = withKw.filter((c) => c.p >= target).sort((a, b) => a.d - b.d || a.kw - b.kw)[0] ?? null;
-  const selected = safe ?? withKw.slice().sort((a, b) => b.p - a.p)[0];
-
   const lowPressure = target < minP;
-  const overMax = !safe; // hedefi karşılayan impeller yok → tolerans dahilinde, en büyük impeller
-  const mode = overMax ? 'Sınırda (pompa maks.)' : lowPressure ? 'Fazla basınç' : 'Uygun';
+  const overMax = !safe; // hedefi karşılayan impeller yok → tolerans dahilinde, sınırda
+  const mode = overMax
+    ? 'Sınırda (pompa maks.)'
+    : lowPressure
+      ? 'Fazla basınç'
+      : selected.p >= target
+        ? 'Uygun'
+        : 'Hedefin biraz altında';
 
   const margin = selected.p - target;
   const npsh = npshRange(p, selected.d, q);
@@ -193,8 +196,8 @@ export function evaluate(p: Pump, q: number, target: number): PumpResult {
     d: selected.d, p: selected.p, diff: Math.abs(margin), signed: margin, kw: selected.kw,
     npsh: npsh.design, npshText: npsh.text, minP, maxP,
     calcD,
-    nearestD: nearest.d, nearestP: nearest.p,
-    safeD: selected.d, safeP: selected.p,
+    nearestD: selected.d, nearestP: selected.p,
+    safeD: safe ? safe.d : null, safeP: safe ? safe.p : null,
     mode, lowPressure,
   };
 }
