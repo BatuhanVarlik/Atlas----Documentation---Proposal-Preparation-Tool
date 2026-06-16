@@ -101,13 +101,6 @@ function npshRange(p: Pump, d: number, q: number): NpshRange {
   return { text: f(selected), design: selected, refText, est: selected };
 }
 
-function impellerEdgePenalty(allD: number[], d: number): number {
-  const ds = [...new Set(allD)].sort((a, b) => a - b);
-  if (ds.length <= 1) return 0;
-  const pos = ds.indexOf(d) / (ds.length - 1);
-  return Math.abs(pos - 0.5) * 2;
-}
-
 interface DPK extends DP { kw: number }
 interface RequiredImpeller {
   calc: number;
@@ -153,23 +146,12 @@ export interface PumpResult {
   npsh?: number | null;
   npshText?: string;
   calcD?: number;
-  lowerD?: number | null;
-  upperD?: number | null;
-  lowerP?: number | null;
-  upperP?: number | null;
-  nearestD?: number;
+  nearestD?: number;   // hesaplanan çapa en yakın impeller (bilgi amaçlı)
   nearestP?: number;
   safeD?: number | null;
   safeP?: number | null;
   mode?: string;
   lowPressure?: boolean;
-  pressurePenalty?: number;
-  lowPenalty?: number;
-  edgePenalty?: number;
-  undershootPenalty?: number;
-  safeGap?: number;
-  recommendedIsSafe?: boolean;
-  score?: number;
 }
 
 export function evaluate(p: Pump, q: number, target: number): PumpResult {
@@ -185,52 +167,38 @@ export function evaluate(p: Pump, q: number, target: number): PumpResult {
   const req = requiredImpeller(withKw, target);
   const calcD = req.calc;
 
-  const recommended = withKw
-    .map((c) => ({ ...c, diffD: Math.abs(c.d - calcD), diffP: Math.abs(c.p - target) }))
-    .sort((a, b) => a.diffD - b.diffD || a.diffP - b.diffP || a.kw - b.kw || a.d - b.d)[0];
+  // Bilgi amaçlı: hesaplanan çapa en yakın katalog impeller (seçim artık buna göre DEĞİL).
+  const nearest = withKw
+    .map((c) => ({ ...c, diffD: Math.abs(c.d - calcD) }))
+    .sort((a, b) => a.diffD - b.diffD || a.kw - b.kw || a.d - b.d)[0];
 
+  // SEÇİM: hedef basıncı karşılayan en küçük impeller. kW çapla arttığı için bu, hedefi
+  // EN DÜŞÜK kW ile karşılayan impellerdir. (ok pompalarda target<=maxP → daima vardır.)
   const safeList = withKw.filter((c) => c.p >= target).sort((a, b) => a.d - b.d || a.kw - b.kw);
-  const safe = safeList[0] || null;
+  const selected = safeList[0] ?? withKw.slice().sort((a, b) => b.p - a.p)[0];
 
   const lowPressure = target < minP;
-  let mode = lowPressure ? 'Fazla basınç' : 'Hesaplanan/nearest';
-  if (!lowPressure && recommended.p < target) mode = 'Recommended hedefin altında';
-  if (!lowPressure && recommended.p >= target && safe && recommended.d === safe.d) mode = 'Recommended güvenli';
+  const mode = lowPressure ? 'Fazla basınç' : 'Uygun';
 
-  const margin = recommended.p - target;
-  const diff = Math.abs(margin);
-  const npsh = npshRange(p, recommended.d, q);
-
-  const pressurePenalty = target > 0 ? Math.min(diff / Math.max(target, 0.5), 1.8) : 0;
-  const lowPenalty = lowPressure ? Math.min((minP - target) / Math.max(minP, 0.5), 1.5) : 0;
-  const edgePenalty = impellerEdgePenalty(withKw.map((c) => c.d), recommended.d);
-  const undershootPenalty = recommended.p < target ? 0.35 : 0;
-  const safeGap = safe ? Math.abs(safe.d - recommended.d) : 0;
+  const margin = selected.p - target;
+  const npsh = npshRange(p, selected.d, q);
 
   return {
     pump: p, ok: true,
-    d: recommended.d, p: recommended.p, diff, signed: margin, kw: recommended.kw,
+    d: selected.d, p: selected.p, diff: Math.abs(margin), signed: margin, kw: selected.kw,
     npsh: npsh.design, npshText: npsh.text, minP, maxP,
-    calcD, lowerD: req.lower ? req.lower.d : null, upperD: req.upper ? req.upper.d : null,
-    lowerP: req.lower ? req.lower.p : null, upperP: req.upper ? req.upper.p : null,
-    nearestD: recommended.d, nearestP: recommended.p,
-    safeD: safe ? safe.d : null, safeP: safe ? safe.p : null,
+    calcD,
+    nearestD: nearest.d, nearestP: nearest.p,
+    safeD: selected.d, safeP: selected.p,
     mode, lowPressure,
-    pressurePenalty, lowPenalty, edgePenalty, undershootPenalty, safeGap,
-    recommendedIsSafe: safe ? recommended.d === safe.d : false,
   };
 }
 
+// Karar mekanizması: ÖNCELİK EN DÜŞÜK kW (hedefi karşılayan seçilen impellerde).
+// Skor mekanizması kaldırıldı. Eşit kW'da hedefe yakınlık, sonra küçük çap önceliklidir.
 export function rankResults(results: PumpResult[]): PumpResult[] {
   const ok = results.filter((r) => r.ok);
-  if (!ok.length) return [];
-  const minKw = Math.min(...ok.map((r) => r.kw!)), maxKw = Math.max(...ok.map((r) => r.kw!));
-  const span = Math.max(maxKw - minKw, 0.001);
-  ok.forEach((r) => {
-    const kwNorm = (r.kw! - minKw) / span;
-    r.score = 0.42 * kwNorm + 0.30 * r.pressurePenalty! + 0.10 * r.lowPenalty! + 0.10 * r.edgePenalty! + 0.08 * r.undershootPenalty!;
-  });
-  return ok.sort((a, b) => a.score! - b.score! || a.diff! - b.diff! || a.kw! - b.kw!);
+  return ok.sort((a, b) => a.kw! - b.kw! || a.diff! - b.diff! || a.d! - b.d!);
 }
 
 export interface SizingOutput {

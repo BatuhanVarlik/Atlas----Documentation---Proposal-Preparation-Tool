@@ -22,9 +22,9 @@ function toDto(r: PumpResult) {
     npshText: r.npshText ?? null,
     calcD: r.calcD ?? null,
     safeD: r.safeD ?? null,
+    nearestD: r.nearestD ?? null,
     mode: r.mode ?? null,
     lowPressure: r.lowPressure ?? false,
-    score: r.score ?? null,
   };
 }
 

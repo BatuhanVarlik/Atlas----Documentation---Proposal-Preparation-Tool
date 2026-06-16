@@ -15,9 +15,9 @@ interface PumpDto {
   npshText: string | null;
   calcD: number | null;
   safeD: number | null;
+  nearestD: number | null;
   mode: string | null;
   lowPressure: boolean;
-  score: number | null;
 }
 interface SizingDto {
   best: PumpDto | null;
@@ -107,20 +107,19 @@ export default function PumpSelectionClient() {
       {/* Ana öneri */}
       {best ? (
         <div className="bg-[#0a2147] text-white rounded-xl p-5">
-          <div className="text-[11px] tracking-wide text-slate-300 font-semibold">ANA ÖNERİ</div>
+          <div className="text-[11px] tracking-wide text-slate-300 font-semibold">ANA ÖNERİ — EN DÜŞÜK kW</div>
           <h2 className="text-2xl font-bold mt-1">{best.name}</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-4">
-            <Metric label="Calculated impeller" value={`${fmt(best.calcD, 1)} mm`} />
-            <Metric label="Recommended" value={`${best.d ?? '—'} mm`} />
-            <Metric label="Safe" value={`${best.safeD ?? '—'} mm`} />
-            <Metric label="Power" value={`${fmt(best.kw)} kW`} />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4">
+            <Metric label="Güç (kW)" value={fmt(best.kw)} />
+            <Metric label="Seçilen impeller" value={`${best.d ?? '—'} mm`} />
+            <Metric label="Hesaplanan impeller" value={`${fmt(best.calcD, 1)} mm`} />
             <Metric label="NPSH req." value={`${best.npshText ?? '—'} m`} />
-            <Metric label="Skor" value={fmt(best.score, 3)} />
+            <Metric label="Eğri basıncı" value={`${fmt(best.p, 2)} bar`} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 text-xs">
-            <div className="bg-white/10 rounded-lg p-3"><span className="text-slate-300">Eğri basıncı:</span><br />{fmt(best.p)} bar</div>
             <div className="bg-white/10 rounded-lg p-3"><span className="text-slate-300">Margin:</span><br />{marginText(best)}</div>
-            <div className="bg-white/10 rounded-lg p-3"><span className="text-slate-300">Seçim tipi:</span><br />{best.mode ?? '—'}</div>
+            <div className="bg-white/10 rounded-lg p-3"><span className="text-slate-300">Durum:</span><br />{best.mode ?? '—'}</div>
+            <div className="bg-white/10 rounded-lg p-3"><span className="text-slate-300">Hesaba en yakın imp.:</span><br />{best.nearestD ?? '—'} mm</div>
           </div>
         </div>
       ) : !loading && (
@@ -142,7 +141,7 @@ export default function PumpSelectionClient() {
                     <span className={`text-[11px] font-semibold ${r.lowPressure ? 'text-amber-600' : 'text-emerald-600'}`}>{r.mode}</span>
                   </div>
                   <div className="text-[11px] text-slate-500 mt-1">
-                    Calc {fmt(r.calcD, 1)} · Rec {r.d ?? '—'} · Safe {r.safeD ?? '—'} mm · {fmt(r.kw)} kW · NPSH {r.npshText} m · {fmt(r.p)} bar · {marginText(r)} · Skor {fmt(r.score, 3)}
+                    {fmt(r.kw)} kW · Seçilen {r.d ?? '—'} mm · Hesaplanan {fmt(r.calcD, 1)} mm · NPSH {r.npshText} m · {fmt(r.p)} bar · {marginText(r)}
                   </div>
                 </div>
               ))}
@@ -160,7 +159,7 @@ export default function PumpSelectionClient() {
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-white">
                 <tr className="text-left text-slate-500 border-b border-slate-200">
-                  {['Pompa', 'Durum', 'Önerilen', 'Calculated', 'Safe', 'P(Q)', 'Margin', 'kW', 'NPSH', 'Skor', 'Zarf'].map((h) => (
+                  {['Pompa', 'Durum', 'kW', 'Seçilen', 'Hesaplanan', 'P(Q)', 'Margin', 'NPSH', 'Zarf'].map((h) => (
                     <th key={h} className="py-2 pr-3 font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -170,14 +169,12 @@ export default function PumpSelectionClient() {
                   <tr key={r.name} className="border-b border-slate-100">
                     <td className="py-2 pr-3 font-semibold text-slate-800 whitespace-nowrap">{r.name}</td>
                     <td className={`py-2 pr-3 font-semibold whitespace-nowrap ${statusClass(r)}`}>{r.ok ? r.mode : r.reason}</td>
+                    <td className="py-2 pr-3 font-semibold whitespace-nowrap">{r.ok ? `${fmt(r.kw)} kW` : '—'}</td>
                     <td className="py-2 pr-3 whitespace-nowrap">{r.ok ? `${r.d} mm` : '—'}</td>
                     <td className="py-2 pr-3 whitespace-nowrap">{r.ok ? `${fmt(r.calcD, 1)} mm` : '—'}</td>
-                    <td className="py-2 pr-3 whitespace-nowrap">{r.ok ? `${r.safeD ?? '—'} mm` : '—'}</td>
                     <td className="py-2 pr-3 whitespace-nowrap">{r.ok ? `${fmt(r.p)} bar` : '—'}</td>
                     <td className="py-2 pr-3 whitespace-nowrap">{marginText(r)}</td>
-                    <td className="py-2 pr-3 whitespace-nowrap">{r.ok ? `${fmt(r.kw)} kW` : '—'}</td>
                     <td className="py-2 pr-3 whitespace-nowrap">{r.ok ? `${r.npshText} m` : '—'}</td>
-                    <td className="py-2 pr-3 whitespace-nowrap">{r.ok ? fmt(r.score, 3) : '—'}</td>
                     <td className="py-2 pr-3 whitespace-nowrap text-slate-500">{r.minP === null ? '—' : `${fmt(r.minP, 2)}–${fmt(r.maxP, 2)} bar`}</td>
                   </tr>
                 ))}
