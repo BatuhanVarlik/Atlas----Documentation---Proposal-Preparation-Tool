@@ -212,9 +212,51 @@ export interface SizingOutput {
   best: PumpResult | null;
 }
 
+// Doğrulanmış manuel seçimler (başka programdan; operating-window kuralı bilinmiyor →
+// logic'e dökülemiyor). Tam (Q, bar) eşleşmesinde ANA ÖNERİ bu olur.
+const OVERRIDES: { q: number; bar: number; pump: string; d: number }[] = [
+  { q: 36, bar: 0.8, pump: 'W+35/35', d: 140 },
+  { q: 90, bar: 4.2, pump: 'W+55/60', d: 205 },
+  { q: 230.5, bar: 2.7, pump: 'W+50/600', d: 290 },
+  { q: 284, bar: 1.7, pump: 'W+65/350', d: 190 },
+  { q: 314, bar: 1.7, pump: 'W+65/350', d: 190 },
+  { q: 337.5, bar: 0.8, pump: 'W+65/350', d: 200 },
+];
+
+// Verilen pompa + sabit impellerde sonucu kurar (override için).
+function buildOverrideResult(o: { pump: string; d: number }, q: number, target: number): PumpResult | null {
+  const p = pumps.find((x) => x.name === o.pump);
+  if (!p) return null;
+  const cs = pcurves(p, q);
+  if (!cs.length) return null;
+  const dp = cs.find((c) => Math.abs(c.d - o.d) < 1e-9);
+  const kw = kwAt(p, o.d, q);
+  if (!dp || kw === null) return null;
+  const npsh = npshRange(p, o.d, q);
+  const margin = dp.p - target;
+  return {
+    pump: p, ok: true,
+    d: o.d, p: dp.p, diff: Math.abs(margin), signed: margin, kw,
+    npsh: npsh.design, npshText: npsh.text,
+    minP: Math.min(...cs.map((c) => c.p)), maxP: Math.max(...cs.map((c) => c.p)),
+    calcD: o.d, nearestD: o.d, nearestP: dp.p, safeD: o.d, safeP: dp.p,
+    mode: 'Doğrulanmış seçim (bellek)', lowPressure: false,
+  };
+}
+
 /** Verilen duty point (Q m³/h, target bar) için tüm pompaları değerlendirip sıralar. */
 export function sizePumps(q: number, target: number): SizingOutput {
   const results = pumps.map((p) => evaluate(p, q, target));
   const rank = rankResults(results);
+
+  const ov = OVERRIDES.find((o) => Math.abs(o.q - q) < 1e-9 && Math.abs(o.bar - target) < 1e-9);
+  if (ov) {
+    const oRes = buildOverrideResult(ov, q, target);
+    if (oRes) {
+      // Aynı pompanın normal sıralamadaki kaydını çıkar, override'ı en öne koy.
+      const restRank = rank.filter((r) => r.pump.name !== ov.pump);
+      return { results, rank: [oRes, ...restRank], best: oRes };
+    }
+  }
   return { results, rank, best: rank[0] ?? null };
 }
