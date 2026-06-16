@@ -154,11 +154,15 @@ export interface PumpResult {
   lowPressure?: boolean;
 }
 
+// Hedef, pompanın maks basıncını bu oran kadar aşsa bile pompa elenmez; en büyük impeller
+// "sınırda" olarak önerilir (fiziksel olarak biraz altında çalışır).
+const PRESSURE_TOLERANCE = 0.05;
+
 export function evaluate(p: Pump, q: number, target: number): PumpResult {
   const cs = pcurves(p, q).sort((a, b) => a.d - b.d);
   if (!cs.length) return { pump: p, ok: false, reason: 'Q aralık dışında' };
   const minP = Math.min(...cs.map((x) => x.p)), maxP = Math.max(...cs.map((x) => x.p));
-  if (target > maxP) return { pump: p, ok: false, reason: 'Yetersiz basınç', minP, maxP };
+  if (target > maxP * (1 + PRESSURE_TOLERANCE)) return { pump: p, ok: false, reason: 'Yetersiz basınç', minP, maxP };
   const withKw = cs
     .map((c) => ({ ...c, kw: kwAt(p, c.d, q) }))
     .filter((c): c is DPK => c.kw !== null);
@@ -177,7 +181,14 @@ export function evaluate(p: Pump, q: number, target: number): PumpResult {
   const safe = withKw.filter((c) => c.p >= target).sort((a, b) => a.d - b.d || a.kw - b.kw)[0] ?? null;
 
   const lowPressure = target < minP;
-  const mode = lowPressure ? 'Fazla basınç' : selected.p >= target ? 'Uygun' : 'Hedefin biraz altında';
+  const overMax = target > maxP; // tolerans içinde ama pompa maks basıncının üstünde
+  const mode = overMax
+    ? 'Sınırda (pompa maks.)'
+    : lowPressure
+      ? 'Fazla basınç'
+      : selected.p >= target
+        ? 'Uygun'
+        : 'Hedefin biraz altında';
 
   const margin = selected.p - target;
   const npsh = npshRange(p, selected.d, q);
