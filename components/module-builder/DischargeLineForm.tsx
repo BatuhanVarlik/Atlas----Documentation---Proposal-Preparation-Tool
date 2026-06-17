@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useModuleBuilder } from '@/store/moduleBuilderStore';
 import { PUMP_MODELS, getImpellersForPump, pumpHasImpeller } from '@/lib/constants/pumpOptions';
+import { useAutoPumpSelection } from '@/hooks/useAutoPumpSelection';
+import type { AutoPumpResult } from '@/lib/pumps/autoSelect';
 import Combobox from '@/components/ui/Combobox';
 import { formatIntegerInputTR, parseNumberTR, formatNumberTR } from '@/lib/utils';
 
@@ -59,6 +61,25 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
   const cap = parseNumberTR(capacity);
   const pres = parseFloat(pressure);
   const isValid = name.trim() && !isNaN(cap) && cap > 0 && !isNaN(pres) && pres > 0;
+
+  // Otomatik pompa seçimi (kapasite/basınç → pompa seçim sayfasındaki yeşil aday).
+  const { suggestion, loading: autoLoading, error: autoError } = useAutoPumpSelection(cap, pres);
+  // null başlar: kayıtlı (elle seçilmiş) pompa açılışta ezilmez; yalnızca boş pompa otomatik dolar.
+  const lastAutoModel = useRef<string | null>(null);
+
+  function applyPump(s: AutoPumpResult) {
+    setPumpModel(s.pumpModel);
+    setPumpKw(s.pumpKw != null ? String(s.pumpKw) : '');
+    setPumpImpellerSize(s.pumpImpellerSize != null ? String(s.pumpImpellerSize) : '');
+    lastAutoModel.current = s.pumpModel;
+  }
+
+  // Kullanıcı pompayı elle değiştirmediyse (boş ya da son otomatik değer) öneriyi uygula.
+  useEffect(() => {
+    if (!suggestion) return;
+    if (!pumpModel || pumpModel === lastAutoModel.current) applyPump(suggestion);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestion]);
 
   function handleCapacityChange(v: string) {
     const formatted = formatIntegerInputTR(v);
@@ -209,6 +230,31 @@ export default function DischargeLineForm({ moduleId, line, onSaved, onDeleted, 
       </div>
 
       {/* Pompa */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Pompa</span>
+        <button
+          type="button"
+          onClick={() => suggestion && applyPump(suggestion)}
+          disabled={!suggestion}
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400"
+        >
+          ⟳ Otomatik Pompa Seç
+        </button>
+      </div>
+      <div className="min-h-4.5 text-[11px]">
+        {autoLoading && <span className="text-slate-400">Pompa hesaplanıyor…</span>}
+        {!autoLoading && suggestion && (
+          <span className="text-emerald-700">
+            Önerilen: <strong>{suggestion.pumpModel}</strong>
+            {suggestion.pumpImpellerSize != null && ` · Ø${suggestion.pumpImpellerSize} mm`}
+            {suggestion.pumpKw != null && ` · Motor ${suggestion.pumpKw} kW`}
+            {suggestion.powerConsumptionKw != null && ` (çekiş ${suggestion.powerConsumptionKw} kW)`}
+          </span>
+        )}
+        {!autoLoading && autoError && cap > 0 && pres > 0 && (
+          <span className="text-amber-600">{autoError}</span>
+        )}
+      </div>
       {(() => {
         const impellerOptions = getImpellersForPump(pumpModel);
         const hasImpeller = pumpHasImpeller(pumpModel);

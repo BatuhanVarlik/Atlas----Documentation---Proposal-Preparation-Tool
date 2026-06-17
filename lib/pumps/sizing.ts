@@ -202,6 +202,30 @@ export function evaluate(p: Pump, q: number, target: number): PumpResult {
   };
 }
 
+export interface ImpellerDetail {
+  d: number;
+  p: number | null;       // bu impellerin Q'daki eğri basıncı (bar)
+  kw: number | null;      // güç tüketimi
+  npshText: string | null;
+  suitable: boolean;      // hedef basıncı karşılıyor mu (p >= target)
+}
+
+/** Verilen pompa için duty Q'daki tüm geçerli impellerlerin detayını döndürür (küçükten büyüğe). */
+export function impellerDetails(p: Pump, q: number, target: number): ImpellerDetail[] {
+  const cs = pcurves(p, q).sort((a, b) => a.d - b.d);
+  return cs.map((c) => {
+    const kw = kwAt(p, c.d, q);
+    const npsh = npshRange(p, c.d, q);
+    return {
+      d: c.d,
+      p: c.p,
+      kw,
+      npshText: npsh.text,
+      suitable: c.p >= target,
+    };
+  });
+}
+
 // Karar mekanizması: ÖNCELİK EN DÜŞÜK kW (yuvarlanarak seçilen impellerin kW'ı).
 // Skor mekanizması kaldırıldı. Eşit kW'da hedefe yakınlık, sonra küçük çap önceliklidir.
 export function rankResults(results: PumpResult[]): PumpResult[] {

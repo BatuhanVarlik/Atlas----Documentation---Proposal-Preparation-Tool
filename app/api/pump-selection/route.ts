@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { requireAuth, apiError, apiSuccess } from '@/lib/auth-middleware';
-import { sizePumps, type PumpResult } from '@/lib/pumps/sizing';
+import { sizePumps, impellerDetails, type PumpResult } from '@/lib/pumps/sizing';
 
 const schema = z.object({
   q: z.number().positive().max(100_000),
@@ -8,7 +8,8 @@ const schema = z.object({
 });
 
 // PumpResult'tan eğri verilerini atıp UI için hafif DTO üretir.
-function toDto(r: PumpResult) {
+// q/bar verilince her pompa için impeller detayları da eklenir.
+function toDto(r: PumpResult, q: number, bar: number) {
   return {
     name: r.pump.name,
     ok: r.ok,
@@ -25,6 +26,8 @@ function toDto(r: PumpResult) {
     nearestD: r.nearestD ?? null,
     mode: r.mode ?? null,
     lowPressure: r.lowPressure ?? false,
+    recommendedD: r.d ?? null,            // önerilen (yuvarlanmış) impeller çapı
+    impellers: impellerDetails(r.pump, q, bar),
   };
 }
 
@@ -39,9 +42,9 @@ export async function POST(request: Request) {
     const { results, rank, best } = sizePumps(q, bar);
 
     return apiSuccess({
-      best: best ? toDto(best) : null,
-      rank: rank.map(toDto),
-      results: results.map(toDto),
+      best: best ? toDto(best, q, bar) : null,
+      rank: rank.map((r) => toDto(r, q, bar)),
+      results: results.map((r) => toDto(r, q, bar)),
     });
   } catch (e: unknown) {
     if (e instanceof Error && 'status' in e) return apiError(e.message, (e as { status: number }).status);

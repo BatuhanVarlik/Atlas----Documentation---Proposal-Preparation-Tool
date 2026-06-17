@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Combobox from '@/components/ui/Combobox';
 import NumberInputTR from '@/components/ui/NumberInputTR';
 import { PUMP_MODELS, getImpellersForPump, pumpHasImpeller } from '@/lib/constants/pumpOptions';
+import { useAutoPumpSelection } from '@/hooks/useAutoPumpSelection';
+import type { AutoPumpResult } from '@/lib/pumps/autoSelect';
 
 export interface ReceptionLine {
   id: string;
@@ -45,6 +47,31 @@ export default function ReceptionLineCard({ moduleId, line, index, onSaved, onDe
     setState((s) => ({ ...s, [key]: value }));
   }
 
+  // Otomatik pompa seçimi (kapasite/basınç → pompa seçim sayfasındaki yeşil aday).
+  const { suggestion, loading: autoLoading, error: autoError } = useAutoPumpSelection(
+    state.capacity,
+    state.pressure,
+  );
+  // null başlar: kayıtlı (elle seçilmiş) pompa açılışta ezilmez; yalnızca boş pompa otomatik dolar.
+  const lastAutoModel = useRef<string | null>(null);
+
+  function applyPump(s: AutoPumpResult) {
+    setState((prev) => ({
+      ...prev,
+      pumpModel: s.pumpModel,
+      pumpKw: s.pumpKw,
+      pumpImpellerSize: s.pumpImpellerSize,
+    }));
+    lastAutoModel.current = s.pumpModel;
+  }
+
+  // Kullanıcı pompayı elle değiştirmediyse (boş ya da son otomatik değer) öneriyi uygula.
+  useEffect(() => {
+    if (!suggestion) return;
+    if (!state.pumpModel || state.pumpModel === lastAutoModel.current) applyPump(suggestion);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestion]);
+
   async function handleSave() {
     setSaving(true); setError('');
     try {
@@ -63,7 +90,7 @@ export default function ReceptionLineCard({ moduleId, line, index, onSaved, onDe
           hasMilkClarifier: state.hasMilkClarifier,
           clarifierBypassValveType: state.hasMilkClarifier ? state.clarifierBypassValveType : null,
           hasPhe: state.hasPhe,
-          pheCapacity: state.hasPhe ? state.pheCapacity : null,
+          pheCapacity: state.hasPhe ? (state.pheCapacity ?? (state.capacity || null)) : null,
           pheIceWaterTempSensorType: state.hasPhe ? state.pheIceWaterTempSensorType : null,
           pheIceWaterPressureMeterType: state.hasPhe ? state.pheIceWaterPressureMeterType : null,
           hasSamplingValve: state.hasSamplingValve,
@@ -130,6 +157,30 @@ export default function ReceptionLineCard({ moduleId, line, index, onSaved, onDe
 
           {/* Pompa */}
           <Section title="Pompa">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="text-[11px]">
+                {autoLoading && <span className="text-slate-400">Pompa hesaplanıyor…</span>}
+                {!autoLoading && suggestion && (
+                  <span className="text-emerald-700">
+                    Önerilen: <strong>{suggestion.pumpModel}</strong>
+                    {suggestion.pumpImpellerSize != null && ` · Ø${suggestion.pumpImpellerSize} mm`}
+                    {suggestion.pumpKw != null && ` · Motor ${suggestion.pumpKw} kW`}
+                    {suggestion.powerConsumptionKw != null && ` (çekiş ${suggestion.powerConsumptionKw} kW)`}
+                  </span>
+                )}
+                {!autoLoading && autoError && state.capacity > 0 && state.pressure > 0 && (
+                  <span className="text-amber-600">{autoError}</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => suggestion && applyPump(suggestion)}
+                disabled={!suggestion}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 shrink-0"
+              >
+                ⟳ Otomatik Pompa Seç
+              </button>
+            </div>
             {(() => {
               const pumpModel = state.pumpModel ?? '';
               const impellerOptions = getImpellersForPump(pumpModel);
@@ -242,11 +293,13 @@ export default function ReceptionLineCard({ moduleId, line, index, onSaved, onDe
               <div className="grid grid-cols-3 gap-3 mt-3">
                 <Field label="Kapasite (L/h)">
                   <NumberInputTR
-                    value={state.pheCapacity}
+                    // Boş bırakılırsa üstte girilen hat kapasitesini miras alır.
+                    value={state.pheCapacity ?? (state.capacity || null)}
                     onChange={(n) => update('pheCapacity', n)}
                     mode="integer"
                     className={inputCls}
                   />
+                  <p className="text-[10px] text-slate-400 mt-0.5">Boş bırakılırsa hat kapasitesi kullanılır</p>
                 </Field>
                 <Field label="Ice water — sıcaklık sensörü">
                   <div className="flex gap-2">
