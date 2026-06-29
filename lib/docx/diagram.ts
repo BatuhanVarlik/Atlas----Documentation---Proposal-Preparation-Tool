@@ -4,9 +4,11 @@ import React from 'react';
 import sharp from 'sharp';
 import { MilkReceptionSchematic } from '@/components/milk-reception/MilkReceptionSchematic';
 import { ModuleSchematic } from '@/components/module-builder/ModuleSchematic';
+import { CipSchematic, type CipTankType } from '@/components/cip-builder/CipSchematic';
 import { calculatePipeDiameter } from '@/lib/calc/pipeDiameter';
 import { selectDN } from '@/lib/calc/selectDN';
 import { calculateModule } from '@/lib/calc/moduleCalculator';
+import { calculateCipLine, calculateCipModule } from '@/lib/calc/cipCalculator';
 
 export const DIAGRAM_REL_ID = 'rIdDiagram1';
 export const DIAGRAM_FILENAME = 'diagram1.png';
@@ -242,6 +244,71 @@ export async function renderStorageDiagram(module: StorageModuleForDiagram): Pro
     return { png, drawingXml: drawingParagraph(widthEmu, heightEmu) };
   } catch (e) {
     console.error('Depolama diyagramı üretilemedi, atlanıyor:', e);
+    return null;
+  }
+}
+
+// ============ CIP diyagramı ============
+
+interface CipLineForDiagram {
+  id: string;
+  lineKind: 'DISCHARGE' | 'RETURN';
+  name: string;
+  capacity: number;
+  pumpModel: string | null;
+  pumpKw: number | null;
+}
+interface CipModuleForDiagram {
+  standard: string;
+  systemType: 'FORWARD' | 'CIRCULATED';
+  tanks: Array<{ tankType: string; capacity: number }>;
+  lines: CipLineForDiagram[];
+}
+
+const CIP_TANK_LABELS: Record<string, string> = {
+  CAUSTIC: 'Caustic', ACID: 'Acid', HOT_WATER: 'Hot Water',
+  RECOVERY: 'Recovery', FRESH_WATER: 'Fresh Water',
+};
+
+export async function renderCipDiagram(module: CipModuleForDiagram): Promise<DiagramResult | null> {
+  if (module.tanks.length === 0 && module.lines.length === 0) return null;
+  const standard = module.standard as 'DIN' | 'SMS';
+
+  try {
+    const moduleCalc = calculateCipModule({
+      standard,
+      lines: module.lines.map((l) => ({ id: l.id, lineKind: l.lineKind, capacityLh: l.capacity })),
+    });
+    const lineDn = (l: CipLineForDiagram): string | null => {
+      if (!l.capacity || l.capacity <= 0) return null;
+      return calculateCipLine(l.capacity, l.lineKind, standard).selectedDN?.dn ?? null;
+    };
+    const toLine = (l: CipLineForDiagram) => ({
+      name: l.name,
+      capacity: l.capacity,
+      dn: lineDn(l),
+      pumpModel: l.pumpModel,
+      pumpKw: l.pumpKw,
+    });
+
+    const props = {
+      standard,
+      systemType: module.systemType,
+      selectedDN: moduleCalc.selectedDN?.dn ?? null,
+      tanks: module.tanks.map((t) => ({
+        tankType: t.tankType as CipTankType,
+        label: CIP_TANK_LABELS[t.tankType] ?? t.tankType,
+        capacity: t.capacity,
+      })),
+      dischargeLines: module.lines.filter((l) => l.lineKind === 'DISCHARGE').map(toLine),
+      returnLines: module.lines.filter((l) => l.lineKind === 'RETURN').map(toLine),
+    } as React.ComponentProps<typeof CipSchematic>;
+
+    const markup = renderToStaticMarkup(React.createElement(CipSchematic, props));
+    const { png, widthEmu, heightEmu } = await svgToPng(markup);
+    return { png, drawingXml: drawingParagraph(widthEmu, heightEmu) };
+  } catch (e) {
+    console.error('CIP diyagramı üretilemedi, atlanıyor:', e);
     return null;
   }
 }

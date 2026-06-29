@@ -39,6 +39,8 @@ model User {
   createdMilkReceptionModules  MilkReceptionModule[]         @relation("MilkReceptionModuleCreator")
   milkReceptionRevisions       MilkReceptionModuleRevision[] @relation("MilkReceptionModuleRevisionCreator")
   customCatalogItems           CustomCatalogItem[]           @relation("CustomCatalogCreator")
+  createdCipModules            CipModule[]                   @relation("CipModuleCreator")
+  cipRevisions                 CipModuleRevision[]           @relation("CipModuleRevisionCreator")
 }
 
 enum Role {
@@ -354,6 +356,7 @@ model DocumentTemplate {
 
   documents              GeneratedDocument[]
   milkReceptionDocuments MilkReceptionGeneratedDocument[]
+  cipDocuments           CipGeneratedDocument[]
 }
 
 // Kataloğa elle eklenen ürünler (Excel'de karşılığı olmayanlar:
@@ -536,4 +539,163 @@ model MilkReceptionModuleRevision {
 
   @@unique([moduleId, revisionNumber])
   @@index([moduleId, createdAt])
+}
+
+// =====================================================================
+// CIP MODULE (Clean-in-Place) — Storage/MilkReception'dan bağımsız yapı
+// =====================================================================
+
+model CipModule {
+  id           String          @id @default(cuid())
+  name         String
+  customerName String?
+  projectCode  String?
+  standard     Standard
+  valveControlUnit ControlUnitType @default(NONE)
+  systemType   CipSystemType
+  status       ModuleStatus    @default(DRAFT)
+
+  // Tank-ortak seçimler (tüm tanklar için)
+  samplingValve   CipSamplingValve @default(NONE)
+  hasManholeSwitch Boolean         @default(false)
+
+  // Hesaplanan/cache değerler
+  selectedDN            String?
+  selectedInnerDiameter Float?
+  selectedOuterDiameter Float?
+
+  // Fiyatlandırma manuel düzenlemeleri (önizlemeden kaydedilir)
+  priceMultiplier Float @default(1)
+  priceOverrides  Json?
+
+  // === Teklif (commercial) bilgileri — HEM-PROJECT-NO şablonu için ===
+  quotationNo           String?
+  customerContactPerson String?
+  deliveryWeeks         Int?
+  deliveryPlace         String?  @default("Customer Factory")
+  offerValidityDays     Int?     @default(30)
+
+  creatorId  String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  approvedAt DateTime?
+
+  creator   User                   @relation("CipModuleCreator", fields: [creatorId], references: [id])
+  tanks     CipTank[]
+  lines     CipLine[]
+  revisions CipModuleRevision[]
+  documents CipGeneratedDocument[]
+}
+
+model CipTank {
+  id       String      @id @default(cuid())
+  moduleId String
+  tankType CipTankType
+  order    Int
+
+  capacity   Float
+  material   TankMaterial
+  insulation TankInsulation
+
+  // Sensörler
+  hasLSH            Boolean @default(false)
+  hasLSL            Boolean @default(false)
+  hasExternalSensor Boolean @default(false)
+
+  // Pressure transmitter (Fresh Water'da kullanılmaz)
+  hasPressureTransmitter Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  module CipModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([moduleId, tankType])
+}
+
+model CipLine {
+  id       String      @id @default(cuid())
+  moduleId String
+  lineKind CipLineKind
+  name     String
+  order    Int
+
+  capacity Float // m³/h
+  pressure Float // bar
+  calculatedDiameter Float? // mm, ham hesap
+
+  pumpModel        String?
+  pumpKw           Float?
+  pumpImpellerSize Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  module CipModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+}
+
+model CipGeneratedDocument {
+  id            String   @id @default(cuid())
+  moduleId      String
+  templateId    String
+  filename      String
+  filepath      String
+  size          Int
+  generatedById String
+  createdAt     DateTime @default(now())
+
+  module   CipModule        @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  template DocumentTemplate @relation(fields: [templateId], references: [id])
+}
+
+model CipModuleRevision {
+  id              String   @id @default(cuid())
+  moduleId        String
+  revisionNumber  Int
+  label           String
+  description     String   @db.Text
+  detectedChanges Json?
+  snapshot        Json
+  createdById     String
+  createdAt       DateTime @default(now())
+
+  module    CipModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("CipModuleRevisionCreator", fields: [createdById], references: [id])
+
+  @@unique([moduleId, revisionNumber])
+  @@index([moduleId, createdAt])
+}
+
+enum CipSystemType {
+  FORWARD
+  CIRCULATED
+}
+
+enum CipTankType {
+  CAUSTIC
+  ACID
+  HOT_WATER
+  RECOVERY
+  FRESH_WATER
+}
+
+enum TankMaterial {
+  AISI_304
+  AISI_316
+}
+
+enum TankInsulation {
+  INSULATED
+  UNINSULATED
+}
+
+enum CipSamplingValve {
+  NONE
+  MANUAL
+  WITH_ACTUATOR
+}
+
+enum CipLineKind {
+  DISCHARGE
+  RETURN
 }

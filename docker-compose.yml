@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: papvba
       POSTGRES_DB: apv_hemisan_doctool
     ports:
-      - "5433:5432"
+      - "5435:5432"
     volumes:
       - apv_hemisan_data:/var/lib/postgresql/data
 

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Modal from '@/components/ui/Modal';
 
-type ModuleTypeKey = 'STORAGE' | 'MILK_RECEPTION';
+type ModuleTypeKey = 'STORAGE' | 'MILK_RECEPTION' | 'CIP';
 
 const MODULE_TYPE_OPTIONS: { value: ModuleTypeKey; label: string; description: string }[] = [
   {
@@ -16,6 +16,11 @@ const MODULE_TYPE_OPTIONS: { value: ModuleTypeKey; label: string; description: s
     value: 'MILK_RECEPTION',
     label: 'Raw Milk Reception (Süt Alım)',
     description: 'Süt alım hatları (Degazör + Filter + Clarifier + PHE) + Tanker CIP',
+  },
+  {
+    value: 'CIP',
+    label: 'CIP (Clean-in-Place)',
+    description: 'Tanklar (Caustic/Acid/Hot Water/Recovery/Fresh) + Forward/Circulated hatlar',
   },
 ];
 
@@ -33,13 +38,14 @@ export default function NewModuleModal({ open, onClose, defaultType = 'STORAGE' 
   const [projectCode, setProjectCode] = useState('');
   const [standard, setStandard] = useState<'DIN' | 'SMS'>('DIN');
   const [productType, setProductType] = useState<'HYGIENIC' | 'ULTRA_HYGIENIC'>('HYGIENIC');
+  const [systemType, setSystemType] = useState<'FORWARD' | 'CIRCULATED'>('FORWARD');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
   function reset() {
     setModuleType(defaultType);
     setName(''); setCustomerName(''); setProjectCode('');
-    setStandard('DIN'); setProductType('HYGIENIC');
+    setStandard('DIN'); setProductType('HYGIENIC'); setSystemType('FORWARD');
     setError('');
   }
 
@@ -70,6 +76,23 @@ export default function NewModuleModal({ open, onClose, defaultType = 'STORAGE' 
         reset();
         onClose();
         router.push(`/modules/${json.data.id}`);
+      } else if (moduleType === 'CIP') {
+        const res = await fetch('/api/cip-modules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name.trim(),
+            customerName: customerName.trim() || undefined,
+            projectCode: projectCode.trim() || undefined,
+            standard,
+            systemType,
+          }),
+        });
+        const json = await res.json();
+        if (!json.success) { setError(json.error ?? 'Hata'); return; }
+        reset();
+        onClose();
+        router.push(`/cip-modules/${json.data.id}`);
       } else {
         const res = await fetch('/api/milk-reception-modules', {
           method: 'POST',
@@ -122,7 +145,7 @@ export default function NewModuleModal({ open, onClose, defaultType = 'STORAGE' 
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={moduleType === 'STORAGE' ? 'örn: Raw Milk Storage' : 'örn: Raw Milk Reception'}
+            placeholder={moduleType === 'STORAGE' ? 'örn: Raw Milk Storage' : moduleType === 'CIP' ? 'örn: CIP Station' : 'örn: Raw Milk Reception'}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -188,6 +211,32 @@ export default function NewModuleModal({ open, onClose, defaultType = 'STORAGE' 
                   }`}
                 >
                   {pt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* CIP'e özel: Sistem Tipi */}
+        {moduleType === 'CIP' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Sistem Tipi</label>
+            <div className="flex gap-2">
+              {([
+                { value: 'FORWARD', label: 'Forward System' },
+                { value: 'CIRCULATED', label: 'Circulated System' },
+              ] as const).map((st) => (
+                <button
+                  key={st.value}
+                  type="button"
+                  onClick={() => setSystemType(st.value)}
+                  className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    systemType === st.value
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-slate-300 text-slate-600 hover:border-slate-400'
+                  }`}
+                >
+                  {st.label}
                 </button>
               ))}
             </div>

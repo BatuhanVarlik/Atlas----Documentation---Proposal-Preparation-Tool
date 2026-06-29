@@ -7,3 +7,9 @@ export const VELOCITY = {
 } as const;
 
 export const LEAKAGE_CHAMBER_MM = 25;
+
+// CIP modülü hat hızları (m/s) — kapasite m³/h cinsindendir.
+export const CIP_VELOCITY = {
+  DISCHARGE: 1.5,
+  RETURN: 2.0,
+} as const;

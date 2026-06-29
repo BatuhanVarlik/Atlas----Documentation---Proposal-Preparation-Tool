@@ -214,11 +214,6 @@ DRAFT → IN_PROGRESS → REVIEW → APPROVED → DOCUMENT_GENERATED → ARCHIVE
 - **Next.js 16**: `next.config.ts` (TypeScript config) destekleniyor. `serverComponentsExternalPackages` → `serverExternalPackages` olarak değişti.
 - **next-auth**: v5 hâlâ beta, v4 kullanılıyor.
 
-### LLM Erişimi — LAN Ortamında
-
-> ⚠️ **Kritik:** Sunucu LAN'da çalışır, ancak **LLM özelliği için sunucunun Anthropic API'sine giden HTTPS erişimi olmalı**. LAN'daki kullanıcılar internete erişmek zorunda değil — yalnızca sunucu (gateway üzerinden) `api.anthropic.com`'a istek atabilmeli.
->
-> **Eğer sunucu tamamen internetten izole ise**: LLM özelliği opsiyonel olarak kapatılabilir. `ENABLE_AI_SUGGESTIONS=false` env değişkeni ile UI'da o panel gizlenir, sistem yine de tam fonksiyoneldir (hesap motoru ve doküman üretimi LLM gerektirmez).
 
 ### Neden Monolitik?
 

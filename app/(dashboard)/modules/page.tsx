@@ -9,7 +9,7 @@ export default async function ModulesPage() {
 
   const where = user.role === 'MEMBER' ? { creatorId: user.id } : {};
 
-  const [storageModules, milkReceptionModules] = await Promise.all([
+  const [storageModules, milkReceptionModules, cipModules] = await Promise.all([
     prisma.module.findMany({
       where,
       include: {
@@ -23,6 +23,14 @@ export default async function ModulesPage() {
       include: {
         creator: { select: { id: true, name: true } },
         _count: { select: { receptionLines: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.cipModule.findMany({
+      where,
+      include: {
+        creator: { select: { id: true, name: true } },
+        _count: { select: { lines: true } },
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -53,6 +61,20 @@ export default async function ModulesPage() {
       productType: null,
       status: m.status,
       childCount: m._count.receptionLines,
+      childLabel: 'Hat',
+      creator: m.creator,
+      createdAt: m.createdAt,
+    })),
+    ...cipModules.map((m) => ({
+      id: m.id,
+      type: 'CIP' as const,
+      name: m.name,
+      customerName: m.customerName,
+      projectCode: m.projectCode,
+      standard: m.standard,
+      productType: null,
+      status: m.status,
+      childCount: m._count.lines,
       childLabel: 'Hat',
       creator: m.creator,
       createdAt: m.createdAt,

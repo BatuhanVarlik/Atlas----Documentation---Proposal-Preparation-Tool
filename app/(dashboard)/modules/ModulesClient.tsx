@@ -8,7 +8,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import ContextMenu, { type ContextMenuEntry } from '@/components/ui/ContextMenu';
 import NewModuleModal from '@/components/modules/NewModuleModal';
 
-export type ModuleType = 'STORAGE' | 'MILK_RECEPTION';
+export type ModuleType = 'STORAGE' | 'MILK_RECEPTION' | 'CIP';
 
 export interface UnifiedModule {
   id: string;
@@ -44,6 +44,7 @@ const STATUS_FILTER_OPTIONS = [
 const TYPE_LABELS: Record<ModuleType, string> = {
   STORAGE: 'Raw Milk Storage',
   MILK_RECEPTION: 'Raw Milk Reception',
+  CIP: 'CIP (Clean-in-Place)',
 };
 
 const PRODUCT_LABELS: Record<string, string> = {
@@ -52,11 +53,15 @@ const PRODUCT_LABELS: Record<string, string> = {
 };
 
 function moduleHref(m: UnifiedModule): string {
-  return m.type === 'STORAGE' ? `/modules/${m.id}` : `/milk-reception-modules/${m.id}`;
+  if (m.type === 'STORAGE') return `/modules/${m.id}`;
+  if (m.type === 'CIP') return `/cip-modules/${m.id}`;
+  return `/milk-reception-modules/${m.id}`;
 }
 
 function moduleApiBase(m: UnifiedModule): string {
-  return m.type === 'STORAGE' ? `/api/modules/${m.id}` : `/api/milk-reception-modules/${m.id}`;
+  if (m.type === 'STORAGE') return `/api/modules/${m.id}`;
+  if (m.type === 'CIP') return `/api/cip-modules/${m.id}`;
+  return `/api/milk-reception-modules/${m.id}`;
 }
 
 export default function ModulesClient({ initialModules }: Props) {
@@ -137,6 +142,7 @@ export default function ModulesClient({ initialModules }: Props) {
           <option value="">Tüm Modül Tipleri</option>
           <option value="STORAGE">Raw Milk Storage</option>
           <option value="MILK_RECEPTION">Raw Milk Reception</option>
+          <option value="CIP">CIP (Clean-in-Place)</option>
         </select>
         <select
           value={statusFilter}
@@ -215,7 +221,7 @@ export default function ModulesClient({ initialModules }: Props) {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${mod.type === 'STORAGE' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${mod.type === 'STORAGE' ? 'bg-blue-50 text-blue-700' : mod.type === 'CIP' ? 'bg-teal-50 text-teal-700' : 'bg-purple-50 text-purple-700'}`}>
                       {TYPE_LABELS[mod.type]}
                     </span>
                   </td>
