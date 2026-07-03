@@ -2,6 +2,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { requireRole, apiError, apiSuccess } from '@/lib/auth-middleware';
+import { upsertSharedUser, adminSetSharedPassword } from '@/lib/shared-users';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -61,6 +62,18 @@ export async function PUT(req: Request, { params }: Params) {
         department: { select: { id: true, name: true, color: true } },
       },
     });
+
+    // ORTAK DB senkronu — ad/departman/rol bilgisi (aktiflik ve şifre korunur).
+    await upsertSharedUser({
+      email: updated.email,
+      name: updated.name,
+      departmentName: updated.department.name,
+      role: updated.role,
+    });
+    // Admin yeni şifre atadıysa ortak DB'de de güncelle (ilk girişte değiştirilir).
+    if (password) {
+      await adminSetSharedPassword(updated.email, password);
+    }
 
     return apiSuccess(updated, 'Kullanıcı güncellendi');
   } catch (e: unknown) {

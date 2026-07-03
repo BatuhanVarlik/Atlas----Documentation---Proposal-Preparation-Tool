@@ -24,9 +24,12 @@ model User {
   email        String  @unique
   password     String
   role         Role    @default(MEMBER)
+  title        String? // Ünvan — ortak kullanıcı DB'sinden senkronlanır (görüntüleme için)
   departmentId String
   avatar       String?
   isActive     Boolean  @default(true)
+  // İlk girişte / admin şifre atadığında zorunlu şifre değişikliği (ortak DB ile uyumlu ayna alanı)
+  mustChangePassword Boolean @default(true)
   createdAt    DateTime @default(now())
 
   department      Department @relation(fields: [departmentId], references: [id])

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
 import { requireRole, apiError, apiSuccess } from '@/lib/auth-middleware';
+import { resolveResetRequest } from '@/lib/shared-users';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -8,6 +8,7 @@ const schema = z.object({
   action: z.enum(['approve', 'reject']),
 });
 
+// PUT /api/password-reset/requests/[id] — onayla/reddet (ADMIN). ORTAK DB üzerinde işler.
 export async function PUT(req: Request, { params }: Params) {
   try {
     const admin = await requireRole(['ADMIN']);
@@ -16,29 +17,12 @@ export async function PUT(req: Request, { params }: Params) {
     const parsed = schema.safeParse(body);
     if (!parsed.success) return apiError('Geçersiz veri', 400);
 
-    const reqRecord = await prisma.passwordResetRequest.findUnique({ where: { id } });
-    if (!reqRecord) return apiError('Talep bulunamadı', 404);
-    if (reqRecord.status !== 'PENDING') return apiError('Talep zaten sonuçlandırılmış', 400);
+    const ok = await resolveResetRequest(id, parsed.data.action, admin.id);
+    if (!ok) return apiError('Bekleyen talep bulunamadı', 404);
 
-    if (parsed.data.action === 'approve') {
-      await prisma.$transaction([
-        prisma.user.update({
-          where: { id: reqRecord.userId },
-          data: { password: reqRecord.hashedNewPassword },
-        }),
-        prisma.passwordResetRequest.update({
-          where: { id },
-          data: { status: 'APPROVED', resolvedAt: new Date(), resolvedById: admin.id },
-        }),
-      ]);
-      return apiSuccess(null, 'Şifre onaylandı ve güncellendi');
-    }
-
-    await prisma.passwordResetRequest.update({
-      where: { id },
-      data: { status: 'REJECTED', resolvedAt: new Date(), resolvedById: admin.id },
-    });
-    return apiSuccess(null, 'Talep reddedildi');
+    return parsed.data.action === 'approve'
+      ? apiSuccess(null, 'Şifre onaylandı ve güncellendi')
+      : apiSuccess(null, 'Talep reddedildi');
   } catch (e: unknown) {
     if (e instanceof Error && 'status' in e) return apiError(e.message, (e as { status: number }).status);
     return apiError('Sunucu hatası', 500);

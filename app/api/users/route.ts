@@ -2,6 +2,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { requireRole, requireAuth, apiError, apiSuccess } from '@/lib/auth-middleware';
+import { upsertSharedUser } from '@/lib/shared-users';
 
 const createSchema = z.object({
   name: z.string().min(2).max(120),
@@ -63,6 +64,15 @@ export async function POST(req: Request) {
         createdAt: true,
         department: { select: { id: true, name: true, color: true } },
       },
+    });
+
+    // ORTAK DB'ye de yaz → kullanıcı tüm uygulamalarda bu giriş bilgisiyle erişir.
+    await upsertSharedUser({
+      email,
+      name,
+      departmentName: dept.name,
+      role,
+      defaultPassword: password,
     });
 
     return apiSuccess(user, 'Kullanıcı oluşturuldu', 201);

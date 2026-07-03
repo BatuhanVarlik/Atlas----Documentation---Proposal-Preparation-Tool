@@ -1,7 +1,7 @@
 import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import bcrypt from 'bcryptjs';
-import { prisma } from '@/lib/prisma';
+import { verifySharedCredentials } from '@/lib/shared-users';
+import { syncLocalUser } from '@/lib/user-sync';
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -19,19 +19,14 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-          include: { department: true },
-        });
-
-        if (!user || !user.isActive) {
+        // 1) Kimlik doğrulama ORTAK DB'de (tek doğruluk kaynağı).
+        const shared = await verifySharedCredentials(credentials.email, credentials.password);
+        if (!shared) {
           return null;
         }
 
-        const isValid = await bcrypt.compare(credentials.password, user.password);
-        if (!isValid) {
-          return null;
-        }
+        // 2) Yerel User aynasını güncelle/oluştur (domain FK'leri için). Yetki yerelde.
+        const user = await syncLocalUser(shared);
 
         return {
           id: user.id,
@@ -40,23 +35,30 @@ export const authOptions: NextAuthOptions = {
           role: user.role,
           departmentId: user.departmentId,
           departmentName: user.department.name,
+          mustChangePassword: shared.mustChangePassword,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         const u = user as unknown as {
           id: string;
           role: string;
           departmentId: string;
           departmentName: string;
+          mustChangePassword: boolean;
         };
         token.id = u.id;
         token.role = u.role;
         token.departmentId = u.departmentId;
         token.departmentName = u.departmentName;
+        token.mustChangePassword = u.mustChangePassword;
+      }
+      // Şifre değiştikten sonra client update({ mustChangePassword: false }) çağırır.
+      if (trigger === 'update' && session?.mustChangePassword === false) {
+        token.mustChangePassword = false;
       }
       return token;
     },
@@ -66,6 +68,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as string;
         session.user.departmentId = token.departmentId as string;
         session.user.departmentName = token.departmentName as string;
+        session.user.mustChangePassword = Boolean(token.mustChangePassword);
       }
       return session;
     },

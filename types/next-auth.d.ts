@@ -7,6 +7,17 @@ declare module 'next-auth' {
       role: string;
       departmentId: string;
       departmentName: string;
+      mustChangePassword: boolean;
     } & DefaultSession['user'];
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id: string;
+    role: string;
+    departmentId: string;
+    departmentName: string;
+    mustChangePassword: boolean;
   }
 }
