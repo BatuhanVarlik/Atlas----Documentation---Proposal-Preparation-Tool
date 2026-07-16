@@ -10,7 +10,9 @@ services:
       POSTGRES_PASSWORD: papvba
       POSTGRES_DB: apv_hemisan_doctool
     ports:
-      - "5435:5432"
+      # Yalnızca localhost'a bağla: uygulama aynı sunucuda localhost:5435 ile
+      # bağlanır; DB'yi LAN'a açmaya gerek yok (aksi halde iş verisi ifşa olur).
+      - "127.0.0.1:5435:5432"
     volumes:
       - apv_hemisan_data:/var/lib/postgresql/data
 

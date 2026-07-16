@@ -29,5 +29,9 @@ export const config = {
     '/settings/:path*',
     '/reports/:path*',
     '/change-password/:path*',
+    // Üretilen teklif belgeleri ve şablonlar public/ altında dursa da Next.js
+    // onları auth'suz statik sunmasın: middleware ile giriş zorunlu kıl.
+    '/uploads/generated/:path*',
+    '/uploads/templates/:path*',
   ],
 };
