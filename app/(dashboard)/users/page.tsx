@@ -9,7 +9,7 @@ export default async function UsersPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
 
-  const isAdmin = session.user.role === 'ADMIN';
+  const isAdmin = ['ADMIN', 'CEO'].includes(session.user.role);
 
   const [users, departments, pendingResets] = await Promise.all([
     prisma.user.findMany({

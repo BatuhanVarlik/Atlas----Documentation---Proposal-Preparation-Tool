@@ -10,7 +10,10 @@ interface HeaderProps {
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Yönetici',
+  CEO: 'Genel Müdür',
+  FINANCE_MANAGER: 'Finans Genel Müdürü',
   DEPARTMENT_MANAGER: 'Müdür',
+  QUALITY_OBSERVER: 'Kalite Gözlemcisi',
   MEMBER: 'Mühendis',
 };
 

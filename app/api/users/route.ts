@@ -3,13 +3,14 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { requireRole, requireAuth, apiError, apiSuccess } from '@/lib/auth-middleware';
 import { upsertSharedUser } from '@/lib/shared-users';
+import { ROLES } from '@/lib/roles';
 
 const createSchema = z.object({
   name: z.string().min(2).max(120),
   email: z.string().email(),
   password: z.string().min(8).max(128),
   departmentId: z.string().cuid(),
-  role: z.enum(['ADMIN', 'DEPARTMENT_MANAGER', 'MEMBER']).default('MEMBER'),
+  role: z.enum(ROLES).default('MEMBER'),
 });
 
 export async function GET() {
@@ -36,7 +37,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    await requireRole(['ADMIN']);
+    await requireRole(['ADMIN', 'CEO']);
     const body: unknown = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {

@@ -46,9 +46,15 @@ model User {
   cipRevisions                 CipModuleRevision[]           @relation("CipModuleRevisionCreator")
 }
 
+// ORTAK ROL SETİ — tüm APV Hemisan uygulamalarında aynı (bkz. lib/roles.ts).
+// Atlas yetki eşlemesi: ADMIN/CEO → admin düzeyi, DEPARTMENT_MANAGER/FINANCE_MANAGER → yönetsel,
+// QUALITY_OBSERVER → salt-oku, MEMBER → temel.
 enum Role {
   ADMIN
+  CEO
+  FINANCE_MANAGER
   DEPARTMENT_MANAGER
+  QUALITY_OBSERVER
   MEMBER
 }
 

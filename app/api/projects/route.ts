@@ -9,7 +9,7 @@ export async function GET() {
     const where =
       user.role === 'MEMBER'
         ? { departmentId: user.departmentId }
-        : user.role === 'DEPARTMENT_MANAGER'
+        : (user.role === 'DEPARTMENT_MANAGER' || user.role === 'FINANCE_MANAGER')
           ? { departmentId: user.departmentId }
           : {};
 

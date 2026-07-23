@@ -9,13 +9,19 @@ import { formatDate } from '@/lib/utils';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Yönetici',
+  CEO: 'Genel Müdür',
+  FINANCE_MANAGER: 'Finans Genel Müdürü',
   DEPARTMENT_MANAGER: 'Departman Müdürü',
+  QUALITY_OBSERVER: 'Kalite Gözlemcisi',
   MEMBER: 'Üye',
 };
 
 const ROLE_OPTIONS = [
   { value: 'MEMBER', label: 'Üye' },
+  { value: 'QUALITY_OBSERVER', label: 'Kalite Gözlemcisi' },
   { value: 'DEPARTMENT_MANAGER', label: 'Departman Müdürü' },
+  { value: 'FINANCE_MANAGER', label: 'Finans Genel Müdürü' },
+  { value: 'CEO', label: 'Genel Müdür' },
   { value: 'ADMIN', label: 'Yönetici' },
 ];
 
@@ -206,6 +212,24 @@ export default function UsersClient({
     }
   }
 
+  // "Aktif Yap" — pasif kullanıcıyı yeniden aktifleştirir. isActive ORTAK DB'ye de yazılır
+  // (PUT route setSharedUserActive çağırır) → sync geri almaz, kalıcı olur.
+  async function handleActivate(u: User) {
+    const res = await fetch(`/api/users/${u.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: true }),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      alert(json.error ?? 'Aktifleştirilemedi');
+      return;
+    }
+    setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, isActive: true } : x)));
+    setCtxMenu(null);
+    router.refresh();
+  }
+
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -213,10 +237,11 @@ export default function UsersClient({
       const res = await fetch(`/api/users/${deleteTarget.id}`, { method: 'DELETE' });
       const json = await res.json();
       if (!json.success) {
-        alert(json.error ?? 'Silinemedi');
+        alert(json.error ?? 'Pasife alınamadı');
         return;
       }
-      setUsers((u) => u.filter((x) => x.id !== deleteTarget.id));
+      // Silme değil pasifleştirme → satır listede kalır, "Pasif" olur.
+      setUsers((u) => u.map((x) => (x.id === deleteTarget.id ? { ...x, isActive: false } : x)));
       setDeleteTarget(null);
       router.refresh();
     } finally {
@@ -256,12 +281,18 @@ export default function UsersClient({
         { label: 'Departman Değiştir', onClick: () => openSimple('changeDept', ctxMenu.user) },
         { label: 'Rol Değiştir', onClick: () => openSimple('changeRole', ctxMenu.user) },
         { divider: true },
-        {
-          label: 'Sil',
-          onClick: () => setDeleteTarget(ctxMenu.user),
-          variant: 'danger',
-          disabled: ctxMenu.user.id === currentUserId,
-        },
+        ctxMenu.user.isActive
+          ? {
+              label: 'Pasife Al',
+              onClick: () => setDeleteTarget(ctxMenu.user),
+              variant: 'danger',
+              disabled: ctxMenu.user.id === currentUserId,
+            }
+          : {
+              label: 'Aktif Yap',
+              onClick: () => handleActivate(ctxMenu.user),
+              disabled: ctxMenu.user.id === currentUserId,
+            },
       ]
     : [];
 
@@ -538,18 +569,18 @@ export default function UsersClient({
         )}
       </Modal>
 
-      {/* Delete confirm */}
+      {/* Pasife alma onayı */}
       <ConfirmDialog
         open={deleteTarget !== null}
-        title="Kullanıcıyı Sil"
+        title="Kullanıcıyı Pasife Al"
         message={
           deleteTarget && (
             <>
-              <strong>{deleteTarget.name}</strong> ({deleteTarget.email}) kalıcı olarak silinecek. Bu işlem geri alınamaz. Devam edilsin mi?
+              <strong>{deleteTarget.name}</strong> ({deleteTarget.email}) pasife alınacak; giriş yapamaz ama tüm kayıtları korunur. Bu işlem tüm uygulamalara yansır. Devam edilsin mi?
             </>
           )
         }
-        confirmLabel="Sil"
+        confirmLabel="Pasife Al"
         loading={deleting}
         onConfirm={handleDelete}
         onCancel={() => { if (!deleting) setDeleteTarget(null); }}

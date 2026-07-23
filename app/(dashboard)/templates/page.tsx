@@ -6,7 +6,7 @@ import TemplatesClient from './TemplatesClient';
 
 export default async function TemplatesPage() {
   const session = await getServerSession(authOptions);
-  if (session?.user?.role !== 'ADMIN') redirect('/dashboard');
+  if (!(['ADMIN', 'CEO'].includes(session?.user?.role ?? ''))) redirect('/dashboard');
 
   const templates = await prisma.documentTemplate.findMany({
     orderBy: { createdAt: 'desc' },

@@ -124,7 +124,7 @@ export default function ProjectsClient({
     }
   }
 
-  const canDelete = userRole === 'ADMIN' || userRole === 'DEPARTMENT_MANAGER';
+  const canDelete = ['ADMIN', 'CEO', 'DEPARTMENT_MANAGER', 'FINANCE_MANAGER'].includes(userRole);
 
   return (
     <div>
@@ -308,7 +308,7 @@ function ProjectForm({ departments, userRole, userDepartmentId, loading, error, 
     code: '',
     customerName: '',
     description: '',
-    departmentId: userRole === 'ADMIN' ? departments[0]?.id ?? '' : userDepartmentId,
+    departmentId: ['ADMIN', 'CEO'].includes(userRole) ? departments[0]?.id ?? '' : userDepartmentId,
   });
 
   function set(field: string, value: string) {
@@ -346,7 +346,7 @@ function ProjectForm({ departments, userRole, userDepartmentId, loading, error, 
           placeholder="örn: ABC Süt A.Ş."
         />
       </div>
-      {userRole === 'ADMIN' && (
+      {['ADMIN', 'CEO'].includes(userRole) && (
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Departman *</label>
           <select

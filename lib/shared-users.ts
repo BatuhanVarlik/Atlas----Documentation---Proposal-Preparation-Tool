@@ -31,6 +31,7 @@ export interface SharedUser {
   title: string | null;
   departmentName: string | null;
   role: string | null;
+  managerEmail: string | null;
   avatar: string | null;
   isActive: boolean;
   mustChangePassword: boolean;
@@ -38,7 +39,7 @@ export interface SharedUser {
 
 const SELECT_COLS = `
   id, email, name, password, title,
-  department_name AS "departmentName", role, avatar,
+  department_name AS "departmentName", role, manager_email AS "managerEmail", avatar,
   is_active AS "isActive", must_change_password AS "mustChangePassword"`;
 
 export async function getSharedUserByEmail(email: string): Promise<SharedUser | null> {
@@ -47,6 +48,14 @@ export async function getSharedUserByEmail(email: string): Promise<SharedUser | 
     [email]
   );
   return rows[0] ?? null;
+}
+
+/** Ortak DB'deki TÜM kullanıcıları döner (yerel ayna toplu senkronu için). */
+export async function listAllSharedUsers(): Promise<SharedUser[]> {
+  const { rows } = await getPool().query<SharedUser>(
+    `SELECT ${SELECT_COLS} FROM users ORDER BY name ASC`
+  );
+  return rows;
 }
 
 /** Kimlik doğrulama: e-posta + şifre doğruysa kullanıcıyı döner, değilse null. */
@@ -173,24 +182,27 @@ export async function upsertSharedUser(params: {
   title?: string | null;
   departmentName?: string | null;
   role?: string | null;
+  managerEmail?: string | null;
   isActive?: boolean;
   defaultPassword?: string; // yalnızca yeni kayıtta kullanılır
 }): Promise<void> {
-  const { email, name, title, departmentName, role, isActive = true, defaultPassword = 'Hemisan1234' } = params;
+  const { email, name, title, departmentName, role, managerEmail, isActive = true, defaultPassword = 'Hemisan1234' } = params;
   const hashed = await bcrypt.hash(defaultPassword, 12);
   await getPool().query(
     // NOT: çakışmada is_active ve password KORUNUR — bir uygulamadaki düzenleme,
     // kullanıcıyı diğer uygulamalarda kilitlemez. Aktiflik için setSharedUserActive kullanılır.
-    // title/department/role COALESCE ile korunur: null gönderen uygulama mevcut değeri silmez.
-    `INSERT INTO users (id, email, name, password, title, department_name, role, is_active, must_change_password)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+    // title/department/role/manager COALESCE ile korunur: null gönderen uygulama mevcut değeri silmez.
+    // Yöneticiyi TEMİZLEMEK için setSharedUserManager(email, null) kullanılır.
+    `INSERT INTO users (id, email, name, password, title, department_name, role, manager_email, is_active, must_change_password)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
      ON CONFLICT (email) DO UPDATE
        SET name = EXCLUDED.name,
            title = COALESCE(EXCLUDED.title, users.title),
            department_name = COALESCE(EXCLUDED.department_name, users.department_name),
            role = COALESCE(EXCLUDED.role, users.role),
+           manager_email = COALESCE(EXCLUDED.manager_email, users.manager_email),
            updated_at = now()`,
-    [randomUUID(), email, name, hashed, title ?? null, departmentName ?? null, role ?? null, isActive]
+    [randomUUID(), email, name, hashed, title ?? null, departmentName ?? null, role ?? null, managerEmail ?? null, isActive]
   );
 }
 
@@ -199,5 +211,13 @@ export async function setSharedUserActive(email: string, isActive: boolean): Pro
   await getPool().query(
     `UPDATE users SET is_active = $1, updated_at = now() WHERE lower(email) = lower($2)`,
     [isActive, email]
+  );
+}
+
+/** Ortak DB'de bağlı yöneticiyi ayarla/temizle (null = yönetici yok). Org hiyerarşisi ORTAKTIR. */
+export async function setSharedUserManager(email: string, managerEmail: string | null): Promise<void> {
+  await getPool().query(
+    `UPDATE users SET manager_email = $1, updated_at = now() WHERE lower(email) = lower($2)`,
+    [managerEmail, email]
   );
 }

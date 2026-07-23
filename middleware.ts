@@ -7,20 +7,36 @@ import { NextResponse } from 'next/server';
 export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
-    const onChangePw = req.nextUrl.pathname.startsWith('/change-password');
+    const path = req.nextUrl.pathname;
 
-    if (token?.mustChangePassword && !onChangePw) {
+    // Zaten oturumu olan kullanıcı /login'e gelirse tekrar giriş isteme; yönlendir.
+    if (path.startsWith('/login')) {
+      if (token) {
+        const dest = token.mustChangePassword ? '/change-password' : '/dashboard';
+        // GÖRELİ yönlendirme — reverse-proxy arkasında req.url=localhost olsa bile
+        // tarayıcı gerçek host'a göre çözer.
+        return new NextResponse(null, { status: 302, headers: { Location: dest } });
+      }
+      return NextResponse.next(); // anonim → login sayfasını göster
+    }
+
+    if (token?.mustChangePassword && !path.startsWith('/change-password')) {
       return NextResponse.redirect(new URL('/change-password', req.url));
     }
     return NextResponse.next();
   },
   {
+    callbacks: {
+      // /login herkese açık (anonim erişebilsin); diğer eşleşen yollar oturum ister.
+      authorized: ({ token, req }) => req.nextUrl.pathname.startsWith('/login') || !!token,
+    },
     pages: { signIn: '/login' },
   }
 );
 
 export const config = {
   matcher: [
+    '/login',
     '/dashboard/:path*',
     '/projects/:path*',
     '/modules/:path*',

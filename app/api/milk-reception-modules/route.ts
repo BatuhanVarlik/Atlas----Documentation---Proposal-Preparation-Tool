@@ -7,7 +7,7 @@ export async function GET(_req: Request) {
     const user = await requireAuth();
     const where: Record<string, unknown> = {};
     if (user.role === 'MEMBER') where.creatorId = user.id;
-    else if (user.role === 'DEPARTMENT_MANAGER')
+    else if ((user.role === 'DEPARTMENT_MANAGER' || user.role === 'FINANCE_MANAGER'))
       where.creator = { departmentId: user.departmentId };
 
     const modules = await prisma.milkReceptionModule.findMany({

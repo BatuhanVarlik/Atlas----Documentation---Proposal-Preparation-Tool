@@ -3,7 +3,7 @@ import { requireAuth, requireRole, apiError, apiSuccess } from '@/lib/auth-middl
 import { createCustomCatalogSchema } from '@/lib/validations/customCatalog';
 
 // Özel katalog tüm modüllerin fiyatlandırmasını etkilediğinden yazma işlemleri yetkili rollere kısıtlı.
-const CATALOG_WRITE_ROLES = ['ADMIN', 'DEPARTMENT_MANAGER'];
+const CATALOG_WRITE_ROLES = ['ADMIN', 'CEO', 'DEPARTMENT_MANAGER', 'FINANCE_MANAGER'];
 
 export async function GET() {
   try {

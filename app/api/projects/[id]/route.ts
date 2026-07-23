@@ -82,7 +82,7 @@ export async function DELETE(_req: Request, { params }: Params) {
     if (user.role === 'MEMBER') {
       return apiError('Forbidden', 403);
     }
-    if (user.role === 'DEPARTMENT_MANAGER' && existing.departmentId !== user.departmentId) {
+    if ((user.role === 'DEPARTMENT_MANAGER' || user.role === 'FINANCE_MANAGER') && existing.departmentId !== user.departmentId) {
       return apiError('Forbidden', 403);
     }
 

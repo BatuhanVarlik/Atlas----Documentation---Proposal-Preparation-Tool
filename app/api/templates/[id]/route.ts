@@ -7,7 +7,7 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, { params }: Params) {
   try {
-    await requireRole(['ADMIN']);
+    await requireRole(['ADMIN', 'CEO']);
     const { id } = await params;
     const body = await req.json() as { isActive?: boolean; moduleType?: string };
     const data: { isActive?: boolean; moduleType?: string } = {};
@@ -25,7 +25,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
 export async function DELETE(_req: Request, { params }: Params) {
   try {
-    await requireRole(['ADMIN']);
+    await requireRole(['ADMIN', 'CEO']);
     const { id } = await params;
 
     const template = await prisma.documentTemplate.findUnique({ where: { id } });

@@ -2,7 +2,8 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { requireRole, apiError, apiSuccess } from '@/lib/auth-middleware';
-import { upsertSharedUser, adminSetSharedPassword } from '@/lib/shared-users';
+import { upsertSharedUser, adminSetSharedPassword, setSharedUserActive } from '@/lib/shared-users';
+import { ROLES } from '@/lib/roles';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -10,13 +11,14 @@ const updateSchema = z.object({
   name: z.string().min(2).max(120).optional(),
   email: z.string().email().optional(),
   departmentId: z.string().cuid().optional(),
-  role: z.enum(['ADMIN', 'DEPARTMENT_MANAGER', 'MEMBER']).optional(),
+  role: z.enum(ROLES).optional(),
   password: z.string().min(8).max(128).optional(),
+  isActive: z.boolean().optional(),
 });
 
 export async function PUT(req: Request, { params }: Params) {
   try {
-    const admin = await requireRole(['ADMIN']);
+    const admin = await requireRole(['ADMIN', 'CEO']);
     const { id } = await params;
     const body: unknown = await req.json();
     const parsed = updateSchema.safeParse(body);
@@ -42,6 +44,10 @@ export async function PUT(req: Request, { params }: Params) {
     // Adminin kendi rolünü düşürmesi
     if (id === admin.id && parsed.data.role && parsed.data.role !== 'ADMIN') {
       return apiError('Kendi yönetici rolünüzü düşüremezsiniz', 400);
+    }
+    // Kendini pasifleştirme
+    if (id === admin.id && parsed.data.isActive === false) {
+      return apiError('Kendinizi pasifleştiremezsiniz', 400);
     }
 
     const data: Record<string, unknown> = { ...rest };
@@ -74,6 +80,10 @@ export async function PUT(req: Request, { params }: Params) {
     if (password) {
       await adminSetSharedPassword(updated.email, password);
     }
+    // Aktiflik ORTAK'tır → değiştiyse ortak DB'ye yaz (yoksa sync eski aktifliği yerele geri basar).
+    if (parsed.data.isActive !== undefined) {
+      await setSharedUserActive(updated.email, parsed.data.isActive);
+    }
 
     return apiSuccess(updated, 'Kullanıcı güncellendi');
   } catch (e: unknown) {
@@ -84,15 +94,18 @@ export async function PUT(req: Request, { params }: Params) {
 
 export async function DELETE(_req: Request, { params }: Params) {
   try {
-    const admin = await requireRole(['ADMIN']);
+    const admin = await requireRole(['ADMIN', 'CEO']);
     const { id } = await params;
     if (id === admin.id) return apiError('Kendi hesabınızı silemezsiniz', 400);
 
-    const target = await prisma.user.findUnique({ where: { id } });
+    const target = await prisma.user.findUnique({ where: { id }, select: { email: true } });
     if (!target) return apiError('Kullanıcı bulunamadı', 404);
 
-    await prisma.user.delete({ where: { id } });
-    return apiSuccess(null, 'Kullanıcı silindi');
+    // Hard-delete YOK: "silme" = ORTAK DB'de pasifleştirme → tüm uygulamalara yayılır.
+    // (Hard-delete edilse ayna bir sonraki senkronda geri gelirdi.)
+    await setSharedUserActive(target.email, false);
+    await prisma.user.update({ where: { id }, data: { isActive: false } });
+    return apiSuccess(null, 'Kullanıcı pasifleştirildi');
   } catch (e: unknown) {
     if (e instanceof Error && 'status' in e) return apiError(e.message, (e as { status: number }).status);
     return apiError('Sunucu hatası', 500);

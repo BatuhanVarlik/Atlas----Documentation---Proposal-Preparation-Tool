@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
     if (user.role === 'MEMBER') {
       where.creatorId = user.id;
-    } else if (user.role === 'DEPARTMENT_MANAGER') {
+    } else if ((user.role === 'DEPARTMENT_MANAGER' || user.role === 'FINANCE_MANAGER')) {
       where.creator = { departmentId: user.departmentId };
     }
 

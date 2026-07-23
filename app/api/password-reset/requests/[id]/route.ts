@@ -11,7 +11,7 @@ const schema = z.object({
 // PUT /api/password-reset/requests/[id] — onayla/reddet (ADMIN). ORTAK DB üzerinde işler.
 export async function PUT(req: Request, { params }: Params) {
   try {
-    const admin = await requireRole(['ADMIN']);
+    const admin = await requireRole(['ADMIN', 'CEO']);
     const { id } = await params;
     const body: unknown = await req.json();
     const parsed = schema.safeParse(body);

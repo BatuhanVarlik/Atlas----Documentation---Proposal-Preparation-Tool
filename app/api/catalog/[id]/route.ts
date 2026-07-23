@@ -6,7 +6,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function DELETE(_req: Request, { params }: Params) {
   try {
     // Fiyatlandırmayı global etkilediğinden silme yetkili rollere kısıtlı.
-    await requireRole(['ADMIN', 'DEPARTMENT_MANAGER']);
+    await requireRole(['ADMIN', 'CEO', 'DEPARTMENT_MANAGER', 'FINANCE_MANAGER']);
     const { id } = await params;
     const existing = await prisma.customCatalogItem.findUnique({ where: { id } });
     if (!existing) return apiError('Ürün bulunamadı', 404);

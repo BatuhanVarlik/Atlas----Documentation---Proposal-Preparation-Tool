@@ -6,6 +6,10 @@ import { syncLocalUser } from '@/lib/user-sync';
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: 'jwt',
+    // LAN içi kullanım — oturum uzun ömürlü ve "rolling": aktif kullanıcı fiilen
+    // hiç düşmez, yalnızca 30 gün hiç kullanılmayan oturum sona erer.
+    maxAge: 30 * 24 * 60 * 60, // 30 gün
+    updateAge: 24 * 60 * 60, // her gün token tazelenir (kullandıkça uzar)
   },
   providers: [
     CredentialsProvider({

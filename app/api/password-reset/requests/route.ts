@@ -4,7 +4,7 @@ import { listPendingResetRequests } from '@/lib/shared-users';
 // GET /api/password-reset/requests — bekleyen talepler (ADMIN). ORTAK DB'den.
 export async function GET() {
   try {
-    await requireRole(['ADMIN']);
+    await requireRole(['ADMIN', 'CEO']);
     const pending = await listPendingResetRequests();
     const requests = pending.map((r) => ({
       id: r.id,

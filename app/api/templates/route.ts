@@ -19,7 +19,7 @@ export async function GET(_req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const user = await requireRole(['ADMIN']);
+    const user = await requireRole(['ADMIN', 'CEO']);
 
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
