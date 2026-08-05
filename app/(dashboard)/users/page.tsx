@@ -3,13 +3,25 @@ import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { listPendingResetRequests } from '@/lib/shared-users';
+import { syncAllLocalUsers } from '@/lib/user-sync';
 import UsersClient from './UsersClient';
+
+export const dynamic = 'force-dynamic';
 
 export default async function UsersPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
 
   const isAdmin = ['ADMIN', 'CEO'].includes(session.user.role);
+
+  // Ortak DB (tek doğruluk kaynağı) ile yerel aynayı eşitle: başka uygulamalarda
+  // (Chronos/PYU) oluşturulan kullanıcılar login'i beklemeden burada da görünsün.
+  // Ortak DB erişilemezse sayfayı düşürme — eldeki yerel listeyle devam et.
+  try {
+    await syncAllLocalUsers();
+  } catch (err) {
+    console.error('[users] Ortak DB ayna senkronu başarısız:', err);
+  }
 
   const [users, departments, pendingResets] = await Promise.all([
     prisma.user.findMany({
