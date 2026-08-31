@@ -204,7 +204,7 @@ DRAFT → IN_PROGRESS → REVIEW → APPROVED → DOCUMENT_GENERATED → ARCHIVE
 | **Doküman Üretimi** | `docxtemplater` + `pizzip` (Word .docx template doldurma) | docxtemplater 3.x |
 | **LLM Entegrasyonu** | Anthropic SDK (Claude API) | `@anthropic-ai/sdk` |
 | **Hesap Motoru** | Saf TS — `lib/calc/` (test edilebilir, deterministik) | — |
-| **Dosya Upload** | Local dosya sistemi → `/uploads` klasörü | — |
+| **Dosya Upload** | Local dosya sistemi → `data/` klasörü (public/ dışında) | — |
 | **Tablo/Grafik** | Recharts (dashboard için) | — |
 
 ### Önemli Versiyon Notları
@@ -290,10 +290,14 @@ apv-hemisan-doc-tool/
 │   ├── schema.prisma           # Veritabanı şeması
 │   ├── migrations/             # Migration dosyaları
 │   └── seed.ts                 # Başlangıç verileri (departmanlar + admin)
-├── public/
-│   └── uploads/
-│       ├── templates/          # Yüklenen .docx şablonları
-│       └── generated/          # Üretilmiş teklif dokümanları
+├── public/                     # SADECE herkese açık statik varlıklar (logolar)
+│   ├── atlas-logo.png          # Next.js public/ altındaki her dosyayı
+│   ├── hemisan-logo.png        # kimlik doğrulaması olmadan yayınlar —
+│   └── tank.png                # buraya gizli veri konmaz
+├── data/                       # Gizli veri — public/ dışında, git'e girmez
+│   ├── templates/              # Yüklenen .docx şablonları + kaynak .xlsm
+│   ├── generated/              # Üretilmiş teklif dokümanları
+│   └── reference/              # Referans belgeler (teklif örnekleri, P&ID, çizimler)
 ├── types/
 │   └── index.ts                # Global TypeScript tipleri
 ├── hooks/                      # Custom React hooks
@@ -1044,7 +1048,7 @@ NEXTAUTH_SECRET="buraya-rastgele-uzun-bir-string-gir"
 
 # Uygulama
 NEXT_PUBLIC_APP_URL="http://SUNUCU_IP:3000"
-UPLOAD_DIR="./public/uploads"
+ATLAS_DATA_DIR="./data"   # şablonlar + üretilen belgeler; public/ dışında tutulur
 MAX_FILE_SIZE=10485760  # 10MB
 
 # AI (Anthropic Claude)
@@ -1207,6 +1211,10 @@ const fillingLineSchema = z.object({
 - **Session:** JWT (httpOnly cookie)
 - **Yetkilendirme:** Her API route başında rol kontrolü
 - **File Upload:** Sadece `.docx` (şablon), `.pdf/.jpg/.png` (ek dosyalar)
+- **Yüklenen/üretilen dosyalar:** `data/` altında, `public/` dışında. Next.js `public/`
+  içeriğini kimlik doğrulaması olmadan servis ettiği için oraya kullanıcı verisi konmaz;
+  indirme her zaman oturum kontrolü yapan API route'ları üzerinden yapılır
+  (`lib/storage.ts` → `resolveDataPath`, yol kaçışına karşı korumalı)
 - **Max Dosya Boyutu:** 10MB
 - **AI API Key:** Sadece sunucuda, asla istemciye gönderilmez
 

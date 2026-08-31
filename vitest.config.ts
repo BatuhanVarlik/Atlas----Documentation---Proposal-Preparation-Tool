@@ -5,7 +5,11 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    include: ['lib/**/__tests__/**/*.test.ts'],
+    include: [
+      'lib/**/__tests__/**/*.test.ts',
+      // Saf mantık taşıyan istemci yardımcıları (taslak saklama gibi) da testli.
+      'components/**/__tests__/**/*.test.ts',
+    ],
   },
   resolve: {
     alias: {

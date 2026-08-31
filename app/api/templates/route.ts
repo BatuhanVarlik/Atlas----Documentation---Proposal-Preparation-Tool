@@ -3,6 +3,7 @@ import { requireAuth, requireRole, apiError, apiSuccess } from '@/lib/auth-middl
 import { extractPlaceholders } from '@/lib/docx/renderTemplate';
 import { writeFile } from 'fs/promises';
 import path from 'path';
+import { TEMPLATES_DIR, ensureDir } from '@/lib/storage';
 
 export async function GET(_req: Request) {
   try {
@@ -36,7 +37,8 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(bytes);
 
     const filename = `template_${Date.now()}_${file.name.replace(/\s/g, '_')}`;
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'templates');
+    const uploadsDir = TEMPLATES_DIR;
+    await ensureDir(uploadsDir);
     const filepath = path.join(uploadsDir, filename);
     await writeFile(filepath, buffer);
 
@@ -47,7 +49,7 @@ export async function POST(req: Request) {
         name,
         description,
         filename,
-        filepath: `/uploads/templates/${filename}`,
+        filepath: `templates/${filename}`,
         placeholders,
         moduleType,
       },

@@ -28,7 +28,8 @@ interface Props {
   onClose: () => void;
 }
 
-const MENU_WIDTH = 200;
+/** Menü genişliği — açan düğme, menüyü kendi kenarına hizalarken bunu kullanır. */
+export const MENU_WIDTH = 200;
 const ITEM_HEIGHT = 34;
 const DIVIDER_HEIGHT = 9;
 

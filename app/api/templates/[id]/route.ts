@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { requireRole, apiError, apiSuccess } from '@/lib/auth-middleware';
 import { unlink } from 'fs/promises';
 import path from 'path';
+import { resolveDataPath } from '@/lib/storage';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -46,7 +47,7 @@ export async function DELETE(_req: Request, { params }: Params) {
 
     // Diskten dosyaları sil (şablon + üretilmiş belgeler) — best-effort
     const files = [template.filepath, ...storageDocs.map((d) => d.filepath), ...milkDocs.map((d) => d.filepath)];
-    await Promise.all(files.map((fp) => unlink(path.join(process.cwd(), 'public', fp)).catch(() => {})));
+    await Promise.all(files.map((fp) => unlink(resolveDataPath(fp)).catch(() => {})));
 
     return apiSuccess(null, 'Şablon silindi');
   } catch (e: unknown) {

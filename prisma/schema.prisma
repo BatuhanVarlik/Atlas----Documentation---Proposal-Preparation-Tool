@@ -43,6 +43,8 @@ model User {
   milkReceptionRevisions       MilkReceptionModuleRevision[] @relation("MilkReceptionModuleRevisionCreator")
   customCatalogItems           CustomCatalogItem[]           @relation("CustomCatalogCreator")
   createdCipModules            CipModule[]                   @relation("CipModuleCreator")
+  savedPrecalculations         SavedPrecalculation[]         @relation("SavedPrecalculationCreator")
+  updatedPrecalculations       SavedPrecalculation[]         @relation("SavedPrecalculationEditor")
   cipRevisions                 CipModuleRevision[]           @relation("CipModuleRevisionCreator")
 }
 
@@ -383,6 +385,40 @@ model CustomCatalogItem {
   createdAt   DateTime @default(now())
 
   @@index([kind])
+}
+
+// Oluşturulan precalculation'lar — "Advanced Precalculation Lists" sayfası bunları listeler.
+// entries, kullanıcının çalışma kitabına yazdığı hücrelerdir ("SAYFA!ADRES" -> değer);
+// hesaplanmış tutarlar buradan yeniden üretilebilir, listede hızlı görünsün diye
+// özet olarak da saklanır.
+model SavedPrecalculation {
+  id          String   @id @default(cuid())
+  precalcNo   String   @unique
+  projectNo   String   @default("")
+  customer    String   @default("")
+  endUser     String   @default("")
+  preparedBy  String   @default("")
+  /** Hangi fiyat listesinden üretildiği (ör. "ORNEK PRECALCULATION 36.07.xlsm"). */
+  sourceFile  String   @default("")
+  currency    String   @default("EUR")
+  totalCost   Float    @default(0)
+  totalSales  Float    @default(0)
+  entryCount  Int      @default(0)
+  entries     Json
+  /**
+   * İyimser kilit sayacı. Her kayıtta bir artar; kaydetmek isteyen taraf
+   * okuduğu sürümü gönderir. Sürüm tutmuyorsa araya başka biri girmiştir ve
+   * kayıt reddedilir — sessizce üzerine yazılmaz.
+   */
+  version     Int      @default(1)
+  createdById String
+  createdBy   User     @relation("SavedPrecalculationCreator", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?    @relation("SavedPrecalculationEditor", fields: [updatedById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
 }
 
 model PasswordResetRequest {

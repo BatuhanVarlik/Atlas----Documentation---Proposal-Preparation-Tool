@@ -2,6 +2,7 @@ import { readFile } from 'fs/promises';
 import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, apiError } from '@/lib/auth-middleware';
+import { resolveDataPath } from '@/lib/storage';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -16,7 +17,7 @@ export async function GET(_req: Request, { params }: Params) {
     const template = await prisma.documentTemplate.findUnique({ where: { id } });
     if (!template) return apiError('Şablon bulunamadı', 404);
 
-    const abs = path.join(process.cwd(), 'public', template.filepath);
+    const abs = resolveDataPath(template.filepath);
     let data: Buffer;
     try {
       data = await readFile(abs);

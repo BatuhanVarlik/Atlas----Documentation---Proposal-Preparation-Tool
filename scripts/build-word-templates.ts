@@ -400,7 +400,7 @@ async function upsertTemplate(opts: { name: string; description: string; filenam
     name: opts.name,
     description: opts.description,
     filename: opts.filename,
-    filepath: `/uploads/templates/${opts.filename}`,
+    filepath: `templates/${opts.filename}`,
     placeholders,
     moduleType: opts.moduleType,
     isActive: true,
@@ -417,7 +417,7 @@ async function upsertTemplate(opts: { name: string; description: string; filenam
 async function main() {
   const root = process.cwd();
   const logo = fs.readFileSync(path.join(root, 'public', 'hemisan-logo.png'));
-  const outDir = path.join(root, 'public', 'uploads', 'templates');
+  const outDir = path.join(root, 'data', 'templates');
   fs.mkdirSync(outDir, { recursive: true });
 
   // Süt Alım
@@ -444,7 +444,7 @@ async function main() {
   });
 
   await prisma.$disconnect();
-  console.log('\nTamamlandı. Şablonlar public/uploads/templates altına yazıldı ve aktif kaydedildi.');
+  console.log('\nTamamlandı. Şablonlar data/templates altına yazıldı ve aktif kaydedildi.');
 }
 
 main().catch(async (e) => {

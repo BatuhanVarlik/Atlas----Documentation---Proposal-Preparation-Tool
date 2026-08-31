@@ -7,6 +7,7 @@ import { renderCipDiagram, DIAGRAM_REL_ID, DIAGRAM_FILENAME } from '@/lib/docx/d
 import { getCustomPricingItems } from '@/lib/pricing/customCatalogServer';
 import { writeFile } from 'fs/promises';
 import path from 'path';
+import { resolveDataPath, GENERATED_DIR, ensureDir } from '@/lib/storage';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -36,7 +37,7 @@ export async function POST(req: Request, { params }: Params) {
     if (!template || !template.isActive) return apiError('Şablon bulunamadı veya aktif değil', 404);
     if (user.role === 'MEMBER' && module.creatorId !== user.id) return apiError('Forbidden', 403);
 
-    const templatePath = path.join(process.cwd(), 'public', template.filepath);
+    const templatePath = resolveDataPath(template.filepath);
     const customItems = await getCustomPricingItems();
     const baseContext = buildCipContext(module, customItems);
     // Diyagramı yalnızca şablon {hasDiagram}/{@diagramXml} referansı veriyorsa üret/göm.
@@ -50,7 +51,8 @@ export async function POST(req: Request, { params }: Params) {
 
     const safeModuleName = module.name.replace(/[^a-zA-Z0-9ğüşöçıİĞÜŞÖÇ\s-]/g, '').trim().replace(/\s+/g, '_');
     const filename = `${safeModuleName}_${Date.now()}.docx`;
-    const outDir = path.join(process.cwd(), 'public', 'uploads', 'generated');
+    const outDir = GENERATED_DIR;
+    await ensureDir(outDir);
     await writeFile(path.join(outDir, filename), docBuffer);
 
     const docRecord = await prisma.cipGeneratedDocument.create({
@@ -58,7 +60,7 @@ export async function POST(req: Request, { params }: Params) {
         moduleId,
         templateId: template.id,
         filename,
-        filepath: `/uploads/generated/${filename}`,
+        filepath: `generated/${filename}`,
         size: docBuffer.length,
         generatedById: user.id,
       },

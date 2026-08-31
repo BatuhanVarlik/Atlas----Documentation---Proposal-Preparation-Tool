@@ -1,9 +1,13 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+
+/** Daraltılmış kenar çubuğu tercihi tarayıcıda saklanır. */
+const COLLAPSE_KEY = 'atlas.sidebar.collapsed';
 
 function DashboardIcon() {
   return (
@@ -83,6 +87,19 @@ function PricingIcon() {
   );
 }
 
+function ListsIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" />
+      <line x1="3" y1="12" x2="3.01" y2="12" />
+      <line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  );
+}
+
 function SettingsIcon() {
   return (
     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -97,7 +114,8 @@ const NAV_ITEMS = [
   { href: '/projects', label: 'Projeler', Icon: ProjectsIcon },
   { href: '/modules', label: 'Modüller', Icon: ModulesIcon },
   { href: '/revisions', label: 'Revizyon Geçmişi', Icon: RevisionsIcon },
-  { href: '/pricing', label: 'Fiyat Kataloğu', Icon: PricingIcon },
+  { href: '/advanced-precalculation', label: 'Advanced Precalculation', Icon: PricingIcon },
+  { href: '/advanced-precalculation-lists', label: 'Advanced Precalculation Lists', Icon: ListsIcon },
   { href: '/pump-selection', label: 'Pompa Seçimi', Icon: PumpIcon },
   { href: '/templates', label: 'Şablonlar', Icon: TemplatesIcon },
   { href: '/users', label: 'Kullanıcılar', Icon: UsersIcon },
@@ -106,11 +124,53 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const pathname = usePathname();
   const settingsActive = pathname === '/settings' || pathname.startsWith('/settings/');
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Tercih yalnızca istemcide okunur; sunucu çıktısı her zaman geniş haldedir.
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === '1');
+    } catch {
+      // localStorage kapalıysa varsayılan geniş hal
+    }
+  }, []);
+
+  function toggle() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try { window.localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0'); } catch { /* yok say */ }
+      return next;
+    });
+  }
 
   return (
-    <aside className="w-60 bg-primary text-white flex flex-col h-screen border-r border-[#1A2B43]">
+    <aside
+      className={cn(
+        'relative bg-primary text-white flex flex-col h-screen border-r border-[#1A2B43]',
+        'transition-[width] duration-200',
+        collapsed ? 'w-16' : 'w-60',
+      )}
+    >
+      {/* Daralt / genişlet — kenarın üstünde, ana alanın üzerine taşar */}
+      <button
+        onClick={toggle}
+        title={collapsed ? 'Menüyü genişlet' : 'Menüyü daralt'}
+        aria-label={collapsed ? 'Menüyü genişlet' : 'Menüyü daralt'}
+        aria-expanded={!collapsed}
+        className={cn(
+          'absolute top-16 -right-3 z-30 w-6 h-6 rounded-full flex items-center justify-center',
+          'bg-white border border-slate-300 text-slate-600 shadow-sm',
+          'hover:bg-slate-50 hover:text-slate-900 transition-colors',
+        )}
+      >
+        <span className="text-[11px] leading-none">{collapsed ? '›' : '‹'}</span>
+      </button>
+
       {/* Logo + Brand — header ile aynı yükseklik (h-14) */}
-      <div className="h-14 px-5 border-b border-[#1A2B43] flex items-center gap-3">
+      <div className={cn(
+        'h-14 border-b border-[#1A2B43] flex items-center gap-3',
+        collapsed ? 'px-0 justify-center' : 'px-5',
+      )}>
         <div className="w-9 h-9 rounded-lg overflow-hidden bg-white/5 dark:bg-white dark:border dark:border-white flex items-center justify-center shrink-0">
           <Image
             src="/atlas-logo.png"
@@ -120,10 +180,12 @@ export default function Sidebar() {
             className="w-9 h-9 object-cover"
           />
         </div>
-        <div className="leading-tight">
-          <h1 className="text-base font-bold text-white">Atlas</h1>
-          <p className="text-[11px] text-slate-300 mt-0.5">Dökümantasyon &amp; Teklif Oluşturma Aracı</p>
-        </div>
+        {!collapsed && (
+          <div className="leading-tight">
+            <h1 className="text-base font-bold text-white">Atlas</h1>
+            <p className="text-[11px] text-slate-300 mt-0.5">Dökümantasyon &amp; Teklif Oluşturma Aracı</p>
+          </div>
+        )}
       </div>
 
       {/* Nav */}
@@ -134,15 +196,17 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              title={collapsed ? item.label : undefined}
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                'flex items-center gap-3 py-2 rounded-lg text-sm transition-colors',
+                collapsed ? 'px-0 justify-center' : 'px-3',
                 isActive
                   ? 'bg-secondary text-white'
                   : 'text-slate-300 hover:bg-white/5 hover:text-white'
               )}
             >
               <item.Icon />
-              <span>{item.label}</span>
+              {!collapsed && <span>{item.label}</span>}
             </Link>
           );
         })}
@@ -152,17 +216,19 @@ export default function Sidebar() {
       <div className="p-3 border-t border-white/10">
         <Link
           href="/settings"
+          title={collapsed ? 'Ayarlar' : undefined}
           className={cn(
-            'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+            'flex items-center gap-3 py-2 rounded-lg text-sm transition-colors',
+            collapsed ? 'px-0 justify-center' : 'px-3',
             settingsActive
               ? 'bg-secondary text-white'
               : 'text-slate-300 hover:bg-white/5 hover:text-white'
           )}
         >
           <SettingsIcon />
-          <span>Ayarlar</span>
+          {!collapsed && <span>Ayarlar</span>}
         </Link>
-        <p className="text-[10px] text-slate-500 text-center mt-2">v1.0.0</p>
+        {!collapsed && <p className="text-[10px] text-slate-500 text-center mt-2">v1.0.0</p>}
       </div>
     </aside>
   );

@@ -2,6 +2,7 @@ import { readFile, unlink } from 'fs/promises';
 import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, apiError } from '@/lib/auth-middleware';
+import { resolveDataPath } from '@/lib/storage';
 
 type Params = { params: Promise<{ id: string; docId: string }> };
 
@@ -18,7 +19,7 @@ export async function GET(_req: Request, { params }: Params) {
     if (!doc || doc.moduleId !== id) return apiError('Belge bulunamadı', 404);
     if (user.role === 'MEMBER' && doc.module.creatorId !== user.id) return apiError('Forbidden', 403);
 
-    const abs = path.join(process.cwd(), 'public', doc.filepath);
+    const abs = resolveDataPath(doc.filepath);
     let data: Buffer;
     try {
       data = await readFile(abs);
@@ -56,7 +57,7 @@ export async function DELETE(_req: Request, { params }: Params) {
 
     await prisma.milkReceptionGeneratedDocument.delete({ where: { id: docId } });
     try {
-      await unlink(path.join(process.cwd(), 'public', doc.filepath));
+      await unlink(resolveDataPath(doc.filepath));
     } catch {
       // Dosya zaten yoksa sorun değil — DB kaydı silindi.
     }

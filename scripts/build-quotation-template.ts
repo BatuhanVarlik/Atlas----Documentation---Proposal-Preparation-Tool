@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-// REFERANS şablon: public/apv-teklif-birlesik.docx  (tasarım/tablolar/placeholder'lar
+// REFERANS şablon: data/reference/apv-teklif-birlesik.docx  (tasarım/tablolar/placeholder'lar
 // Word'de bakımı yapılır — tek birleşik şablon: Süt Alım + Depolama, {#isReception}/
 // {#isStorage} ile koşullu bölümler).
 //
@@ -20,7 +20,7 @@ import Docxtemplater from 'docxtemplater';
 import { prisma } from '../lib/prisma';
 import { extractPlaceholders, dotNotationParser } from '../lib/docx/renderTemplate';
 
-const SOURCE = 'public/apv-teklif-birlesik.docx';
+const SOURCE = 'data/reference/apv-teklif-birlesik.docx';
 const OUT_FILENAME = 'apv-teklif-birlesik.docx';
 const TEMPLATE_NAME = 'APV Hemisan Teklif (Birleşik)';
 const OLD_TEMPLATE_NAMES = [
@@ -159,7 +159,7 @@ async function upsertTemplate(opts: { name: string; description: string; filenam
     name: opts.name,
     description: opts.description,
     filename: opts.filename,
-    filepath: `/uploads/templates/${opts.filename}`,
+    filepath: `templates/${opts.filename}`,
     placeholders,
     moduleType: opts.moduleType,
     isActive: true,
@@ -178,7 +178,7 @@ async function main() {
   const srcPath = path.join(root, SOURCE);
   if (!fs.existsSync(srcPath)) throw new Error(`Referans şablon bulunamadı: ${SOURCE}`);
   const srcBuf = fs.readFileSync(srcPath);
-  const outDir = path.join(root, 'public', 'uploads', 'templates');
+  const outDir = path.join(root, 'data', 'templates');
   fs.mkdirSync(outDir, { recursive: true });
 
   console.log(`Referans: ${SOURCE}`);

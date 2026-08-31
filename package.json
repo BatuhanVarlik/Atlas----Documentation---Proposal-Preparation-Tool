@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev -p 8000",
     "build": "next build",
+    "build:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next build",
     "start": "next start -p 8000",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
@@ -20,7 +21,15 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "db:sync-users": "tsx prisma/sync-shared-users.ts",
-    "pricing:extract": "node scripts/extract-precalculation.js"
+    "precalc:build": "node scripts/build-precalc.js",
+    "precalc:pumps": "tsx scripts/smoke-pumps.ts",
+    "precalc:verify": "tsx scripts/verify-precalc.ts",
+    "precalc:smoke": "tsx scripts/smoke-precalc.ts",
+    "precalc:quote": "tsx scripts/verify-quote.ts",
+    "precalc:quote-draft": "tsx scripts/verify-quote-draft.ts",
+    "precalc:export-style": "tsx scripts/verify-export-style.ts",
+    "precalc:reprice": "tsx scripts/reprice-quote.ts",
+    "precalc:load": "tsx scripts/load-quote.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -45,6 +54,7 @@
     "date-fns": "^4.1.0",
     "docxtemplater": "^3.59.4",
     "lucide-react": "^0.511.0",
+    "mssql": "^12.7.0",
     "next": "^15.3.2",
     "next-auth": "^4.24.11",
     "pg": "^8.14.1",
@@ -57,12 +67,14 @@
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.3.0",
     "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0",
     "zod": "^3.24.4",
     "zustand": "^5.0.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.7",
     "@types/bcryptjs": "^2.4.6",
+    "@types/mssql": "^12.3.0",
     "@types/node": "^22.15.17",
     "@types/pg": "^8.11.13",
     "@types/react": "^19.1.4",
