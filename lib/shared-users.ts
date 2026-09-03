@@ -35,12 +35,15 @@ export interface SharedUser {
   avatar: string | null;
   isActive: boolean;
   mustChangePassword: boolean;
+  // Uygulamaya özel per-kullanıcı ayarları (Portal merkezî yönetir; Atlas kendi anahtarını okur).
+  appSettings: Record<string, Record<string, unknown>>;
 }
 
 const SELECT_COLS = `
   id, email, name, password, title,
   department_name AS "departmentName", role, manager_email AS "managerEmail", avatar,
-  is_active AS "isActive", must_change_password AS "mustChangePassword"`;
+  is_active AS "isActive", must_change_password AS "mustChangePassword",
+  COALESCE(app_settings, '{}'::jsonb) AS "appSettings"`;
 
 export async function getSharedUserByEmail(email: string): Promise<SharedUser | null> {
   const { rows } = await getPool().query<SharedUser>(
@@ -219,5 +222,29 @@ export async function setSharedUserManager(email: string, managerEmail: string |
   await getPool().query(
     `UPDATE users SET manager_email = $1, updated_at = now() WHERE lower(email) = lower($2)`,
     [managerEmail, email]
+  );
+}
+
+/**
+ * Uygulamaya özel per-kullanıcı ayarını ortak DB'de merge eder (e-posta ile).
+ * Atlas'ın kendi Kullanıcılar sayfasından yapılan app-özel değişiklikler de ortak DB'ye
+ * yazılsın diye kullanılır → Portal görür ve ayna senkronu tutarlı kalır.
+ */
+export async function setSharedUserAppSettingByEmail(
+  email: string,
+  appKey: string,
+  patch: Record<string, unknown>
+): Promise<void> {
+  await getPool().query(
+    `UPDATE users
+       SET app_settings = jsonb_set(
+             COALESCE(app_settings, '{}'::jsonb),
+             ARRAY[$2],
+             COALESCE(app_settings -> $2, '{}'::jsonb) || $3::jsonb,
+             true
+           ),
+           updated_at = now()
+     WHERE lower(email) = lower($1)`,
+    [email, appKey, JSON.stringify(patch)]
   );
 }
