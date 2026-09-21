@@ -62,6 +62,28 @@ DOM test ortamı kurulu değil (`environment: 'node'`, testing-library yok) ve k
 
 ---
 
+## Yürütme Notu (2026-09-21)
+
+Kullanıcı bu plandaki maddelerin çoğunu bağımsız olarak yeniden istedi (bkz.
+konuşma). Bu yürütmede kapsam şöyle daraltıldı:
+
+- **Atlanan:** Task 1 (OTHERS Kaynak sütunu sona), Task 13, Task 14 (P–AC /
+  AD–BO katlanır sütun grupları). Bunlar bugünkü istekte yok; plana daha
+  önce ayrı bir ihtiyaçtan eklenmişler. Adımları olduğu gibi dursun —
+  ileride ayrı bir yürütmede ele alınabilir.
+- **Task 2 kapsamı genişletildi:** `IDENTITY_FIELDS`, yalnızca
+  `AdvancedPrecalculationClient.tsx`'e değil, `PrecalculationClient.tsx`
+  içindeki yerel `QuoteIdentityBar`'a da bağlanır (`fields` dizisi silinip
+  `IDENTITY_FIELDS` import edilir). Teklifi fiilen dışa aktarıp kaydeden
+  ekran orası olduğu için Customer/End User oradan da girilebilmeli.
+- **Eklenen:** Task 21 (aşağıda) — Precalculation No input'unun içerik
+  uzunluğuna göre sağa genişlemesi. Plandaki diğer maddelerde yok.
+
+Faz sırası ve bağımlılıklar değişmedi: 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+15, 16, 17, 18, 19, 20, 21.
+
+---
+
 ## Faz 1 — Küçük düzeltmeler
 
 ### Task 1: OTHERS tablosunda Kaynak (G) sütununu sona taşı
@@ -4132,6 +4154,159 @@ git commit -m "feat(precalc): OZET sayfasina revizyon gecmisi blogu"
 
 ---
 
+### Task 21: Precalculation No input'u içerik uzunluğuna göre genişlesin
+
+Kimlik şeridindeki diğer alanlar (Müşteri, Son Kullanıcı…) sabit genişlikte
+kalabilir; ama Precalculation No revizyon kodu eklendikçe uzar
+(`PRE-2026-114 RE-01` gibi) ve sabit `w-44` kutuda kırpılıp okunmuyor.
+Yalnızca bu alan, yazılan metne göre sağa doğru büyüsün.
+
+**Files:**
+- Create: `components/precalc/autoWidth.ts`
+- Create: `components/precalc/__tests__/autoWidth.test.ts`
+- Modify: `components/precalc/identityFields.ts` (Task 2'de oluşturulur) — `IdentityField`'a `autoWidth?: boolean`, `precalcNo` girdisine `autoWidth: true`
+- Modify: `components/precalc/EditableCell.tsx` — `autoWidth?: boolean` prop
+- Modify: `app/(dashboard)/advanced-precalculation/AdvancedPrecalculationClient.tsx` (`QuoteIdentityBar`)
+- Modify: `app/(dashboard)/precalculation/PrecalculationClient.tsx` (`QuoteIdentityBar`)
+
+**Interfaces:**
+- Produces: `computeAutoWidthCh(text: string): number` — `ch` biriminde, `AUTO_WIDTH_MIN_CH` (18) ile `AUTO_WIDTH_MAX_CH` (48) arası kenetlenmiş genişlik.
+
+**Bağımlılık:** Task 2 tamamlanmış olmalı (`identityFields.ts` ve her iki
+`QuoteIdentityBar`'ın `IDENTITY_FIELDS` üzerinden çalışıyor olması gerekir;
+Task 2'nin bu plandaki genişletilmiş hâli — bkz. Yürütme Notu — ikisini de
+kapsar).
+
+- [ ] **Step 1: Write the failing test**
+
+`components/precalc/__tests__/autoWidth.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { computeAutoWidthCh, AUTO_WIDTH_MIN_CH, AUTO_WIDTH_MAX_CH } from '../autoWidth';
+
+describe('computeAutoWidthCh', () => {
+  it('boş ya da kısa metinde asgari genişliği verir', () => {
+    expect(computeAutoWidthCh('')).toBe(AUTO_WIDTH_MIN_CH);
+    expect(computeAutoWidthCh('PRE-01')).toBe(AUTO_WIDTH_MIN_CH);
+  });
+
+  it('asgariyi aşan metinde uzunluk + boşluk payı kadar büyür', () => {
+    // 20 karakter + 2 pay = 22 (asgari 18'i aşıyor)
+    expect(computeAutoWidthCh('PRE-2026-114 RE-01AB')).toBe(22);
+  });
+
+  it('azami genişliği aşmaz', () => {
+    expect(computeAutoWidthCh('X'.repeat(100))).toBe(AUTO_WIDTH_MAX_CH);
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npm test -- autoWidth`
+Expected: FAIL — `Failed to resolve import "../autoWidth"`
+
+- [ ] **Step 3: Implement**
+
+`components/precalc/autoWidth.ts`:
+
+```ts
+/**
+ * Precalculation No gibi uzunluğu öngörülemeyen alanlar için içerik
+ * genişliğinde giriş kutusu. Piksel yerine `ch` (bir karakter genişliği)
+ * kullanılır — yazı tipi/ekran boyutundan bağımsız çalışır ve mevcut
+ * Tailwind `w-*` sınıflarıyla aynı ölçekte kalır.
+ */
+export const AUTO_WIDTH_MIN_CH = 18; // önceki sabit `w-44` (11rem) karşılığı
+export const AUTO_WIDTH_MAX_CH = 48; // şeridi tek satırda tutan üst sınır
+
+/** Metne göre `ch` cinsinden giriş kutusu genişliği (imleç payı dahil). */
+export function computeAutoWidthCh(text: string): number {
+  const withCaretRoom = text.length + 2;
+  return Math.min(AUTO_WIDTH_MAX_CH, Math.max(AUTO_WIDTH_MIN_CH, withCaretRoom));
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npm test -- autoWidth`
+Expected: PASS (3 test)
+
+- [ ] **Step 5: EditableCell'e bağla**
+
+`EditableCell.tsx` — `Props`'a `autoWidth?: boolean` ekle; genişlik, odaktaysa
+taslak metinden, değilse görüntülenen metinden hesaplanır:
+
+```tsx
+import { computeAutoWidthCh } from './autoWidth';
+// …
+function EditableCellBase({ value, format, align = 'left', edited, placeholder, autoWidth, onCommit }: Props) {
+  // … (mevcut gövde aynı)
+  const display = formatCell(value, format);
+  const widthCh = autoWidth ? computeAutoWidthCh(focused ? draft : display) : undefined;
+
+  return (
+    <input
+      // … (mevcut props aynı)
+      style={widthCh ? { width: `${widthCh}ch` } : undefined}
+      className={cn(
+        autoWidth ? 'h-full px-2 bg-transparent text-xs outline-none rounded-sm transition-[width]'
+          : 'w-full h-full px-2 bg-transparent text-xs outline-none rounded-sm',
+        'border border-slate-300 hover:border-slate-400 focus:border-blue-500 focus:bg-white',
+        'focus:ring-1 focus:ring-blue-500/30',
+        align === 'right' && 'text-right',
+        align === 'center' && 'text-center',
+        edited && 'bg-amber-50 font-medium text-amber-900',
+      )}
+    />
+  );
+}
+```
+
+- [ ] **Step 6: identityFields.ts'e işaretle**
+
+`IdentityField`'a `autoWidth?: boolean` ekle; `precalcNo` girdisine `autoWidth: true` yaz (diğerlerinde yok — sabit genişlikte kalırlar).
+
+- [ ] **Step 7: Her iki QuoteIdentityBar'da sarmalayıcıyı gevşet**
+
+Sabit `w-44`/`w-36` sınıfı, büyüyen alanı kırpar. İki dosyada da alan
+sarmalayıcısı şu hâle gelir:
+
+```tsx
+<span className={f.autoWidth ? 'inline-block' : 'w-36'}>
+  <EditableCell
+    value={engine.value(f.addr)}
+    format={f.format}
+    align="left"
+    edited={engine.isUserEntry(f.addr)}
+    placeholder={f.placeholder}
+    autoWidth={f.autoWidth}
+    onCommit={(v) => onSetCell(f.addr, v)}
+  />
+</span>
+```
+
+- [ ] **Step 8: Tip denetimi ve elle doğrulama**
+
+Run: `npm run type-check`
+Expected: hata yok
+
+`/precalculation` ve `/advanced-precalculation` → Precalculation No alanına
+kısa bir numara yaz: kutu asgari genişlikte kalmalı. Sonra
+`PRE-2026-114 RE-01 EK AÇIKLAMA` gibi uzun bir metin yaz: kutu yazdıkça
+sağa doğru büyümeli, şeritteki diğer alanları alt satıra itmeli (`flex-wrap`
+zaten var), kırpma olmamalı. 48 karakteri aşan bir metinde büyüme durmalı.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add components/precalc/autoWidth.ts components/precalc/__tests__/autoWidth.test.ts components/precalc/identityFields.ts components/precalc/EditableCell.tsx "app/(dashboard)/advanced-precalculation/AdvancedPrecalculationClient.tsx" "app/(dashboard)/precalculation/PrecalculationClient.tsx"
+git commit -m "feat(precalc): precalculation no input icerik uzunluguna gore genislesin"
+```
+
+---
+
 ## Kapanış Kontrolü
 
 Bütün görevler bittikten sonra:
@@ -4141,3 +4316,4 @@ Bütün görevler bittikten sonra:
 - [ ] `npm run lint` — yeni uyarı yok
 - [ ] `npm run build:clean` — üretim derlemesi geçiyor (Tailwind sınıfları için temiz derleme şart)
 - [ ] Uçtan uca: yeni teklif → kalem gir → kaydet (RE-00) → revizyon (RE-01) → Precalculation Oluştur → inen dosyanın adı numarayla başlıyor, ÖZET ilk sayfa, CASHFLOW'da grafik var, AYRINTILI FIYATLANDIRMA A4'e sığıyor, PRECALCULATION'da P sütununda `+` düğmesi var.
+- [ ] Precalculation No alanına uzun bir revizyon numarası yazıldığında kutu kırpmadan sağa genişliyor (Task 21).
