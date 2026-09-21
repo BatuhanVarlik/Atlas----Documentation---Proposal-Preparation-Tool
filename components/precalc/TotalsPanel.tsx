@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import type { PrecalcEngine } from '@/lib/precalc/engine';
+import { profitRate } from '@/lib/precalc/profit';
 import type { RawValue } from '@/lib/precalc/types';
 import { cn, formatNumberTR } from '@/lib/utils';
 import { EditableCell } from './EditableCell';
@@ -51,15 +52,14 @@ export default function TotalsPanel({ engine, settledVersion, calculating, curre
     const subSales = engine.num('N' + subtotalRow);
     const grandCost = engine.num('M' + grandTotalRow);
     const grandSales = engine.num('N' + grandTotalRow);
-    const profitRate = engine.num('M' + (subtotalRow + 19));
+    const rate = profitRate(engine);
 
     return {
       subCost,
       subSales,
       grandCost,
       grandSales,
-      profitRate,
-      margin: grandSales > 0 ? (grandSales - grandCost) / grandSales : 0,
+      profitRate: rate,
       overheads: OVERHEAD_ROWS.map((o) => {
         const row = subtotalRow + o.offset;
         return {
@@ -88,11 +88,18 @@ export default function TotalsPanel({ engine, settledVersion, calculating, curre
 
   return (
     <div className={cn('space-y-3 transition-opacity', calculating && 'opacity-60')}>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Stat label={`Ara Toplam — Maliyet (${currency})`} value={money(totals.subCost)} />
         <Stat label={`Ara Toplam — Satış (${currency})`} value={money(totals.subSales)} />
         <Stat label={`Genel Toplam — Maliyet (${currency})`} value={money(totals.grandCost)} tone="slate" />
         <Stat label={`Genel Toplam — Satış (${currency})`} value={money(totals.grandSales)} tone="emerald" />
+        <Stat
+          label="Kâr Oranı"
+          value={totals.profitRate === null
+            ? '—'
+            : formatNumberTR(totals.profitRate * 100, { decimals: 2 }) + ' %'}
+          tone="emerald"
+        />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

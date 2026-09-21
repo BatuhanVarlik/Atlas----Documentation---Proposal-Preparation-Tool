@@ -13,6 +13,7 @@
 import * as XLSX from 'xlsx-js-style';
 import { PrecalcEngine } from './engine';
 import { indexToCol, isError } from './formula';
+import { profitRate } from './profit';
 import {
   ROW_HEIGHT, S_BLOCK_TITLE, S_HEAD, S_LABEL, S_LABEL_VALUE, S_TITLE,
   itemStyle, sectionStyle, totalStyle, type NumFmtKey,
@@ -471,7 +472,7 @@ function buildSummarySheet(
   r++;
   row('ARA TOPLAM (maliyet)', engine.num('M' + AN.subtotalRow), 'money');
   row('ARA TOPLAM (satış)', engine.num('N' + AN.subtotalRow), 'money');
-  row('Kâr oranı', engine.num('M' + (AN.subtotalRow + 19)), 'percent');
+  row('Kâr oranı', profitRate(engine) ?? '—', 'percent');
   r++;
   row('GENEL TOPLAM (maliyet)', engine.num('M' + AN.grandTotalRow), 'money', true);
   row('GENEL TOPLAM (satış)', engine.num('N' + AN.grandTotalRow), 'money', true);
