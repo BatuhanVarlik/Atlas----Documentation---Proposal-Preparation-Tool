@@ -15,7 +15,7 @@ const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
 
-const SOURCE = process.argv[2] || 'data/templates/ORNEK PRECALCULATION 36.07.xlsm';
+const SOURCE = process.argv[2] || 'data/templates/ORNEK PRECALCULATION 36.10.xlsm';
 const SHEET = 'PRECALCULATION';
 const HEADER_ROW = 9;
 
@@ -211,6 +211,196 @@ const FORMULA_PATCHES = [
     was: 'IF(P27<3,1,"30A Takınız")',
     now: 'IF(P27<3,1,2)',
     why: 'Metin dönüşü V28=V27*200 üzerinden bütün pano maliyetini bozuyordu.',
+  },
+
+  /*
+   * 36.10'da CENTRIFUGAL PUMP & FAN şablonunun ilk satırı (3566) etrafında
+   * bozulma: bu satırın J/L/M/O/S/U/BB/BQ hücreleri artık kendi satırı yerine
+   * 3568'i okuyor, 3568'in kendi O/S hücreleri ise #REF! içeriyor. Bütün
+   * kardeş satırlar (3567, 3569-3585) kendi kendine referans veren doğru
+   * desende — yalnızca bu ikisi bozuk. Ekipman kodu formülü de aynı bölgede
+   * kayboldu (bkz. MISSING_FORMULA_PATCHES / B3566-B3569); bu, kaynak
+   * dosyada 36.07 -> 36.10 arasında satır 3566-3568 civarında yapılan bir
+   * düzenlemenin (muhtemelen kopyala/yapıştır veya satır ekle/sil) yarım
+   * kalmış izi. `was`, satırların kendi kendine tutarlılığını bozan GÜNCEL
+   * (36.10) formül; `now`, kardeş satırların hâlâ izlediği doğru desen.
+   */
+  {
+    sheet: SHEET,
+    addr: 'J3566',
+    was: 'IF(D3568="APV",0.38,1)',
+    now: 'IF(D3566="APV",0.38,1)',
+    why: 'Marka çarpanı kendi satırındaki D3566 yerine D3568\'i okuyordu; ' +
+      'pompa markası APV dışına çekilse bile çarpan hep 0,38 kalıyordu ' +
+      '(veya tam tersi — D3568 ne yazıyorsa ona bağlı kalıyordu).',
+  },
+  {
+    sheet: SHEET,
+    addr: 'L3566',
+    was: 'I3566*J3566*K3566*M$4878*F3568',
+    now: 'I3566*J3566*K3566*M$4878*F3566',
+    why: 'Nakliye maliyeti kendi satırındaki F3566 yerine F3568 miktarını çarpıyordu.',
+  },
+  {
+    sheet: SHEET,
+    addr: 'M3566',
+    was: 'F3568*I3566*J3566*K3566',
+    now: 'F3566*I3566*J3566*K3566',
+    why: 'Toplam maliyet kendi satırındaki F3566 yerine F3568 miktarını çarpıyordu — ' +
+      'satıra miktar girilse bile F3568 boşken maliyet 0 çıkıyordu (smoke-pumps.ts ile yakalandı).',
+  },
+  {
+    sheet: SHEET,
+    addr: 'O3566',
+    was: 'VALUE(IF(AND(F3568>0,(OR(I3566=0,I3566=""))),"1","0"))',
+    now: 'VALUE(IF(AND(F3566>0,(OR(I3566=0,I3566=""))),"1","0"))',
+    why: '"Fiyat eksik" uyarısı kendi satırındaki F3566 yerine F3568\'e bakıyordu.',
+  },
+  {
+    sheet: SHEET,
+    addr: 'S3566',
+    was: '(IF(F3568=0,0,IF(F3568<5,2,IF(F3568<20,3,IF(F3568>20,F3568/10)))))*R3566',
+    now: '(IF(F3566=0,0,IF(F3566<5,2,IF(F3566<20,3,IF(F3566>20,F3566/10)))))*R3566',
+    why: 'Yedek parça kademesi kendi satırındaki F3566 yerine F3568\'i okuyordu.',
+  },
+  {
+    sheet: SHEET,
+    addr: 'U3566',
+    was: 'IF(F3568=0,0,8)',
+    now: 'IF(F3566=0,0,8)',
+    why: 'Tedarik haftası kendi satırındaki F3566 yerine F3568\'i okuyordu.',
+  },
+  {
+    sheet: SHEET,
+    addr: 'BB3566',
+    was: 'F3568*BA3566',
+    now: 'F3566*BA3566',
+    why: 'Toplam kaynak metrajı kendi satırındaki F3566 yerine F3568\'i okuyordu.',
+  },
+  {
+    sheet: SHEET,
+    addr: 'BQ3566',
+    was: 'F3568',
+    now: 'F3566',
+    why: 'Kendi satırındaki F3566 yerine F3568\'i taşıyordu.',
+  },
+  {
+    sheet: SHEET,
+    addr: 'O3568',
+    was: 'VALUE(IF(AND(#REF!>0,(OR(I3568=0,I3568=""))),"1","0"))',
+    now: 'VALUE(IF(AND(F3568>0,(OR(I3568=0,I3568=""))),"1","0"))',
+    why: 'Aynı bölgedeki düzenleme F3568 referansını #REF!\'e çevirmiş — hücre artık ' +
+      'her zaman hata döndürüyor, hatası genel toplama kadar yayılabilir.',
+  },
+  {
+    sheet: SHEET,
+    addr: 'S3568',
+    was: '(IF(#REF!=0,0,IF(#REF!<5,2,IF(#REF!<20,3,IF(#REF!>20,#REF!/10)))))*R3568',
+    now: '(IF(F3568=0,0,IF(F3568<5,2,IF(F3568<20,3,IF(F3568>20,F3568/10)))))*R3568',
+    why: 'Aynı sebep — F3568 referansı #REF!\'e çevrilmiş.',
+  },
+];
+
+/*
+ * Aynı satır 3566 bölgesindeki bozulma, birkaç çok-terimli formülün İÇİNDE
+ * de tek bir terimi etkiliyor (yüzlerce terimden yalnızca biri). Tüm formülü
+ * satır satır yeniden yazmak yerine yalnızca bozuk alt dizge değiştirilir;
+ * `find` dizgesinin formülde tam olarak `count` kez geçtiği doğrulanır.
+ */
+const SUBSTRING_PATCHES = [
+  {
+    sheet: SHEET,
+    addr: 'AF3564',
+    find: 'IF(AF3566="E",F3568,0)',
+    replace: 'IF(AF3566="E",F3566,0)',
+    count: 1,
+    why: 'AGITATOR bloğunun "E" (hız sürücülü) motor kW toplamı; 20+ terimlik zincirde ' +
+      'yalnızca 3566 terimi kendi F3566 yerine F3568\'i okuyor.',
+  },
+  {
+    sheet: SHEET,
+    addr: 'F3617',
+    find: 'PRECALCULATION!$AF$3566="E",PRECALCULATION!$AE$3566<0.76,PRECALCULATION!$AE$3566>0)),PRECALCULATION!$F$3567',
+    replace: 'PRECALCULATION!$AF$3566="E",PRECALCULATION!$AE$3566<0.76,PRECALCULATION!$AE$3566>0)),PRECALCULATION!$F$3566',
+    count: 1,
+    why: 'Küçük motor (AE<0,76 kW) kablo kesiti kovası; 29 terimlik zincirde yalnızca ' +
+      '3566 terimi kendi F3566 yerine F3567\'yi okuyor — satır 3566\'nın miktarı bu ' +
+      'kovaya hiç girmiyordu.',
+  },
+  {
+    // 36.07'de F4840 idi; bu kitapta (36.10) 6 satırlık kayma sonrası F4834.
+    sheet: SHEET,
+    addr: 'F4834',
+    find: 'F3567:F3595',
+    replace: 'F3566:F3595',
+    count: 2,
+    why: 'Pano gövde boyutlandırma formülü (MROUND…/60) pompa bloğunu F3567\'den ' +
+      'başlatıyor — satır 3566\'nın miktarı iki dalda da (E/diğer) toplamdan düşüyordu.',
+  },
+  {
+    // 36.07'de F4841 idi; bu kitapta (36.10) F4835.
+    sheet: SHEET,
+    addr: 'F4835',
+    find: 'F3567:F3595',
+    replace: 'F3566:F3595',
+    count: 2,
+    why: 'Aynı sebep — F4834\'ün kardeş satırı.',
+  },
+];
+
+/*
+ * 36.10'da kaybolmuş formüller.
+ *
+ * Aşağıdaki hücreler, kendileriyle birebir aynı desendeki KOMŞU satırların
+ * hepsinde hâlâ duran bir formülün bu birkaç satırda hiç kalmamış hâli —
+ * biri hücreyi yanlışlıkla silmiş/üzerine yazmış olmalı. Fiyat güncellemesiyle
+ * bilinçli olarak formülden statik değere çevrilen VLOOKUP hücrelerinden
+ * (I1847, I1848, I1853, I3095 — dış fiyat listesine bağlıydı, yeni fiyat elle
+ * yapıştırılmış) farkı şu: burada aynı bloktaki DİĞER bütün satırlar formülü
+ * koruyor, yalnızca bunlar boş kalmış; hiçbir yeni değer/model bilgisiyle de
+ * açıklanmıyor. `now`, kardeş satırın formülüyle birebir aynı desen — yalnızca
+ * satır numarası değişir.
+ *
+ * Hücre zaten formül taşıyorsa (üretici kendi düzeltmişse) yama atlanır;
+ * beklenmedik BAŞKA bir formül taşıyorsa derleme durur.
+ */
+const MISSING_FORMULA_PATCHES = [
+  {
+    sheet: SHEET,
+    addr: 'B3566',
+    now: 'UPPER(MID(C3566,1,26))&IF(ISERROR((FIND("Double Mech.",C3566))),""," WF")',
+    why: 'CENTRIFUGAL PUMP & FAN şablonunda ekipman kodunu C sütunundaki ' +
+      'teknik açıklamadan türeten formül. Aynı bloktaki B3568, B3570-B3585 ' +
+      'formülü hâlâ taşıyor; yalnızca B3566/67/69 boş — ekipman kodu bu ' +
+      'satırlarda hep "" dönerdi.',
+  },
+  {
+    sheet: SHEET,
+    addr: 'B3567',
+    now: 'UPPER(MID(C3567,1,26))&IF(ISERROR((FIND("Double Mech.",C3567))),""," WF")',
+    why: 'Aynı sebep — bkz. B3566.',
+  },
+  {
+    sheet: SHEET,
+    addr: 'B3569',
+    now: 'UPPER(MID(C3569,1,26))&IF(ISERROR((FIND("Double Mech.",C3569))),""," WF")',
+    why: 'Aynı sebep — bkz. B3566.',
+  },
+  {
+    sheet: SHEET,
+    addr: 'F4063',
+    now: 'IF(AND(AF$4053="H",AE$4053=22),F$4053,0)+IF(AND(AF$4054="H",AE$4054=22),F$4054,0)',
+    why: 'HOMOGENIZER > CONTROL CABINET (HIZ SÜRÜCÜSÜZ) 22 kW satırı. Aynı ' +
+      'bloktaki 11-315 kW satırlarının (F4060-F4075) hepsi formülü koruyor, ' +
+      'yalnızca 22 kW boş — 22 kW\'lık bir motor girilse bile pano sayısı hep 0 kalırdı.',
+  },
+  {
+    sheet: SHEET,
+    addr: 'F4084',
+    now: 'IF(AND(AF$4053="E",AE$4053=55),F$4053,0)+IF(AND(AF$4054="E",AE$4054=55),F$4054,0)',
+    why: 'HOMOGENIZER > CONTROL CABINET (HIZ SÜRÜCÜLÜ) 55 kW satırı. Aynı ' +
+      'bloktaki 11-200 kW satırlarının (F4077-F4090) hepsi formülü koruyor, ' +
+      'yalnızca 55 kW boş.',
   },
 ];
 
@@ -502,6 +692,43 @@ for (const patch of FORMULA_PATCHES) {
   }
   sheet.f[patch.addr] = patch.now;
   console.log('Formül düzeltildi: ' + patch.sheet + '!' + patch.addr + '  ' + patch.was + '  ->  ' + patch.now);
+}
+
+for (const patch of MISSING_FORMULA_PATCHES) {
+  const sheet = sheets[patch.sheet];
+  if (!sheet) throw new Error('Yama sayfası yok: ' + patch.sheet);
+  if (sheet.f[patch.addr] === patch.now) continue;   // üretici zaten düzeltmiş
+  if (sheet.f[patch.addr] !== undefined) {
+    throw new Error([
+      'Kayıp formül yaması uymuyor: ' + patch.sheet + '!' + patch.addr,
+      '  hücre zaten başka bir formül taşıyor: ' + sheet.f[patch.addr],
+      '  Kaynak kitap değişmiş; yamayı gözden geçirin.',
+    ].join('\n'));
+  }
+  sheet.f[patch.addr] = patch.now;
+  delete sheet.v[patch.addr]; // formül eklenince eski statik değer önbellek olarak öncelenmesin
+  formulaCount++;
+  console.log('Kayıp formül geri eklendi: ' + patch.sheet + '!' + patch.addr + '  ->  ' + patch.now);
+}
+
+for (const patch of SUBSTRING_PATCHES) {
+  const sheet = sheets[patch.sheet];
+  if (!sheet) throw new Error('Yama sayfası yok: ' + patch.sheet);
+  const current = sheet.f[patch.addr];
+  if (current === undefined) throw new Error('Alt dizge yaması için hücre formülsüz: ' + patch.sheet + '!' + patch.addr);
+  const occurrences = current.split(patch.find).length - 1;
+  if (occurrences === 0) continue;                    // üretici zaten düzeltmiş
+  if (occurrences !== patch.count) {
+    throw new Error([
+      'Alt dizge yaması uymuyor: ' + patch.sheet + '!' + patch.addr,
+      '  aranan   : ' + patch.find,
+      '  beklenen tekrar: ' + patch.count + ', bulunan: ' + occurrences,
+      '  Kaynak kitap değişmiş; yamayı gözden geçirin.',
+    ].join('\n'));
+  }
+  sheet.f[patch.addr] = current.split(patch.find).join(patch.replace);
+  console.log('Alt dizge düzeltildi: ' + patch.sheet + '!' + patch.addr +
+    '  "' + patch.find.slice(0, 40) + '…" -> "' + patch.replace.slice(0, 40) + '…" (' + occurrences + 'x)');
 }
 
 /* ------------------------------------------------------------------ */

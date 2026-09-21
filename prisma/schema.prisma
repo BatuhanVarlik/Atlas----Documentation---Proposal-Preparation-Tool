@@ -19,33 +19,41 @@ model Department {
 }
 
 model User {
-  id           String  @id @default(cuid())
-  name         String
-  email        String  @unique
-  password     String
-  role         Role    @default(MEMBER)
-  title        String? // Ünvan — ortak kullanıcı DB'sinden senkronlanır (görüntüleme için)
-  departmentId String
-  avatar       String?
-  isActive     Boolean  @default(true)
+  id                    String   @id @default(cuid())
+  name                  String
+  email                 String   @unique
+  password              String
+  role                  Role     @default(MEMBER)
+  title                 String? // Ünvan — ortak kullanıcı DB'sinden senkronlanır (görüntüleme için)
+  departmentId          String
+  avatar                String?
+  isActive              Boolean  @default(true)
   // İlk girişte / admin şifre atadığında zorunlu şifre değişikliği (ortak DB ile uyumlu ayna alanı)
-  mustChangePassword Boolean @default(true)
-  createdAt    DateTime @default(now())
+  mustChangePassword    Boolean  @default(true)
+  /**
+   * Advanced Precalculation kataloğunu (liste fiyatı, etiket/tedarikçi/teknik
+   * açıklama) düzenleme yetkisi. ADMIN her zaman düzenleyebilir; bu bayrak
+   * ADMIN'in başka kullanıcılara verdiği ek yetkidir — ortak kullanıcı DB'sine
+   * senkronlanmaz, yalnızca bu uygulamaya özeldir.
+   */
+  canEditPrecalcCatalog Boolean  @default(false)
+  createdAt             DateTime @default(now())
 
-  department      Department @relation(fields: [departmentId], references: [id])
-  createdProjects     Project[]              @relation("ProjectCreator")
-  createdModules      Module[]               @relation("ModuleCreator")
-  reviewedModules     Module[]               @relation("ModuleReviewer")
-  resetRequests       PasswordResetRequest[] @relation("ResetRequestUser")
-  resolvedResets      PasswordResetRequest[] @relation("ResetRequestResolver")
-  moduleRevisions     ModuleRevision[]       @relation("ModuleRevisionCreator")
-  createdMilkReceptionModules  MilkReceptionModule[]         @relation("MilkReceptionModuleCreator")
-  milkReceptionRevisions       MilkReceptionModuleRevision[] @relation("MilkReceptionModuleRevisionCreator")
-  customCatalogItems           CustomCatalogItem[]           @relation("CustomCatalogCreator")
-  createdCipModules            CipModule[]                   @relation("CipModuleCreator")
-  savedPrecalculations         SavedPrecalculation[]         @relation("SavedPrecalculationCreator")
-  updatedPrecalculations       SavedPrecalculation[]         @relation("SavedPrecalculationEditor")
-  cipRevisions                 CipModuleRevision[]           @relation("CipModuleRevisionCreator")
+  department                  Department                    @relation(fields: [departmentId], references: [id])
+  createdProjects             Project[]                     @relation("ProjectCreator")
+  createdModules              Module[]                      @relation("ModuleCreator")
+  reviewedModules             Module[]                      @relation("ModuleReviewer")
+  resetRequests               PasswordResetRequest[]        @relation("ResetRequestUser")
+  resolvedResets              PasswordResetRequest[]        @relation("ResetRequestResolver")
+  moduleRevisions             ModuleRevision[]              @relation("ModuleRevisionCreator")
+  createdMilkReceptionModules MilkReceptionModule[]         @relation("MilkReceptionModuleCreator")
+  milkReceptionRevisions      MilkReceptionModuleRevision[] @relation("MilkReceptionModuleRevisionCreator")
+  customCatalogItems          CustomCatalogItem[]           @relation("CustomCatalogCreator")
+  createdCipModules           CipModule[]                   @relation("CipModuleCreator")
+  savedPrecalculations        SavedPrecalculation[]         @relation("SavedPrecalculationCreator")
+  updatedPrecalculations      SavedPrecalculation[]         @relation("SavedPrecalculationEditor")
+  cipRevisions                CipModuleRevision[]           @relation("CipModuleRevisionCreator")
+  precalcCatalogOverrides     PrecalcCatalogOverride[]      @relation("PrecalcCatalogOverrideEditor")
 }
 
 // ORTAK ROL SETİ — tüm APV Hemisan uygulamalarında aynı (bkz. lib/roles.ts).
@@ -96,30 +104,30 @@ model Module {
   selectedInnerDiameter Float?
   selectedOuterDiameter Float?
 
-  valveType              ValveType?
-  valveControlUnit       ControlUnitType?
-  cipReturnValveType     CipReturnValveType?
-  waterInletValveType    WaterInletType?
-  tankCipInletValveType  TankCipInletValveType?
-  tankCipInletDiameter   String?
+  valveType             ValveType?
+  valveControlUnit      ControlUnitType?
+  cipReturnValveType    CipReturnValveType?
+  waterInletValveType   WaterInletType?
+  tankCipInletValveType TankCipInletValveType?
+  tankCipInletDiameter  String?
 
   // Tank CIP Dönüş Hattı (modül seviyesinde, tüm tanklar için ortak)
-  tankCipReturnManifoldExists Boolean @default(false)
-  tankCipReturnLineCount      Int     @default(1)
-  tankCipReturnPumpModel      String?
-  tankCipReturnPumpKw         Float?
+  tankCipReturnManifoldExists   Boolean @default(false)
+  tankCipReturnLineCount        Int     @default(1)
+  tankCipReturnPumpModel        String?
+  tankCipReturnPumpKw           Float?
   tankCipReturnPumpImpellerSize Float?
 
   // Fiyatlandırma manuel düzenlemeleri (önizlemeden kaydedilir)
   priceMultiplier Float @default(1)
-  priceOverrides  Json?   // { [rowKey]: number } — satır bazında manuel birim net fiyat
+  priceOverrides  Json? // { [rowKey]: number } — satır bazında manuel birim net fiyat
 
   // === Teklif (commercial) bilgileri — yeni teklif şablonu (HEM-PROJECT-NO) için ===
-  quotationNo           String?  // örn. HEM-2026-001 (oluşturmada otomatik üretilir)
-  customerContactPerson String?  // mektup: "For the Attention of ___"
-  deliveryWeeks         Int?     // "Can be delivered within X weeks"
-  deliveryPlace         String?  @default("Customer Factory")
-  offerValidityDays     Int?     @default(30) // Offer validity + bağlayıcı kabul süresi
+  quotationNo           String? // örn. HEM-2026-001 (oluşturmada otomatik üretilir)
+  customerContactPerson String? // mektup: "For the Attention of ___"
+  deliveryWeeks         Int? // "Can be delivered within X weeks"
+  deliveryPlace         String? @default("Customer Factory")
+  offerValidityDays     Int?    @default(30) // Offer validity + bağlayıcı kabul süresi
 
   creatorId  String
   reviewerId String?
@@ -138,15 +146,15 @@ model Module {
 }
 
 model ModuleRevision {
-  id             String   @id @default(cuid())
-  moduleId       String
-  revisionNumber Int                      // 1, 2, 3...
-  label          String                   // "RV-01", "RV-02"...
-  description    String                   @db.Text
-  detectedChanges Json?                   // [{ field, before, after }]
-  snapshot       Json                     // full module state
-  createdById    String
-  createdAt      DateTime @default(now())
+  id              String   @id @default(cuid())
+  moduleId        String
+  revisionNumber  Int // 1, 2, 3...
+  label           String // "RV-01", "RV-02"...
+  description     String   @db.Text
+  detectedChanges Json? // [{ field, before, after }]
+  snapshot        Json // full module state
+  createdById     String
+  createdAt       DateTime @default(now())
 
   module    Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   createdBy User   @relation("ModuleRevisionCreator", fields: [createdById], references: [id])
@@ -185,28 +193,28 @@ model ValveCluster {
 }
 
 model FillingLine {
-  id             String  @id @default(cuid())
-  valveClusterId String
-  name           String
-  order          Int
-  capacity       Float
+  id                 String          @id @default(cuid())
+  valveClusterId     String
+  name               String
+  order              Int
+  capacity           Float
   calculatedDiameter Float?
-  valveType        ValveType
-  valveControlUnit ControlUnitType @default(AS_I)
-  connectedTankCount Int           @default(1)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  valveType          ValveType
+  valveControlUnit   ControlUnitType @default(AS_I)
+  connectedTankCount Int             @default(1)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
   valveCluster ValveCluster @relation(fields: [valveClusterId], references: [id], onDelete: Cascade)
 }
 
 model DischargeLine {
-  id             String  @id @default(cuid())
-  valveClusterId String
-  name           String
-  order          Int
-  capacity       Float
-  pressure       Float
+  id                     String          @id @default(cuid())
+  valveClusterId         String
+  name                   String
+  order                  Int
+  capacity               Float
+  pressure               Float
   calculatedDiameter     Float?
   valveType              ValveType
   valveControlUnit       ControlUnitType @default(AS_I)
@@ -268,7 +276,7 @@ model Tank {
   samplingValve      SamplingValveType
   hasProximitySwitch Boolean           @default(false)
 
-  hasAgitator      Boolean          @default(false)
+  hasAgitator      Boolean           @default(false)
   agitatorMotorKw  Float?
   agitatorRpm      Int?
   agitatorPosition AgitatorPosition?
@@ -374,10 +382,10 @@ model DocumentTemplate {
 // Milk Clarifier, PHE, W+ pompalar vb.). Fiyatlandırma bunlardan otomatik çeker.
 model CustomCatalogItem {
   id          String   @id @default(cuid())
-  kind        String                 // MILK_CLARIFIER | PHE | PUMP | OTHER (eşleştirme anahtarı)
-  name        String                 // teknik açıklama / model
-  standard    String   @default("")  // 'DIN' | 'SMS' | '' (her ikisi)
-  size        String?                // ör. "DN50" / "63 SMS (2\")" / pompa modeli
+  kind        String // MILK_CLARIFIER | PHE | PUMP | OTHER (eşleştirme anahtarı)
+  name        String // teknik açıklama / model
+  standard    String   @default("") // 'DIN' | 'SMS' | '' (her ikisi)
+  size        String? // ör. "DN50" / "63 SMS (2\")" / pompa modeli
   listPrice   Float
   discount    Float    @default(0)
   createdById String
@@ -398,7 +406,9 @@ model SavedPrecalculation {
   customer    String   @default("")
   endUser     String   @default("")
   preparedBy  String   @default("")
-  /** Hangi fiyat listesinden üretildiği (ör. "ORNEK PRECALCULATION 36.07.xlsm"). */
+  /**
+   * Hangi fiyat listesinden üretildiği (ör. "ORNEK PRECALCULATION 36.07.xlsm").
+   */
   sourceFile  String   @default("")
   currency    String   @default("EUR")
   totalCost   Float    @default(0)
@@ -421,16 +431,47 @@ model SavedPrecalculation {
   @@index([createdAt])
 }
 
+/**
+ * Advanced Precalculation kataloğunda (Excel'den üretilen catalog.json)
+ * admin tarafından düzeltilen tek bir alan. Kataloğun kendisi hâlâ .xlsm
+ * içe aktarımından üretilir — bu tablo onun üzerine okunurken bindirilen
+ * bir katman, üretilen dosyaları asla değiştirmez.
+ * `catalogKey`, Excel satır numarası DEĞİLDİR: satırlar sürümden sürüme
+ * kayabiliyor (36.07 -> 36.10'da 6 satır kaydı). Bunun yerine kalemin
+ * ekipman numarası (eqNo) — o da yoksa kategori+teknik açıklama birleşimi —
+ * kullanılır (bkz. lib/precalc/catalogOverrides.ts computeCatalogKey).
+ * Yeni bir .xlsm içe aktarıldığında bu anahtar aynı kalemi yine bulur;
+ * bulamazsa (kalem kataloktan kaldırılmışsa) düzeltme sessizce uygulanmaz.
+ */
+model PrecalcCatalogOverride {
+  id          String   @id @default(cuid())
+  catalogKey  String
+  /**
+   * 'listPrice' | 'priceFactor' | 'extraFactor' | 'label' | 'supplier' | 'techSpec' | 'machineType'
+   */
+  field       String
+  /**
+   * Sayısal alanlar metne çevrilmiş sayı olarak, metin alanları doğrudan tutulur.
+   */
+  value       String
+  updatedById String
+  updatedBy   User     @relation("PrecalcCatalogOverrideEditor", fields: [updatedById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([catalogKey, field])
+}
+
 model PasswordResetRequest {
-  id                 String                     @id @default(cuid())
-  userId             String
-  user               User                       @relation("ResetRequestUser", fields: [userId], references: [id], onDelete: Cascade)
-  hashedNewPassword  String
-  status             PasswordResetRequestStatus @default(PENDING)
-  requestedAt        DateTime                   @default(now())
-  resolvedAt         DateTime?
-  resolvedById       String?
-  resolvedBy         User?                      @relation("ResetRequestResolver", fields: [resolvedById], references: [id])
+  id                String                     @id @default(cuid())
+  userId            String
+  user              User                       @relation("ResetRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  hashedNewPassword String
+  status            PasswordResetRequestStatus @default(PENDING)
+  requestedAt       DateTime                   @default(now())
+  resolvedAt        DateTime?
+  resolvedById      String?
+  resolvedBy        User?                      @relation("ResetRequestResolver", fields: [resolvedById], references: [id])
 
   @@index([status, requestedAt])
 }
@@ -457,13 +498,13 @@ model ModuleActivity {
 // =====================================================================
 
 model MilkReceptionModule {
-  id           String       @id @default(cuid())
-  name         String
-  customerName String?
-  projectCode  String?
-  standard     Standard
+  id               String          @id @default(cuid())
+  name             String
+  customerName     String?
+  projectCode      String?
+  standard         Standard
   valveControlUnit ControlUnitType @default(AS_I)
-  status       ModuleStatus @default(DRAFT)
+  status           ModuleStatus    @default(DRAFT)
 
   // Hesaplanan/cache değerler
   selectedDN            String?
@@ -480,22 +521,22 @@ model MilkReceptionModule {
 
   // Fiyatlandırma manuel düzenlemeleri (önizlemeden kaydedilir)
   priceMultiplier Float @default(1)
-  priceOverrides  Json?   // { [rowKey]: number } — satır bazında manuel birim net fiyat
+  priceOverrides  Json? // { [rowKey]: number } — satır bazında manuel birim net fiyat
 
   // === Teklif (commercial) bilgileri — yeni teklif şablonu (HEM-PROJECT-NO) için ===
   // Degazör/Sensör adetleri modülden istenmez; context'te kurallardan türetilir.
-  quotationNo           String?  // örn. HEM-2026-001 (oluşturmada otomatik üretilir)
-  customerContactPerson String?  // mektup: "For the Attention of ___"
-  deliveryWeeks         Int?     // "Can be delivered within X weeks"
-  deliveryPlace         String?  @default("Customer Factory")
-  offerValidityDays     Int?     @default(30) // Offer validity + bağlayıcı kabul süresi
+  quotationNo           String? // örn. HEM-2026-001 (oluşturmada otomatik üretilir)
+  customerContactPerson String? // mektup: "For the Attention of ___"
+  deliveryWeeks         Int? // "Can be delivered within X weeks"
+  deliveryPlace         String? @default("Customer Factory")
+  offerValidityDays     Int?    @default(30) // Offer validity + bağlayıcı kabul süresi
 
   creatorId  String
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   approvedAt DateTime?
 
-  creator        User                          @relation("MilkReceptionModuleCreator", fields: [creatorId], references: [id])
+  creator        User                             @relation("MilkReceptionModuleCreator", fields: [creatorId], references: [id])
   receptionLines MilkReceptionLine[]
   revisions      MilkReceptionModuleRevision[]
   documents      MilkReceptionGeneratedDocument[]
@@ -516,15 +557,15 @@ model MilkReceptionGeneratedDocument {
 }
 
 model MilkReceptionLine {
-  id        String              @id @default(cuid())
-  moduleId  String
-  module    MilkReceptionModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  name      String
-  order     Int
+  id       String              @id @default(cuid())
+  moduleId String
+  module   MilkReceptionModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  name     String
+  order    Int
 
-  capacity  Float
-  pressure  Float
-  calculatedDiameter Float?     // mm, ham hesap (V=2)
+  capacity           Float
+  pressure           Float
+  calculatedDiameter Float? // mm, ham hesap (V=2)
 
   // Pompa
   pumpModel        String?
@@ -540,13 +581,13 @@ model MilkReceptionLine {
   clarifierBypassValveType ClarifierBypassValveType?
 
   // PHE (Plate Heat Exchanger)
-  hasPhe                       Boolean             @default(false)
+  hasPhe                       Boolean            @default(false)
   pheCapacity                  Float?
   pheIceWaterTempSensorType    PheTempSensorType?
   pheIceWaterPressureMeterType PressureMeterType?
 
   // Sampling Valve
-  hasSamplingValve  Boolean             @default(false)
+  hasSamplingValve  Boolean            @default(false)
   samplingValveType SamplingValveType?
 
   createdAt DateTime @default(now())
@@ -591,18 +632,18 @@ model MilkReceptionModuleRevision {
 // =====================================================================
 
 model CipModule {
-  id           String          @id @default(cuid())
-  name         String
-  customerName String?
-  projectCode  String?
-  standard     Standard
+  id               String          @id @default(cuid())
+  name             String
+  customerName     String?
+  projectCode      String?
+  standard         Standard
   valveControlUnit ControlUnitType @default(NONE)
-  systemType   CipSystemType
-  status       ModuleStatus    @default(DRAFT)
+  systemType       CipSystemType
+  status           ModuleStatus    @default(DRAFT)
 
   // Tank-ortak seçimler (tüm tanklar için)
-  samplingValve   CipSamplingValve @default(NONE)
-  hasManholeSwitch Boolean         @default(false)
+  samplingValve    CipSamplingValve @default(NONE)
+  hasManholeSwitch Boolean          @default(false)
 
   // Hesaplanan/cache değerler
   selectedDN            String?
@@ -617,8 +658,8 @@ model CipModule {
   quotationNo           String?
   customerContactPerson String?
   deliveryWeeks         Int?
-  deliveryPlace         String?  @default("Customer Factory")
-  offerValidityDays     Int?     @default(30)
+  deliveryPlace         String? @default("Customer Factory")
+  offerValidityDays     Int?    @default(30)
 
   creatorId  String
   createdAt  DateTime  @default(now())
@@ -665,8 +706,8 @@ model CipLine {
   name     String
   order    Int
 
-  capacity Float // m³/h
-  pressure Float // bar
+  capacity           Float // m³/h
+  pressure           Float // bar
   calculatedDiameter Float? // mm, ham hesap
 
   pumpModel        String?

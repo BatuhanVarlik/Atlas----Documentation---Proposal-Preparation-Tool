@@ -14,6 +14,9 @@ const updateSchema = z.object({
   role: z.enum(ROLES).optional(),
   password: z.string().min(8).max(128).optional(),
   isActive: z.boolean().optional(),
+  // Advanced Precalculation kataloğunu düzenleme yetkisi — ortak DB'ye senkronlanmaz,
+  // yalnızca bu uygulamaya özel (bkz. lib/precalc/catalogPermission.ts).
+  canEditPrecalcCatalog: z.boolean().optional(),
 });
 
 export async function PUT(req: Request, { params }: Params) {
@@ -64,6 +67,7 @@ export async function PUT(req: Request, { params }: Params) {
         email: true,
         role: true,
         isActive: true,
+        canEditPrecalcCatalog: true,
         createdAt: true,
         department: { select: { id: true, name: true, color: true } },
       },

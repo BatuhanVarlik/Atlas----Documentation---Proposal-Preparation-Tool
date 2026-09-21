@@ -13,7 +13,7 @@ import { PrecalcEngine } from '../lib/precalc/engine';
 import { isError } from '../lib/precalc/formula';
 import type { PrecalcWorkbook } from '../lib/precalc/types';
 
-const SOURCE = process.argv[2] || 'data/templates/ORNEK PRECALCULATION 36.07.xlsm';
+const SOURCE = process.argv[2] || 'data/templates/ORNEK PRECALCULATION 36.10.xlsm';
 const TOLERANCE = 1e-6;
 
 const workbook: PrecalcWorkbook = JSON.parse(fs.readFileSync('lib/precalc/workbook.json', 'utf8'));

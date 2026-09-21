@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { CatalogItem, CatalogMeta } from '@/lib/precalc/catalog';
 import type { CellValue } from '@/lib/precalc/formula';
 import type { RawValue } from '@/lib/precalc/types';
@@ -18,6 +19,7 @@ import SheetGrid from '@/components/precalc/SheetGrid';
 import OthersTable from '@/components/precalc/OthersTable';
 import TotalsPanel from '@/components/precalc/TotalsPanel';
 import { parseSumRanges, weightOf } from '@/lib/precalc/totals';
+import CatalogEditorModal from '@/components/precalc/CatalogEditorModal';
 
 interface Props {
   items: CatalogItem[];
@@ -27,6 +29,14 @@ interface Props {
    * olan teklifle devam edilir.
    */
   docId: string | null;
+  /** ADMIN ya da admin'in yetkilendirdiği kullanıcı — "Katalog Düzelt" düğmesini açar. */
+  canEditCatalog: boolean;
+  /**
+   * Katalog kalemleri, HİÇBİR düzeltme bindirilmeden — yalnızca CatalogEditorModal
+   * için. Modal kendi düzeltme birleştirmesini bunun üzerinden yapar; `items`
+   * (yukarıda) zaten bindirilmiş olduğu için tekrar birleştirmeye girdi olamaz.
+   */
+  rawCatalogItems: CatalogItem[];
 }
 
 /** Kaydetmeden sonra gösterilen bilgi şeridi. */
@@ -356,7 +366,10 @@ const COLUMN_VIEWS: { id: string; label: string; cols: string[] | null }[] = [
   { id: 'all', label: 'Tümü', cols: null },
 ];
 
-export default function AdvancedPrecalculationClient({ items: allItems, meta, docId }: Props) {
+export default function AdvancedPrecalculationClient({ items: allItems, meta, docId, canEditCatalog, rawCatalogItems }: Props) {
+  const router = useRouter();
+  const [catalogEditorOpen, setCatalogEditorOpen] = useState(false);
+
   /*
    * Katalog listesi OTHERS'ı içermez: o blok kendi sekmesinde, kendi sütun
    * düzeniyle gösterilir (bkz. OthersTable). Hesap yine tek kitap üzerinde
@@ -977,9 +990,26 @@ export default function AdvancedPrecalculationClient({ items: allItems, meta, do
           <Link href="/precalculation" className={BTN_DARK}>
             Precalculation Oluştur
           </Link>
+          {canEditCatalog && (
+            <button
+              onClick={() => setCatalogEditorOpen(true)}
+              title="Kataloğun kendisini (fiyat/etiket) düzelt — bu teklifi değil, tüm gelecek teklifleri etkiler."
+              className={BTN_GHOST}
+            >
+              Katalog Düzelt
+            </button>
+          )}
           <MoreMenu items={moreActions} />
         </div>
       </div>
+
+      {catalogEditorOpen && (
+        <CatalogEditorModal
+          items={rawCatalogItems}
+          onClose={() => setCatalogEditorOpen(false)}
+          onChanged={() => router.refresh()}
+        />
+      )}
 
       {saveNotice && (
         <div

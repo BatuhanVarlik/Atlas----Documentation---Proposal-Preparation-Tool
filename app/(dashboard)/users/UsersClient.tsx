@@ -31,6 +31,8 @@ interface User {
   email: string;
   role: string;
   isActive: boolean;
+  /** Advanced Precalculation kataloğunu düzenleme yetkisi — ADMIN/CEO'dan bağımsız, elle verilir. */
+  canEditPrecalcCatalog: boolean;
   createdAt: Date | string;
   department: { id: string; name: string; color: string | null } | null;
 }
@@ -230,6 +232,25 @@ export default function UsersClient({
     router.refresh();
   }
 
+  // Advanced Precalculation kataloğunu düzenleme yetkisi — ADMIN/CEO zaten her
+  // zaman düzenleyebilir, bu yalnızca diğer rollere verilen ek bir izindir.
+  async function handleToggleCatalogEdit(u: User) {
+    const next = !u.canEditPrecalcCatalog;
+    const res = await fetch(`/api/users/${u.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ canEditPrecalcCatalog: next }),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      alert(json.error ?? 'Yetki güncellenemedi');
+      return;
+    }
+    setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, canEditPrecalcCatalog: next } : x)));
+    setCtxMenu(null);
+    router.refresh();
+  }
+
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -280,6 +301,15 @@ export default function UsersClient({
         { label: 'Düzenle', onClick: () => openEdit(ctxMenu.user) },
         { label: 'Departman Değiştir', onClick: () => openSimple('changeDept', ctxMenu.user) },
         { label: 'Rol Değiştir', onClick: () => openSimple('changeRole', ctxMenu.user) },
+        // ADMIN/CEO zaten her zaman düzenleyebilir — bu bayrak onlar için anlamsız.
+        ...(['ADMIN', 'CEO'].includes(ctxMenu.user.role)
+          ? []
+          : [{
+              label: ctxMenu.user.canEditPrecalcCatalog
+                ? 'Katalog Düzenleme Yetkisini Al'
+                : 'Katalog Düzenleme Yetkisi Ver',
+              onClick: () => handleToggleCatalogEdit(ctxMenu.user),
+            }]),
         { divider: true },
         ctxMenu.user.isActive
           ? {

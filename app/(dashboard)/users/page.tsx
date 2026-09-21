@@ -31,6 +31,7 @@ export default async function UsersPage() {
         email: true,
         role: true,
         isActive: true,
+        canEditPrecalcCatalog: true,
         createdAt: true,
         department: { select: { id: true, name: true, color: true } },
       },
