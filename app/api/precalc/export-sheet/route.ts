@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx-js-style';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth-middleware';
 import { buildSheetSnapshot, precalcFileName } from '@/lib/precalc/export';
+import { summarizePrecalc } from '@/lib/precalc/savedSummary';
 import { PrecalcEngine } from '@/lib/precalc/engine';
 import type { PrecalcWorkbook } from '@/lib/precalc/types';
 import workbookData from '@/lib/precalc/workbook.json';
@@ -66,7 +67,9 @@ export async function POST(req: Request) {
     XLSX.utils.book_append_sheet(book, snapshot, sheet.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31));
 
     const buffer: Buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' });
-    const filename = precalcFileName(sheet.replace(/[\\/?*[\]:]/g, ' '));
+    const no = summarizePrecalc(entries).precalcNo;
+    const safeSheet = sheet.replace(/[\\/?*[\]:]/g, ' ');
+    const filename = precalcFileName(no ? `${no} — ${safeSheet}` : safeSheet);
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {

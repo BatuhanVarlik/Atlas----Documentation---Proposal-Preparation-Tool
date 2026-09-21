@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx-js-style';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth-middleware';
 import { buildPrecalcWorkbook, precalcFileName, quoteEquipmentNumbers } from '@/lib/precalc/export';
+import { summarizePrecalc } from '@/lib/precalc/savedSummary';
 import { lookupStock, isStockConfigured } from '@/lib/stock/sqlServer';
 import type { PrecalcWorkbook } from '@/lib/precalc/types';
 import workbookData from '@/lib/precalc/workbook.json';
@@ -75,7 +76,7 @@ export async function POST(req: Request) {
     });
 
     const buffer: Buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' });
-    const filename = precalcFileName();
+    const filename = precalcFileName(summarizePrecalc(parsed.data.entries).precalcNo);
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {

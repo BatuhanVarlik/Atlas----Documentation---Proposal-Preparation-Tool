@@ -48,7 +48,24 @@ describe('precalculation dışa aktarımı', () => {
     expect(buildSheetSnapshot(engine, 'KABLO')).not.toBeNull();
   });
 
-  it('dosya adı .xlsx ile biter', () => {
-    expect(precalcFileName()).toMatch(/^PRECALCULATION .+\.xlsx$/);
+  describe('dosya adı', () => {
+    it('numara yoksa eski biçimi korur', () => {
+      expect(precalcFileName()).toMatch(/^PRECALCULATION \d{4}-\d{2}-\d{2} \d{2}-\d{2}\.xlsx$/);
+    });
+
+    it('numara verilirse dosya adı numarayla başlar', () => {
+      expect(precalcFileName('PRE-2026-114 RE-01'))
+        .toMatch(/^PRE-2026-114 RE-01 \d{4}-\d{2}-\d{2}\.xlsx$/);
+    });
+
+    it("Windows'ta yasak karakterleri alt çizgiye çevirir", () => {
+      const name = precalcFileName('PRE/2026:114*RE?01');
+      expect(name).toMatch(/^PRE_2026_114_RE_01 /);
+      expect(name).not.toMatch(/[\\/:*?"<>|]/);
+    });
+
+    it('boş ya da yalnızca boşluktan oluşan numarayı yok sayar', () => {
+      expect(precalcFileName('   ')).toMatch(/^PRECALCULATION /);
+    });
   });
 });
