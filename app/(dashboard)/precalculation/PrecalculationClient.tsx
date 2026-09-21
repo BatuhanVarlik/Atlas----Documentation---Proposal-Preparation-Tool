@@ -8,6 +8,7 @@ import TotalsPanel from '@/components/precalc/TotalsPanel';
 import { usePrecalc } from '@/components/precalc/usePrecalc';
 import { savePrecalculation } from '@/lib/precalc/savedClient';
 import { EditableCell } from '@/components/precalc/EditableCell';
+import { IDENTITY_FIELDS } from '@/components/precalc/identityFields';
 import type { PrecalcEngine } from '@/lib/precalc/engine';
 import type { RawValue, RowMeta } from '@/lib/precalc/types';
 import { cn } from '@/lib/utils';
@@ -330,11 +331,12 @@ export default function PrecalculationClient() {
 /* ------------------------------------------------------------------ */
 
 /**
- * Proje ve precalculation numarası.
+ * Teklifin kimliği: proje/precalculation no, müşteri, son kullanıcı, tarih,
+ * hazırlayan (bkz. IDENTITY_FIELDS).
  *
  * Advanced Precalculation ekranıyla aynı hücrelere yazar (girdiler ortak
  * taslakta saklanır), böylece hangi ekrandan girilirse girilsin dışa
- * aktarılan Excel ve liste kaydı aynı numarayı taşır.
+ * aktarılan Excel ve liste kaydı aynı kimliği taşır.
  */
 function QuoteIdentityBar({
   engine, onSetCell,
@@ -347,10 +349,7 @@ function QuoteIdentityBar({
   version: number;
   onSetCell: (addr: string, value: RawValue) => void;
 }) {
-  const fields = [
-    { key: 'projectNo', label: 'Proje No', placeholder: 'ör. 2026-114' },
-    { key: 'precalcNo', label: 'Precalculation No', placeholder: 'ör. PRE-2026-114-01' },
-  ]
+  const fields = IDENTITY_FIELDS
     .map((f) => ({ ...f, addr: engine.paramAddr(f.key) }))
     .filter((f): f is typeof f & { addr: string } => !!f.addr);
 
@@ -361,10 +360,10 @@ function QuoteIdentityBar({
       {fields.map((f) => (
         <label key={f.key} className="flex items-center gap-2">
           <span className="text-[11px] font-semibold text-slate-600 whitespace-nowrap">{f.label}</span>
-          <span className="w-44">
+          <span className="w-36">
             <EditableCell
               value={engine.value(f.addr)}
-              format="text"
+              format={f.format}
               align="left"
               edited={engine.isUserEntry(f.addr)}
               placeholder={f.placeholder}

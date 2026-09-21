@@ -15,6 +15,7 @@ import { fetchSaved, savePrecalculation } from '@/lib/precalc/savedClient';
 import { formatCell, formatTrimmed } from '@/components/precalc/cellFormat';
 import { FACTOR_DECIMALS, type CellFormat } from '@/components/precalc/columns';
 import { EditableCell } from '@/components/precalc/EditableCell';
+import { IDENTITY_FIELDS } from '@/components/precalc/identityFields';
 import SheetGrid from '@/components/precalc/SheetGrid';
 import OthersTable from '@/components/precalc/OthersTable';
 import TotalsPanel from '@/components/precalc/TotalsPanel';
@@ -1625,10 +1626,10 @@ function QuoteIdentityBar({
       {fields.map((f) => (
         <label key={f.key} className="flex items-center gap-2 shrink-0" title={f.hint}>
           <span className="text-[11px] font-semibold text-slate-600 whitespace-nowrap">{f.label}</span>
-          <span className="w-40">
+          <span className="w-36">
             <EditableCell
               value={f.value}
-              format="text"
+              format={f.format}
               align="left"
               edited={f.edited}
               placeholder={f.placeholder}
@@ -1696,24 +1697,6 @@ function MoreMenu({ items }: { items: ContextMenuEntry[] }) {
     </>
   );
 }
-
-/** Precalculation'a başlarken doldurulan kimlik alanları. */
-const IDENTITY_FIELDS: {
-  key: string; label: string; placeholder: string; hint: string;
-}[] = [
-  {
-    key: 'projectNo',
-    label: 'Proje No',
-    placeholder: 'ör. 2026-114',
-    hint: 'Teklifin bağlı olduğu proje numarası. Başlık bloğuna yazılır.',
-  },
-  {
-    key: 'precalcNo',
-    label: 'Precalculation No',
-    placeholder: 'ör. PRE-2026-114-01',
-    hint: 'Bu precalculation numarası. Ayrıntılı Fiyatlandırma sayfasının A1 hücresinde de görünür.',
-  },
-];
 
 /** Katalog ekranında düzenlenebilen çarpanlar. */
 const PARAM_FIELDS: {
