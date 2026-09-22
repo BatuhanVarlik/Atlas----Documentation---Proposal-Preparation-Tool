@@ -1737,13 +1737,14 @@ function QuoteIdentityBar({
       {fields.map((f) => (
         <label key={f.key} className="flex items-center gap-2 shrink-0" title={f.hint}>
           <span className="text-[11px] font-semibold text-slate-600 whitespace-nowrap">{f.label}</span>
-          <span className="w-36">
+          <span className={f.autoWidth ? 'inline-block' : 'w-36'}>
             <EditableCell
               value={f.value}
               format={f.format}
               align="left"
               edited={f.edited}
               placeholder={f.placeholder}
+              autoWidth={f.autoWidth}
               onCommit={(v) => onSetCell(f.addr, v)}
             />
           </span>

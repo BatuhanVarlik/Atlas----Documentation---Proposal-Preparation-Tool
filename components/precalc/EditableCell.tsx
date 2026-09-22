@@ -4,6 +4,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import type { CellValue } from '@/lib/precalc/formula';
 import type { RawValue } from '@/lib/precalc/types';
 import { cn } from '@/lib/utils';
+import { computeAutoWidthCh } from './autoWidth';
 import { formatCell, parseEditText, toEditText } from './cellFormat';
 import type { CellFormat } from './columns';
 
@@ -15,6 +16,8 @@ interface Props {
   edited: boolean;
   /** Hücre boşken gösterilecek ipucu metni. */
   placeholder?: string;
+  /** İçerik uzunluğuna göre sağa doğru büyüsün mü? (bkz. autoWidth.ts) */
+  autoWidth?: boolean;
   onCommit: (value: RawValue) => void;
 }
 
@@ -23,7 +26,7 @@ interface Props {
  * kaybında ya da Enter'da motora yazılır — böylece her tuş vuruşunda
  * tüm tablo yeniden hesaplanmaz.
  */
-function EditableCellBase({ value, format, align = 'left', edited, placeholder, onCommit }: Props) {
+function EditableCellBase({ value, format, align = 'left', edited, placeholder, autoWidth, onCommit }: Props) {
   const [focused, setFocused] = useState(false);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,6 +44,7 @@ function EditableCellBase({ value, format, align = 'left', edited, placeholder, 
   };
 
   const display = formatCell(value, format);
+  const widthCh = autoWidth ? computeAutoWidthCh(focused ? draft : display) : undefined;
 
   return (
     <input
@@ -56,8 +60,11 @@ function EditableCellBase({ value, format, align = 'left', edited, placeholder, 
         if (e.key === 'Enter') { commit(); inputRef.current?.blur(); }
         if (e.key === 'Escape') { setDraft(toEditText(value, format)); setFocused(false); inputRef.current?.blur(); }
       }}
+      style={widthCh ? { width: `${widthCh}ch` } : undefined}
       className={cn(
-        'w-full h-full px-2 bg-transparent text-xs outline-none rounded-sm',
+        autoWidth
+          ? 'h-full px-2 bg-transparent text-xs outline-none rounded-sm transition-[width]'
+          : 'w-full h-full px-2 bg-transparent text-xs outline-none rounded-sm',
         // Kenarlık her zaman görünür: hangi hücrelere yazılabildiği üzerine
         // gelmeden anlaşılsın (imleçle arayarak bulunmasın).
         'border border-slate-300 hover:border-slate-400 focus:border-blue-500 focus:bg-white',

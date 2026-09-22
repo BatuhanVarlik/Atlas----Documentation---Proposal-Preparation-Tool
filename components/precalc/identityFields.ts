@@ -7,6 +7,8 @@ export interface IdentityField {
   placeholder: string;
   hint: string;
   format: Extract<CellFormat, 'text' | 'date'>;
+  /** İçerik uzunluğuna göre sağa doğru büyüsün mü? (bkz. autoWidth.ts) */
+  autoWidth?: boolean;
 }
 
 /**
@@ -28,6 +30,7 @@ export const IDENTITY_FIELDS: IdentityField[] = [
     placeholder: 'ör. PRE-2026-114 RE-00',
     hint: 'Kaydın listedeki adı. Revizyon için sonundaki kodu değiştirin (RE-00 → RE-01).',
     format: 'text',
+    autoWidth: true,
   },
   {
     key: 'customer',
