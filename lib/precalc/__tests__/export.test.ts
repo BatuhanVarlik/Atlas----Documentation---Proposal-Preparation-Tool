@@ -22,6 +22,7 @@ describe('precalculation dışa aktarımı', () => {
     const book = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
 
     expect(book.SheetNames[0]).toBe('ÖZET');
+    expect(book.SheetNames[1]).toBe('CASHFLOW');
     expect(book.SheetNames).not.toContain('EQUIPMENT LIST');
     expect(book.SheetNames).not.toContain('Ekipman Listesi Limitleri');
     expect(book.SheetNames).toContain('Sevk Listesi');

@@ -19,6 +19,7 @@ import { buildPrecalcSheet, type ResolvedHeader } from './precalcSheet';
 import { buildShippingSheet, type StockRow } from './listSheets';
 import { buildDetailedSheet, DETAILED_SHEET } from './detailedSheet';
 import { buildSummarySheet } from './summarySheet';
+import { buildCashflowSheet, CASHFLOW_SHEET, type CashflowLayout } from './cashflowSheet';
 import { buildSheetSnapshot } from './snapshot';
 
 /**
@@ -112,10 +113,13 @@ export function buildPrecalcWorkbook(
     itemCount: keptItemCount,
   }), 'ÖZET');
 
-  // 2 — Teklifin kendisi
+  // 2 — CASHFLOW: ödeme planı + haftalık nakit akışı (grafik Task 11'de enjekte edilir)
+  XLSX.utils.book_append_sheet(book, buildCashflowSheet(engine).sheet, CASHFLOW_SHEET);
+
+  // 3 — Teklifin kendisi
   XLSX.utils.book_append_sheet(book, sheet, 'PRECALCULATION');
 
-  // 3 — Maliyet kırılımı, baskı düzeniyle
+  // 4 — Maliyet kırılımı, baskı düzeniyle
   const detailed = buildDetailedSheet(engine);
   if (detailed) {
     XLSX.utils.book_append_sheet(book, detailed.sheet, DETAILED_SHEET);
@@ -133,7 +137,7 @@ export function buildPrecalcWorkbook(
     ];
   }
 
-  // 4 — Kitabın kalan sayfaları, kaynak dosyadaki sırayla
+  // 5 — Kitabın kalan sayfaları, kaynak dosyadaki sırayla
   for (const name of wb.sheetNames) {
     if (name === 'PRECALCULATION' || name === DETAILED_SHEET) continue;
     if (EXCLUDED_SHEETS.has(name)) continue;
@@ -142,11 +146,20 @@ export function buildPrecalcWorkbook(
     if (snapshot) XLSX.utils.book_append_sheet(book, snapshot, safeSheetName(name));
   }
 
-  // 5 — Sevk Listesi: ham sayfa değil, satın alma için üretilen biçimi
+  // 6 — Sevk Listesi: ham sayfa değil, satın alma için üretilen biçimi
   XLSX.utils.book_append_sheet(
     book, buildShippingSheet(lines, stock, listMeta), 'Sevk Listesi');
 
   return book;
+}
+
+/**
+ * Son üretilen kitabın CASHFLOW yerleşimi — grafik enjeksiyonu (Task 11) bunu
+ * okur. Sayfayı ikinci kez kurar; 52 satırlık bir tablo için maliyeti ihmal
+ * edilebilir ve `buildPrecalcWorkbook`'un imzasını kirletmekten iyidir.
+ */
+export function cashflowLayoutFor(engine: PrecalcEngine): CashflowLayout {
+  return buildCashflowSheet(engine).layout;
 }
 
 export { EXPORT_COLUMNS } from './precalcSheet';
