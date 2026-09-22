@@ -16,9 +16,25 @@ import { isError } from '../formula';
 import type { PrecalcEntries, PrecalcWorkbook } from '../types';
 import { excelDate } from './cells';
 import { buildPrecalcSheet, type ResolvedHeader } from './precalcSheet';
-import { buildEquipmentSheet, buildShippingSheet, type StockRow } from './listSheets';
+import { buildShippingSheet, type StockRow } from './listSheets';
 import { buildDetailedSheet, DETAILED_SHEET } from './detailedSheet';
 import { buildSummarySheet } from './summarySheet';
+import { buildSheetSnapshot } from './snapshot';
+
+/**
+ * Dosyaya girmeyen sayfalar.
+ *
+ * EQUIPMENT LIST üretim tarafının kendi listesi; teklif dosyasında yer
+ * kaplıyor ve kimse açmıyordu. "Ekipman Listesi Limitleri" ise bir ayar
+ * sayfası — satır aralıklarını tutar, teklife dair bir bilgi taşımaz.
+ */
+export const EXCLUDED_SHEETS: ReadonlySet<string> = new Set([
+  'EQUIPMENT LIST',
+  'Ekipman Listesi Limitleri',
+]);
+
+/** Excel sayfa adı 31 karakterle sınırlı ve bazı işaretleri kabul etmez. */
+const safeSheetName = (name: string) => name.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31);
 
 export interface ExportOptions {
   /** true ise yalnızca miktarı girilmiş kalemler yazılır. */
@@ -80,37 +96,26 @@ export function buildPrecalcWorkbook(
 
   const { sheet, keptItemCount, lines } = buildPrecalcSheet(engine, wb, options, header);
 
-  const book = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(book, sheet, 'PRECALCULATION');
-
-  /* ---- Ekipman ve sevk listeleri ---- */
-  // Her ikisi de yalnızca miktarı girilmiş kalemleri gösterir: sipariş ve
-  // sevkiyat için kullanıldıklarından tüm katalog anlamsız olur.
+  // Ekipman ve sevk listeleri yalnızca miktarı girilmiş kalemleri gösterir:
+  // sipariş ve sevkiyat için kullanıldıklarından tüm katalog anlamsız olur.
   const listMeta = {
     sourceFile: wb.meta.sourceFile.replace(/\.xlsm?$/i, ''),
     customer: [header.customer, header.endUser].filter(Boolean).join(' / '),
     date: header.date,
   };
-
-  // Grup satır aralıkları "Ekipman Listesi Limitleri" sayfasından okunur;
-  // sürüm değiştikçe orası güncellendiği için burada sabit satır tutulmaz.
-  const limitSheet = wb.sheets['Ekipman Listesi Limitleri'];
-  const limitRange = (limitRow: number) => {
-    const from = limitSheet?.v['D' + limitRow];
-    const to = limitSheet?.v['E' + limitRow];
-    return typeof from === 'number' && typeof to === 'number' ? { from, to } : null;
-  };
-
   const stock = options.stock ?? {};
-  XLSX.utils.book_append_sheet(
-    book, buildEquipmentSheet(lines, limitRange, stock, listMeta), 'EQUIPMENT LIST');
-  XLSX.utils.book_append_sheet(
-    book, buildShippingSheet(lines, stock, listMeta), 'Sevk Listesi');
 
-  /* ---- AYRINTILI FIYATLANDIRMA ---- */
-  // Kaynak kitaptaki maliyet kırılımı sayfası. Hesap motoru bu sayfayı da
-  // canlı hesapladığı için çıktıya hesaplanmış hâliyle konur; kullanıcı
-  // teklifi Excel'de açtığında kırılımı da elinde bulur.
+  const book = XLSX.utils.book_new();
+
+  // 1 — ÖZET en başta: dosyayı açan kişi önce rakamları görsün.
+  XLSX.utils.book_append_sheet(book, buildSummarySheet(wb, engine, {
+    itemCount: keptItemCount,
+  }), 'ÖZET');
+
+  // 2 — Teklifin kendisi
+  XLSX.utils.book_append_sheet(book, sheet, 'PRECALCULATION');
+
+  // 3 — Maliyet kırılımı, baskı düzeniyle
   const detailed = buildDetailedSheet(engine);
   if (detailed) {
     XLSX.utils.book_append_sheet(book, detailed.sheet, DETAILED_SHEET);
@@ -128,10 +133,18 @@ export function buildPrecalcWorkbook(
     ];
   }
 
-  /* ---- Özet sayfası ---- */
-  XLSX.utils.book_append_sheet(book, buildSummarySheet(wb, engine, {
-    itemCount: keptItemCount,
-  }), 'ÖZET');
+  // 4 — Kitabın kalan sayfaları, kaynak dosyadaki sırayla
+  for (const name of wb.sheetNames) {
+    if (name === 'PRECALCULATION' || name === DETAILED_SHEET) continue;
+    if (EXCLUDED_SHEETS.has(name)) continue;
+    if (name === 'Sevk Listesi') continue; // aşağıda üretilmiş hâli eklenir
+    const snapshot = buildSheetSnapshot(engine, name);
+    if (snapshot) XLSX.utils.book_append_sheet(book, snapshot, safeSheetName(name));
+  }
+
+  // 5 — Sevk Listesi: ham sayfa değil, satın alma için üretilen biçimi
+  XLSX.utils.book_append_sheet(
+    book, buildShippingSheet(lines, stock, listMeta), 'Sevk Listesi');
 
   return book;
 }

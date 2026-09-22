@@ -18,12 +18,26 @@ function quoteEntries(): PrecalcEntries {
 }
 
 describe('precalculation dışa aktarımı', () => {
-  it('beklenen sayfaları üretir', () => {
+  it('ÖZET ilk sırada, EQUIPMENT LIST ve limitler dışarıda', () => {
     const book = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
-    expect(book.SheetNames).toEqual([
-      'PRECALCULATION', 'EQUIPMENT LIST', 'Sevk Listesi',
-      'AYRINTILI FIYATLANDIRMA', 'ÖZET',
-    ]);
+
+    expect(book.SheetNames[0]).toBe('ÖZET');
+    expect(book.SheetNames).not.toContain('EQUIPMENT LIST');
+    expect(book.SheetNames).not.toContain('Ekipman Listesi Limitleri');
+    expect(book.SheetNames).toContain('Sevk Listesi');
+  });
+
+  it('kitabın kalan sayfalarını da taşır', () => {
+    const book = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
+    for (const name of ['KABLO', 'SMS PASLANMAZ', 'DIN PASLANMAZ MALZEME',
+      'INTEGRATOR PANOSU', 'KONTROL ODASI OLUSTURMA']) {
+      expect(book.SheetNames).toContain(name);
+    }
+  });
+
+  it('Excel’in 31 karakter sınırını aşan sayfa adı kısaltılır', () => {
+    const book = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
+    for (const name of book.SheetNames) expect(name.length).toBeLessThanOrEqual(31);
   });
 
   it('PRECALCULATION sayfası başlık bloğu ve sütun şeridiyle başlar', () => {
