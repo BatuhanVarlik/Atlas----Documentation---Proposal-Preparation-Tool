@@ -70,9 +70,6 @@ const NODE_ROW_HEIGHT = 33;
 /** Görünen pencerenin dışında da çizilen satır sayısı (kaydırma pürüzsüzlüğü). */
 const OVERSCAN = 10;
 
-/** Tablo kutusunun yüksekliği — başlık ve yatay çubuk hep ekranda kalsın diye. */
-const TABLE_HEIGHT = 'calc(100vh - 17rem)';
-
 /*
  * Araç çubuğu düğmelerinin ortak ölçüsü.
  *
@@ -197,9 +194,9 @@ export default function AdvancedPrecalculationClient({
   const [pendingRevision, setPendingRevision] = useState<{ note: string; no: string } | null>(null);
 
   /* ---- tablo kutusu ve sanallaştırma ---- */
-  // Tablo sayfayla birlikte değil kendi kutusunda kayar. Böylece başlık
-  // (sticky thead) ve yatay kaydırma çubuğu tarayıcının kendi davranışıyla
-  // hep ekranda kalır; ayrıca yalnızca görünen satırlar çizilir.
+  // Tablo artık sayfayla birlikte akar (tek native pencere scroll'u); yalnızca
+  // dikeyde görünür satır aralığı çizilir. Yatay kaydırma hâlâ bu kutunun
+  // kendi ekseninde — bkz. Task 5 (HScrollControl).
   const scrollRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ top: 0, height: 600 });
 
@@ -209,20 +206,23 @@ export default function AdvancedPrecalculationClient({
     let frame = 0;
     const measure = () => {
       frame = 0;
-      setViewport((prev) => (
-        prev.top === el.scrollTop && prev.height === el.clientHeight
-          ? prev
-          : { top: el.scrollTop, height: el.clientHeight }
-      ));
+      // Tablonun viewport'un üstünden ne kadar kaydırıldığı: element'in üst
+      // kenarı ekranın üstünün ne kadar üzerindeyse o kadar satır "geçilmiş"
+      // demektir. getBoundingClientRect().top negatifse tablo yukarı kaymıştır.
+      const top = Math.max(0, -el.getBoundingClientRect().top);
+      const height = window.innerHeight;
+      setViewport((prev) => (prev.top === top && prev.height === height ? prev : { top, height }));
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
     measure();
-    el.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
     const ro = new ResizeObserver(schedule);
     ro.observe(el);
     return () => {
       if (frame) cancelAnimationFrame(frame);
-      el.removeEventListener('scroll', schedule);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
       ro.disconnect();
     };
   }, [activeSheet]);
@@ -777,7 +777,9 @@ export default function AdvancedPrecalculationClient({
   // dizi döndürdüğü için onu izlemek, adet girişinden sonra listeyi başa
   // atardı.
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    if (scrollRef.current) {
+      window.scrollTo({ top: window.scrollY + scrollRef.current.getBoundingClientRect().top });
+    }
   }, [search, topCategory, subCategory, productType, standard, supplier, label,
     group, priced, minPrice, maxPrice, onlyEntered, sortKey, sortDir]);
 
@@ -1134,9 +1136,15 @@ export default function AdvancedPrecalculationClient({
             </button>
           </div>
 
-          {/* Tablo — kendi kutusunda kayar: başlık ve yatay çubuk hep ekranda */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div ref={scrollRef} className="overflow-auto" style={{ height: TABLE_HEIGHT }}>
+          {/*
+            Tablo artık ayrı bir kart değil — sayfa akışının doğal bir parçası.
+            Dikey kaydırma pencereye ait (bkz. yukarıdaki viewport effect'i);
+            bu kutu yalnızca yatay eksende taşar (overflow-x). CSS overflow
+            normalizasyonu gereği overflow-y burada "visible" yazılsa da
+            tarayıcı bunu "auto"ya çevirir (bkz. CSS Overflow spec) — zararsız,
+            çünkü kutuya sabit yükseklik verilmediği için hiçbir zaman taşmaz.
+          */}
+          <div ref={scrollRef} className="overflow-x-auto">
               {/*
                 Sabit yerleşim + colgroup: sütun genişliğini yalnızca buradaki
                 değerler belirler. Otomatik yerleşimde tarayıcı sütunları başlık
@@ -1228,7 +1236,6 @@ export default function AdvancedPrecalculationClient({
                 </tbody>
               </table>
             </div>
-          </div>
 
           {/* Hücre renklerinin ne anlama geldiği — araç çubuğunu sıkıştırmasın */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 px-1 text-[11px] text-slate-400">
