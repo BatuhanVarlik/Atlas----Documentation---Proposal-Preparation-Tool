@@ -38,6 +38,9 @@ export default async function AdvancedPrecalculationPage(
       meta={dataset.meta}
       docId={id?.trim() || null}
       canEditCatalog={user ? await canEditCatalog(user) : false}
+      // Yalnızca revizyon diyaloğunun önizleme metninde kullanılır — kaydedilen
+      // asıl revizyon notunu sunucu kendi bildiği kullanıcı adıyla yazar.
+      userName={user?.name ?? 'bilinmiyor'}
     />
   );
 }

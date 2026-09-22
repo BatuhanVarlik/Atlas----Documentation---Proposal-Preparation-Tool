@@ -5,13 +5,15 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { CatalogItem, CatalogMeta } from '@/lib/precalc/catalog';
 import type { CellValue } from '@/lib/precalc/formula';
-import type { RawValue } from '@/lib/precalc/types';
+import type { PrecalcEntries, RawValue } from '@/lib/precalc/types';
 import type { PrecalcEngine } from '@/lib/precalc/engine';
 import { cn, formatNumberTR } from '@/lib/utils';
 import { usePrecalc } from '@/components/precalc/usePrecalc';
 import ContextMenu, { MENU_WIDTH, type ContextMenuEntry } from '@/components/ui/ContextMenu';
 import type { DraftDoc } from '@/components/precalc/precalcDraft';
-import { fetchSaved, savePrecalculation } from '@/lib/precalc/savedClient';
+import { fetchSaved, savePrecalculation, type RevisionRow } from '@/lib/precalc/savedClient';
+import { diffEntries, formatRevision } from '@/lib/precalc/revisionDiff';
+import { nextRevisionNo, parseRevisionCode } from '@/lib/precalc/precalcNo';
 import { formatCell, formatTrimmed } from '@/components/precalc/cellFormat';
 import { FACTOR_DECIMALS, type CellFormat } from '@/components/precalc/columns';
 import { EditableCell } from '@/components/precalc/EditableCell';
@@ -22,6 +24,8 @@ import TotalsPanel from '@/components/precalc/TotalsPanel';
 import CashflowPanel from '@/components/precalc/CashflowPanel';
 import { parseSumRanges, weightOf } from '@/lib/precalc/totals';
 import CatalogEditorModal from '@/components/precalc/CatalogEditorModal';
+import RevisionBar from '@/components/precalc/RevisionBar';
+import RevisionDialog from '@/components/precalc/RevisionDialog';
 
 interface Props {
   items: CatalogItem[];
@@ -39,6 +43,12 @@ interface Props {
    * (yukarıda) zaten bindirilmiş olduğu için tekrar birleştirmeye girdi olamaz.
    */
   rawCatalogItems: CatalogItem[];
+  /**
+   * Oturumdaki kullanıcının adı — yalnızca revizyon diyaloğunun ÖNİZLEME
+   * metninde kullanılır. Kaydedilen asıl revizyon notunu sunucu, kendi
+   * bildiği kullanıcı adıyla yazar (bkz. app/api/precalc/saved/route.ts).
+   */
+  userName: string;
 }
 
 /** Kaydetmeden sonra gösterilen bilgi şeridi. */
@@ -374,7 +384,9 @@ const COLUMN_VIEWS: { id: string; label: string; cols: string[] | null }[] = [
   { id: 'all', label: 'Tümü', cols: null },
 ];
 
-export default function AdvancedPrecalculationClient({ items: allItems, meta, docId, canEditCatalog, rawCatalogItems }: Props) {
+export default function AdvancedPrecalculationClient({
+  items: allItems, meta, docId, canEditCatalog, rawCatalogItems, userName,
+}: Props) {
   const router = useRouter();
   const [catalogEditorOpen, setCatalogEditorOpen] = useState(false);
 
@@ -419,6 +431,10 @@ export default function AdvancedPrecalculationClient({ items: allItems, meta, do
   /** "Listeye Kaydet" geri bildirimi. */
   const [saving, setSaving] = useState(false);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | null>(null);
+  /** Açık kaydın revizyon geçmişi — RevisionBar'da gösterilir. */
+  const [revisions, setRevisions] = useState<RevisionRow[]>([]);
+  /** Onay bekleyen revizyon — diyalog açıkken dolu, kaydedince/vazgeçince null. */
+  const [pendingRevision, setPendingRevision] = useState<{ note: string; no: string } | null>(null);
 
   /* ---- tablo kutusu ve sanallaştırma ---- */
   // Tablo sayfayla birlikte değil kendi kutusunda kayar. Böylece başlık
@@ -558,20 +574,73 @@ export default function AdvancedPrecalculationClient({ items: allItems, meta, do
 
   const ready = !!engine && !engineLoading;
 
+  /** Açık kaydın revizyon geçmişini sunucudan tazeler. */
+  const loadRevisions = useCallback(async (id: string | null) => {
+    if (!id) { setRevisions([]); return; }
+    const remote = await fetchSaved(id);
+    setRevisions(remote?.revisions ?? []);
+  }, []);
+
+  useEffect(() => { void loadRevisions(doc.docId); }, [doc.docId, loadRevisions]);
+
+  /** Kitaptaki güncel precalculation numarası — kullanıcı henüz kaydetmemiş olabilir. */
+  function currentPrecalcNo(): string {
+    const addr = engine?.paramAddr('precalcNo');
+    return addr ? engine!.text(addr).trim() : '';
+  }
+
+  /** Ebeveynin girdileri — fark önizlemesi için. Sunucu farkı yine kendi hesaplar. */
+  async function parentEntries(id: string): Promise<PrecalcEntries> {
+    const remote = await fetchSaved(id);
+    return remote?.entries ?? {};
+  }
+
   /*
    * Teklifi listeye kaydeder.
    *
-   * Sunucuya yalnızca girdiler gider; genel toplam orada yeniden hesaplanır,
-   * böylece listedeki rakam Excel çıktısıyla ayrışmaz. Açık bir kayıt varsa
-   * O KAYIT güncellenir (numaraya göre değil): kaydın kimliği ve sürümü
-   * gönderilir, araya başka biri girdiyse sunucu reddeder ve kullanıcı ne
-   * yapacağına karar verir.
+   * Kaydedilmemiş taslak doğrudan yeni kayıt açar. Açık bir kaydın üzerine
+   * yazmak yoktur — sunucu numarası değişmeyen bir güncellemeyi reddeder
+   * (bkz. app/api/precalc/saved/[id]/route.ts): revizyon her zaman yeni bir
+   * kayıttır, eski sürüm listede kalır. Bu yüzden burada önce numaranın
+   * değişip değişmediğine bakılır; değişmediyse sunucuya gitmeye gerek yok,
+   * değiştiyse fark çıkarılıp kullanıcıya onaylatılır.
    */
   async function saveToList() {
+    const no = currentPrecalcNo();
+
+    // Kaydedilmemiş taslak: doğrudan yeni kayıt.
+    if (!doc.docId) { void runSave({}); return; }
+
+    // Açık kayıt: numara değişmediyse sunucuya gitmeye gerek yok — sunucu
+    // zaten aynı hatayla reddedecekti.
+    if (no === doc.precalcNo) {
+      setSaveNotice({
+        kind: 'err',
+        text: `"${doc.precalcNo}" numarası zaten kayıtlı. Revizyon için Precalculation No'yu `
+          + `değiştirin — önerilen: ${nextRevisionNo(doc.precalcNo)}`,
+      });
+      return;
+    }
+
+    // Numara değişti: farkı göster, kullanıcı onaylasın.
+    const changes = diffEntries(await parentEntries(doc.docId), getEntries());
+    setPendingRevision({
+      no,
+      note: formatRevision(changes, {
+        code: parseRevisionCode(no)?.full ?? no,
+        author: userName,
+        date: new Date(),
+      }),
+    });
+  }
+
+  /** Asıl kaydetme — hem ilk kayıt hem revizyon buradan geçer. */
+  async function runSave(opts: { asRevisionOf?: string; revisionNote?: string }) {
     setSaving(true);
     setSaveNotice(null);
-    const result = await savePrecalculation(doc, getEntries());
+    const result = await savePrecalculation(doc, getEntries(), opts);
     setSaving(false);
+    setPendingRevision(null);
 
     if (result.kind === 'ok') {
       const next: DraftDoc = {
@@ -584,11 +653,12 @@ export default function AdvancedPrecalculationClient({ items: allItems, meta, do
       if (result.created && typeof window !== 'undefined') {
         window.history.replaceState(null, '', `/advanced-precalculation?id=${result.saved.id}`);
       }
+      void loadRevisions(next.docId);
       setSaveNotice({
         kind: 'ok',
-        text: result.created
-          ? `${next.precalcNo} listeye kaydedildi. Bundan sonra "Listeye Kaydet" bu kaydı günceller.`
-          : `${next.precalcNo} güncellendi (sürüm ${next.version}).`,
+        text: opts.asRevisionOf
+          ? `${next.precalcNo} yeni revizyon olarak kaydedildi.`
+          : `${next.precalcNo} listeye kaydedildi.`,
       });
       return;
     }
@@ -614,7 +684,7 @@ export default function AdvancedPrecalculationClient({ items: allItems, meta, do
       setSaveNotice({
         kind: 'err',
         text: `"${result.existing.precalcNo}" numarası zaten kayıtlı. Revizyon için `
-          + 'Precalculation No\'yu değiştirin (ör. RE-00 → RE-01).',
+          + `Precalculation No'yu değiştirin — önerilen: ${nextRevisionNo(result.existing.precalcNo)}`,
       });
       return;
     }
@@ -998,11 +1068,11 @@ export default function AdvancedPrecalculationClient({ items: allItems, meta, do
             onClick={saveToList}
             disabled={!ready || saving}
             title={doc.docId
-              ? 'Açık kaydı günceller (Advanced Precalculation Lists).'
+              ? 'Precalculation No değiştirilmişse yeni bir revizyon kaydı açar; eski sürüm listede kalır.'
               : 'Yeni bir kayıt açar (precalculation numarası zorunludur).'}
             className={BTN_PRIMARY}
           >
-            {saving ? 'Kaydediliyor…' : doc.docId ? 'Kaydı Güncelle' : 'Listeye Kaydet'}
+            {saving ? 'Kaydediliyor…' : doc.docId ? 'Yeni Revizyon Kaydet' : 'Listeye Kaydet'}
           </button>
           <Link href="/precalculation" className={BTN_DARK}>
             Precalculation Oluştur
@@ -1067,6 +1137,9 @@ export default function AdvancedPrecalculationClient({ items: allItems, meta, do
         entryCount={entryCount}
         onSetCell={setMainCell}
       />
+
+      {/* Açık kaydın revizyon geçmişi — katlanır, boşsa görünmez */}
+      <RevisionBar revisions={revisions} currentId={doc.docId} />
 
       {/* Sayfa geçişi — kitabın bütün sayfaları */}
       <div className="flex flex-wrap items-center gap-1 mb-3">
@@ -1468,6 +1541,14 @@ export default function AdvancedPrecalculationClient({ items: allItems, meta, do
         </div>
       )}
 
+      {pendingRevision && (
+        <RevisionDialog
+          suggestion={pendingRevision.note}
+          precalcNo={pendingRevision.no}
+          onCancel={() => setPendingRevision(null)}
+          onConfirm={(note) => void runSave({ asRevisionOf: doc.docId!, revisionNote: note })}
+        />
+      )}
     </div>
   );
 }
