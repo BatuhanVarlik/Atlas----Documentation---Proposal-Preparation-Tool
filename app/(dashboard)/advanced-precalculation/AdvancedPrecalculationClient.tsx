@@ -19,6 +19,7 @@ import { IDENTITY_FIELDS } from '@/components/precalc/identityFields';
 import SheetGrid from '@/components/precalc/SheetGrid';
 import OthersTable from '@/components/precalc/OthersTable';
 import TotalsPanel from '@/components/precalc/TotalsPanel';
+import CashflowPanel from '@/components/precalc/CashflowPanel';
 import { parseSumRanges, weightOf } from '@/lib/precalc/totals';
 import CatalogEditorModal from '@/components/precalc/CatalogEditorModal';
 
@@ -117,6 +118,12 @@ const TOTALS_TAB = '__totals__';
  * Bu yüzden kendi tablosunda, kendi sütun sırasıyla gösterilir.
  */
 const OTHERS_TAB = '__others__';
+
+/**
+ * Nakit akışı sekmesi. Kitapta ödeme planının sağında duran haftalık tablo
+ * kendi ekranını hak ediyor: hem 52 satır, hem de asıl okunan şey grafiği.
+ */
+const CASHFLOW_TAB = '__cashflow__';
 
 /** Sütun genişliği/sırası tercihinin saklandığı anahtar. */
 const COLUMN_LAYOUT_KEY = 'atlas.pricing.columns.v1';
@@ -1072,6 +1079,12 @@ export default function AdvancedPrecalculationClient({ items: allItems, meta, do
           active={activeSheet === TOTALS_TAB}
           onClick={() => setActiveSheet(TOTALS_TAB)}
         />
+        <SheetButton
+          name={CASHFLOW_TAB}
+          label="Cashflow"
+          active={activeSheet === CASHFLOW_TAB}
+          onClick={() => setActiveSheet(CASHFLOW_TAB)}
+        />
         {(workbook?.sheetNames ?? [])
           .filter((n) => n !== MAIN_SHEET)
           .map((name) => (
@@ -1424,6 +1437,14 @@ export default function AdvancedPrecalculationClient({ items: allItems, meta, do
             değeri doğrudan değiştirir; Matrah (I) sütunu formülle hesaplanır.
           </p>
         </div>
+      ) : engine && activeSheet === CASHFLOW_TAB ? (
+        <CashflowPanel
+          engine={engine}
+          settledVersion={settledVersion}
+          calculating={calculating}
+          currency={meta.currency}
+          onSetCell={setMainCell}
+        />
       ) : engine ? (
         <SheetGrid
           engine={engine}
