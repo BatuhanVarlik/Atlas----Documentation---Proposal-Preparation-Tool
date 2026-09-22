@@ -153,14 +153,6 @@ export const COLUMNS: Column[] = [
     ) : null,
   },
   {
-    key: 'topCategory', label: 'Üst Kategori', width: 200,
-    render: (it) => <span className="text-slate-500 text-[11px]">{it.topCategory}</span>,
-  },
-  {
-    key: 'subCategory', label: 'Alt Kategori', width: 210,
-    render: (it) => <span className="text-slate-500 text-[11px]">{it.subCategory}</span>,
-  },
-  {
     key: 'productType', label: 'Ürün Tipi', width: 200, sortKey: 'productType',
     render: (it) => <span className="text-slate-500 text-[11px]">{it.productType}</span>,
   },
@@ -224,6 +216,189 @@ export const COLUMNS: Column[] = [
     key: 'connections', label: 'Bağlantı', width: 80, align: 'right', engineCol: 'BA',
     render: (it) => <span className="font-mono text-slate-500 text-[11px]">{it.connections ?? ''}</span>,
   },
+  {
+    key: 'sparePartTotal', label: 'Yedek Parça Toplam (€)', width: 140, align: 'right', engineCol: 'S',
+    hint: 'Yedek parça fiyatı × adet (Excel S sütunu).',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="S" format="money" readOnly />,
+  },
+  {
+    key: 'leadTime', label: 'Tedarik Süresi (hafta)', width: 130, align: 'right', engineCol: 'U',
+    hint: 'Siparişten teslime geçen süre (Excel U sütunu).',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="U" format="int" readOnly />,
+  },
+  {
+    key: 'paymentWeek', label: 'Ödeme Haftası', width: 110, align: 'right', engineCol: 'V',
+    hint: 'Bu kalemin ödeme planındaki haftası (Excel V sütunu) — Cashflow sekmesini besler.',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="V" format="int" readOnly />,
+  },
+  {
+    key: 'hemitekOC', label: 'HEMİTEK OC No', width: 120, engineCol: 'W',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="W" format="text" readOnly />,
+  },
+  {
+    key: 'orderDate', label: 'Sipariş Tarihi', width: 115, engineCol: 'X',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="X" format="date" readOnly />,
+  },
+  {
+    key: 'abroadOC', label: 'Yurtdışı OC No', width: 120, engineCol: 'Y',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="Y" format="text" readOnly />,
+  },
+  {
+    key: 'estLoadDate', label: 'Tahmini Yükleme Tarihi', width: 140, engineCol: 'Z',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="Z" format="date" readOnly />,
+  },
+  {
+    key: 'actualLoadDate', label: 'Gerçekleşen Yükleme Tarihi', width: 150, engineCol: 'AA',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AA" format="date" readOnly />,
+  },
+  {
+    key: 'estCustomsDate', label: 'Gümrüğe Geliş (Tahmini)', width: 150, engineCol: 'AB',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AB" format="date" readOnly />,
+  },
+  {
+    key: 'customsArrivalDate', label: 'Gümrük Varış Tarihi', width: 140, engineCol: 'AC',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AC" format="date" readOnly />,
+  },
+  {
+    key: 'capacity', label: 'Kapasite (lt/h)', width: 110, align: 'right', engineCol: 'AD',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AD" format="number" readOnly />,
+  },
+  {
+    key: 'motorKw', label: 'Motor (kW)', width: 95, align: 'right', engineCol: 'AE',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AE" format="number" readOnly />,
+  },
+  {
+    key: 'fcEH', label: 'FC E/H', width: 80, engineCol: 'AF',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AF" format="text" readOnly />,
+  },
+  {
+    key: 'acOrDc', label: 'AC/DC', width: 80, engineCol: 'AG',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AG" format="text" readOnly />,
+  },
+  {
+    key: 'revolutionRpm', label: 'Devir (rpm)', width: 100, align: 'right', engineCol: 'AH',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AH" format="number" readOnly />,
+  },
+  {
+    key: 'impellerMm', label: 'Pervane (mm)', width: 100, align: 'right', engineCol: 'AI',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AI" format="number" readOnly />,
+  },
+  {
+    key: 'pressureBar', label: 'Basınç (bar)', width: 100, align: 'right', engineCol: 'AJ',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AJ" format="number" readOnly />,
+  },
+  {
+    key: 'elastomer', label: 'Elastomer', width: 100, engineCol: 'AK',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AK" format="text" readOnly />,
+  },
+  {
+    key: 'aisiGrade', label: 'AISI 316/304', width: 100, engineCol: 'AL',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AL" format="text" readOnly />,
+  },
+  {
+    key: 'voltage', label: 'Voltaj', width: 90, engineCol: 'AM',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AM" format="text" readOnly />,
+  },
+  {
+    key: 'steamConsumption', label: 'Buhar Sarfiyatı (kg/h)', width: 140, align: 'right', engineCol: 'AN',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AN" format="number" readOnly />,
+  },
+  {
+    key: 'steamPressure', label: 'Buhar Basıncı (bar)', width: 130, align: 'right', engineCol: 'AO',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AO" format="number" readOnly />,
+  },
+  {
+    key: 'condensate', label: 'Kondens (kg/h)', width: 110, align: 'right', engineCol: 'AP',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AP" format="number" readOnly />,
+  },
+  {
+    key: 'processWater', label: 'Proses Suyu (lt/h)', width: 130, align: 'right', engineCol: 'AQ',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AQ" format="number" readOnly />,
+  },
+  {
+    key: 'coldWater', label: 'Soğuk Su (lt/h)', width: 120, align: 'right', engineCol: 'AR',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AR" format="number" readOnly />,
+  },
+  {
+    key: 'iceWater', label: 'Buzlu Su (lt/h)', width: 120, align: 'right', engineCol: 'AS',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AS" format="number" readOnly />,
+  },
+  {
+    key: 'heatLoad', label: 'Isı Yükü (kcal/h)', width: 130, align: 'right', engineCol: 'AT',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AT" format="number" readOnly />,
+  },
+  {
+    key: 'product', label: 'Ürün', width: 130, engineCol: 'AU',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AU" format="text" readOnly />,
+  },
+  {
+    key: 'productTemp', label: 'Ürün Sıcaklığı (°C)', width: 130, align: 'right', engineCol: 'AV',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AV" format="number" readOnly />,
+  },
+  {
+    key: 'productViscosity', label: 'Ürün Viskozitesi (cP)', width: 140, align: 'right', engineCol: 'AW',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AW" format="number" readOnly />,
+  },
+  {
+    key: 'connectionType', label: 'Bağlantı Tipi', width: 120, engineCol: 'AX',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="AX" format="text" readOnly />,
+  },
+  {
+    key: 'totalWelding', label: 'Toplam Kaynak', width: 110, align: 'right', engineCol: 'BB',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BB" format="int" readOnly />,
+  },
+  {
+    key: 'controlUnit', label: 'Kontrol Ünitesi (V/H)', width: 140, engineCol: 'BC',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BC" format="text" readOnly />,
+  },
+  {
+    key: 'orificeDiameter', label: 'Orifis Çapı (mm)', width: 130, align: 'right', engineCol: 'BD',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BD" format="number" readOnly />,
+  },
+  {
+    key: 'powerConsumption', label: 'Güç Tüketimi (kW)', width: 130, align: 'right', engineCol: 'BE',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BE" format="number" readOnly />,
+  },
+  {
+    key: 'positionerType', label: 'Pozisyoner Tipi', width: 130, engineCol: 'BF',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BF" format="text" readOnly />,
+  },
+  {
+    key: 'actuatorType', label: 'Aktüatör Tipi', width: 120, engineCol: 'BG',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BG" format="text" readOnly />,
+  },
+  {
+    key: 'actuatorDiameter', label: 'Aktüatör Çapı (mm)', width: 140, align: 'right', engineCol: 'BH',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BH" format="number" readOnly />,
+  },
+  {
+    key: 'airPressure', label: 'Hava Basıncı (bar)', width: 130, align: 'right', engineCol: 'BI',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BI" format="number" readOnly />,
+  },
+  {
+    key: 'airConsumption', label: 'Hava Sarfiyatı (Nl/h)', width: 140, align: 'right', engineCol: 'BJ',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BJ" format="number" readOnly />,
+  },
+  {
+    key: 'airSupplyPressure', label: 'Hava Besleme Basıncı (bar)', width: 160, align: 'right', engineCol: 'BK',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BK" format="number" readOnly />,
+  },
+  {
+    key: 'airSignalPressure', label: 'Hava Sinyal Basıncı (bar)', width: 160, align: 'right', engineCol: 'BL',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BL" format="number" readOnly />,
+  },
+  {
+    key: 'linePressure', label: 'Hat Basıncı (bar)', width: 130, align: 'right', engineCol: 'BM',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BM" format="number" readOnly />,
+  },
+  {
+    key: 'mechanicalSeal', label: 'Mekanik Keçe (S/D)', width: 140, engineCol: 'BN',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BN" format="text" readOnly />,
+  },
+  {
+    key: 'operationTime', label: 'Çalışma Süresi (saat/yıl)', width: 160, align: 'right', engineCol: 'BO',
+    render: (_it, ctx) => <SheetCell ctx={ctx} col="BO" format="number" readOnly />,
+  },
 ];
 
 export const LEAD = COLUMNS.filter((c) => c.lead);
@@ -245,7 +420,9 @@ export const COLUMN_VIEWS: { id: string; label: string; cols: string[] | null }[
     id: 'tech',
     label: 'Teknik',
     cols: ['placeOfUse', 'machineType', 'supplier', 'standard', 'inletDiameter',
-      'outletDiameter', 'connections', 'sparePartNo', 'sparePartDesc', 'sparePartPrice'],
+      'outletDiameter', 'connections', 'sparePartNo', 'sparePartDesc', 'sparePartPrice',
+      'capacity', 'motorKw', 'pressureBar', 'voltage', 'product', 'connectionType',
+      'controlUnit', 'actuatorType', 'airPressure', 'linePressure'],
   },
   { id: 'all', label: 'Tümü', cols: null },
 ];
