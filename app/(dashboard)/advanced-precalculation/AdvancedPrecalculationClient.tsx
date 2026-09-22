@@ -26,6 +26,7 @@ import { parseSumRanges, weightOf } from '@/lib/precalc/totals';
 import CatalogEditorModal from '@/components/precalc/CatalogEditorModal';
 import RevisionBar from '@/components/precalc/RevisionBar';
 import RevisionDialog from '@/components/precalc/RevisionDialog';
+import HScrollControl from '@/components/precalc/HScrollControl';
 import {
   COLUMNS, LEAD, OPTIONAL, COLUMN_VIEWS, DEFAULT_COLUMN_VIEW,
   TextSheetCell, SheetCell,
@@ -1144,7 +1145,7 @@ export default function AdvancedPrecalculationClient({
             tarayıcı bunu "auto"ya çevirir (bkz. CSS Overflow spec) — zararsız,
             çünkü kutuya sabit yükseklik verilmediği için hiçbir zaman taşmaz.
           */}
-          <div ref={scrollRef} className="overflow-x-auto">
+          <div ref={scrollRef} className="overflow-x-auto hscroll-hidden">
               {/*
                 Sabit yerleşim + colgroup: sütun genişliğini yalnızca buradaki
                 değerler belirler. Otomatik yerleşimde tarayıcı sütunları başlık
@@ -1236,6 +1237,8 @@ export default function AdvancedPrecalculationClient({
                 </tbody>
               </table>
             </div>
+
+          <HScrollControl targetRef={scrollRef} watch={cols.length} />
 
           {/* Hücre renklerinin ne anlama geldiği — araç çubuğunu sıkıştırmasın */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 px-1 text-[11px] text-slate-400">
