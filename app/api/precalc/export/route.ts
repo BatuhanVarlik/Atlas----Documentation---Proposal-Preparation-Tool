@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx-js-style';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth-middleware';
+import { prisma } from '@/lib/prisma';
 import {
   buildPrecalcWorkbook,
   CASHFLOW_SHEET,
@@ -22,6 +23,8 @@ const workbook = workbookData as unknown as PrecalcWorkbook;
 const exportSchema = z.object({
   entries: z.record(z.string(), z.union([z.number(), z.string(), z.boolean(), z.null()])),
   onlyEntered: z.boolean().default(true),
+  /** Verilirse revizyon geçmişi ÖZET sayfasına yazılır. */
+  docId: z.string().cuid().optional(),
   header: z
     .object({
       customer: z.string().max(200).optional(),
@@ -78,10 +81,46 @@ export async function POST(req: Request) {
       }
     }
 
+    /**
+     * Revizyon geçmişi: verilen kayıttan köke kadar ebeveyn zinciri,
+     * eskiden yeniye. Döngüye karşı sayaçla korunur — bozuk veri sunucuyu
+     * kilitlemesin (bkz. /api/precalc/saved/[id] GET).
+     */
+    let revisions: { code: string; note: string; author: string; date: string }[] = [];
+    if (parsed.data.docId) {
+      type RevisionChainRow = {
+        precalcNo: string; revisionCode: string; revisionNote: string; createdAt: Date;
+        parentId: string | null; createdBy: { name: string | null } | null;
+      };
+      const chain: RevisionChainRow[] = [];
+      let cursor: string | null = parsed.data.docId;
+      for (let guard = 0; cursor && guard < 50; guard++) {
+        const found: RevisionChainRow | null = await prisma.savedPrecalculation.findUnique({
+          where: { id: cursor },
+          select: {
+            precalcNo: true, revisionCode: true, revisionNote: true, createdAt: true,
+            parentId: true, createdBy: { select: { name: true } },
+          },
+        });
+        if (!found) break;
+        chain.unshift(found);
+        cursor = found.parentId;
+      }
+      revisions = chain
+        .filter((row) => row.revisionCode || row.revisionNote)
+        .map((row) => ({
+          code: row.revisionCode || row.precalcNo,
+          note: row.revisionNote || 'açıklama girilmedi',
+          author: row.createdBy?.name ?? '',
+          date: row.createdAt.toLocaleDateString('tr-TR'),
+        }));
+    }
+
     const book = buildPrecalcWorkbook(workbook, parsed.data.entries, {
       onlyEntered: parsed.data.onlyEntered,
       header: parsed.data.header,
       stock,
+      revisions,
     });
 
     // CASHFLOW grafiğinin hangi satırlara bağlanacağını belirlemek için motor

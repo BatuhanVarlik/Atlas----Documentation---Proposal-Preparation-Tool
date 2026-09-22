@@ -67,7 +67,7 @@ export default function AdvancedPrecalculationListsClient({ items }: Props) {
       const res = await fetch('/api/precalc/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entries, onlyEntered: true }),
+        body: JSON.stringify({ entries, onlyEntered: true, docId: row.id }),
       });
       if (!res.ok) throw new Error('Excel oluşturulamadı (' + res.status + ')');
 

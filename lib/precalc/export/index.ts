@@ -54,6 +54,11 @@ export interface ExportOptions {
     projectNo?: string;
     precalcNo?: string;
   };
+  /**
+   * Kaydın revizyon geçmişi, eskiden yeniye. Kayıtla ilişkilendirilmemiş
+   * (henüz listeye girmemiş) teklifte boştur.
+   */
+  revisions?: { code: string; note: string; author: string; date: string }[];
 }
 
 /**
@@ -111,6 +116,7 @@ export function buildPrecalcWorkbook(
   // 1 — ÖZET en başta: dosyayı açan kişi önce rakamları görsün.
   XLSX.utils.book_append_sheet(book, buildSummarySheet(wb, engine, {
     itemCount: keptItemCount,
+    revisions: options.revisions,
   }), 'ÖZET');
 
   // 2 — CASHFLOW: ödeme planı + haftalık nakit akışı (grafik Task 11'de enjekte edilir)

@@ -148,7 +148,11 @@ export default function PrecalculationClient() {
       const res = await fetch('/api/precalc/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entries: state.getEntries(), onlyEntered }),
+        body: JSON.stringify({
+          entries: state.getEntries(),
+          onlyEntered,
+          docId: state.doc.docId ?? undefined,
+        }),
       });
       if (!res.ok) throw new Error('Sunucu hatası (' + res.status + ')');
 

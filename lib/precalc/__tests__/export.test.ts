@@ -63,6 +63,34 @@ describe('precalculation dışa aktarımı', () => {
     expect(buildSheetSnapshot(engine, 'KABLO')).not.toBeNull();
   });
 
+  it('ÖZET sayfasına revizyon geçmişi yazar', () => {
+    const book = buildPrecalcWorkbook(workbook, quoteEntries(), {
+      onlyEntered: true,
+      revisions: [
+        { code: 'RE-00', note: 'İlk sürüm.', author: 'A', date: '30.08.2026' },
+        { code: 'RE-01', note: '5 Adet vana eklendi.', author: 'B', date: '31.08.2026' },
+      ],
+    });
+
+    const cells = Object.values(book.Sheets['ÖZET'])
+      .filter((c): c is { v: unknown } => !!c && typeof c === 'object' && 'v' in c)
+      .map((c) => String(c.v));
+
+    expect(cells).toContain('REVİZYON GEÇMİŞİ');
+    expect(cells).toContain('RE-01');
+    expect(cells).toContain('5 Adet vana eklendi.');
+    // En yeni üstte.
+    expect(cells.indexOf('RE-01')).toBeLessThan(cells.indexOf('RE-00'));
+  });
+
+  it('revizyon yoksa ÖZET blok başlığını hiç yazmaz', () => {
+    const book = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
+    const cells = Object.values(book.Sheets['ÖZET'])
+      .filter((c): c is { v: unknown } => !!c && typeof c === 'object' && 'v' in c)
+      .map((c) => String(c.v));
+    expect(cells).not.toContain('REVİZYON GEÇMİŞİ');
+  });
+
   describe('dosya adı', () => {
     it('numara yoksa eski biçimi korur', () => {
       expect(precalcFileName()).toMatch(/^PRECALCULATION \d{4}-\d{2}-\d{2} \d{2}-\d{2}\.xlsx$/);
