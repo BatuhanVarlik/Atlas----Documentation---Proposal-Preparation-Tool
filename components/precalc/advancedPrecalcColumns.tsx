@@ -153,6 +153,14 @@ export const COLUMNS: Column[] = [
     ) : null,
   },
   {
+    key: 'topCategory', label: 'Üst Kategori', width: 200,
+    render: (it) => <span className="text-slate-500 text-[11px]">{it.topCategory}</span>,
+  },
+  {
+    key: 'subCategory', label: 'Alt Kategori', width: 210,
+    render: (it) => <span className="text-slate-500 text-[11px]">{it.subCategory}</span>,
+  },
+  {
     key: 'productType', label: 'Ürün Tipi', width: 200, sortKey: 'productType',
     render: (it) => <span className="text-slate-500 text-[11px]">{it.productType}</span>,
   },

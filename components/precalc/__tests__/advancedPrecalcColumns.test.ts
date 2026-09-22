@@ -49,8 +49,8 @@ describe('advancedPrecalcColumns — tam sütun kapsamı', () => {
     expect(missing).toEqual([]);
   });
 
-  it('69 sütun tanımlı olmalı (24 mevcut + 45 yeni teknik/lojistik sütun)', () => {
-    expect(COLUMNS).toHaveLength(69);
+  it('71 sütun tanımlı olmalı (26 mevcut + 45 yeni teknik/lojistik sütun)', () => {
+    expect(COLUMNS).toHaveLength(71);
   });
 
   it('"tech" görünümü yeni teknik sütunlardan en az birini içerir', () => {
