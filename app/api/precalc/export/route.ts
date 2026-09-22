@@ -2,9 +2,15 @@ import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx-js-style';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth-middleware';
-import { buildPrecalcWorkbook, precalcFileName, quoteEquipmentNumbers } from '@/lib/precalc/export';
+import {
+  buildPrecalcWorkbook,
+  DETAILED_SHEET,
+  precalcFileName,
+  quoteEquipmentNumbers,
+} from '@/lib/precalc/export';
 import { summarizePrecalc } from '@/lib/precalc/savedSummary';
 import { lookupStock, isStockConfigured } from '@/lib/stock/sqlServer';
+import { applySheetSetup } from '@/lib/precalc/xlsxPost';
 import type { PrecalcWorkbook } from '@/lib/precalc/types';
 import workbookData from '@/lib/precalc/workbook.json';
 
@@ -75,7 +81,10 @@ export async function POST(req: Request) {
       stock,
     });
 
-    const buffer: Buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' });
+    const raw: Buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' });
+    // AYRINTILI FIYATLANDIRMA sayfası A4'e sığdırılır — SheetJS sayfa
+    // düzenini yazamadığı için buffer burada son bir kez işlenir.
+    const buffer = applySheetSetup(raw, [{ sheet: DETAILED_SHEET, a4FitToWidth: true }]);
     const filename = precalcFileName(summarizePrecalc(parsed.data.entries).precalcNo);
 
     return new NextResponse(new Uint8Array(buffer), {

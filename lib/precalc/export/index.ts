@@ -112,7 +112,21 @@ export function buildPrecalcWorkbook(
   // canlı hesapladığı için çıktıya hesaplanmış hâliyle konur; kullanıcı
   // teklifi Excel'de açtığında kırılımı da elinde bulur.
   const detailed = buildDetailedSheet(engine);
-  if (detailed) XLSX.utils.book_append_sheet(book, detailed, DETAILED_SHEET);
+  if (detailed) {
+    XLSX.utils.book_append_sheet(book, detailed.sheet, DETAILED_SHEET);
+
+    // Baskı alanı tanımlı adla verilir; sayfa adı boşluk içerdiği için tırnaklı.
+    const sheetIndex = book.SheetNames.indexOf(DETAILED_SHEET);
+    book.Workbook = book.Workbook ?? {};
+    book.Workbook.Names = [
+      ...(book.Workbook.Names ?? []),
+      {
+        Name: '_xlnm.Print_Area',
+        Sheet: sheetIndex,
+        Ref: `'${DETAILED_SHEET}'!$A$1:$${detailed.lastCol}$${detailed.lastRow}`,
+      },
+    ];
+  }
 
   /* ---- Özet sayfası ---- */
   XLSX.utils.book_append_sheet(book, buildSummarySheet(wb, engine, {
