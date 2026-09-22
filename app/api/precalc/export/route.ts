@@ -4,13 +4,16 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth-middleware';
 import {
   buildPrecalcWorkbook,
+  CASHFLOW_SHEET,
+  cashflowLayoutFor,
   DETAILED_SHEET,
   precalcFileName,
   quoteEquipmentNumbers,
 } from '@/lib/precalc/export';
+import { PrecalcEngine } from '@/lib/precalc/engine';
 import { summarizePrecalc } from '@/lib/precalc/savedSummary';
 import { lookupStock, isStockConfigured } from '@/lib/stock/sqlServer';
-import { applySheetSetup } from '@/lib/precalc/xlsxPost';
+import { applySheetSetup, injectLineChart } from '@/lib/precalc/xlsxPost';
 import type { PrecalcWorkbook } from '@/lib/precalc/types';
 import workbookData from '@/lib/precalc/workbook.json';
 
@@ -81,10 +84,37 @@ export async function POST(req: Request) {
       stock,
     });
 
+    // CASHFLOW grafiğinin hangi satırlara bağlanacağını belirlemek için motor
+    // burada ayrıca kurulur — buildPrecalcWorkbook kendi motorunu döndürmüyor,
+    // 52 satırlık bir tablo için bunu yeniden hesaplamanın maliyeti önemsiz.
+    const cashflowEngine = new PrecalcEngine(workbook);
+    cashflowEngine.setEntries(parsed.data.entries);
+    cashflowEngine.settle();
+    const layout = cashflowLayoutFor(cashflowEngine);
+
     const raw: Buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' });
     // AYRINTILI FIYATLANDIRMA sayfası A4'e sığdırılır — SheetJS sayfa
     // düzenini yazamadığı için buffer burada son bir kez işlenir.
-    const buffer = applySheetSetup(raw, [{ sheet: DETAILED_SHEET, a4FitToWidth: true }]);
+    const withSetup = applySheetSetup(raw, [{ sheet: DETAILED_SHEET, a4FitToWidth: true }]);
+    // CASHFLOW sayfasına native çizgi grafiği enjekte edilir — bu da SheetJS'in
+    // yazamadığı bir parça; A4 sığdırma uygulanmış buffer üzerinde çalışır.
+    const buffer = injectLineChart(withSetup, {
+      sheet: CASHFLOW_SHEET,
+      title: 'HAFTA',
+      catRef: `${CASHFLOW_SHEET}!$A$${layout.firstWeekRow}:$A$${layout.lastWeekRow}`,
+      series: [{
+        nameRef: `${CASHFLOW_SHEET}!$D$${layout.netHeaderRow}`,
+        valRef: `${CASHFLOW_SHEET}!$D$${layout.firstWeekRow}:$D$${layout.lastWeekRow}`,
+        // Kaynak Excel'deki turuncu çizgiyle aynı renk.
+        colorRGB: 'ED7D31',
+      }],
+      anchor: {
+        fromCol: 6,
+        fromRow: layout.netHeaderRow - 1,
+        toCol: 20,
+        toRow: layout.netHeaderRow + 24,
+      },
+    });
     const filename = precalcFileName(summarizePrecalc(parsed.data.entries).precalcNo);
 
     return new NextResponse(new Uint8Array(buffer), {

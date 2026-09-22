@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import PizZip from 'pizzip';
 import * as XLSX from 'xlsx-js-style';
-import { applySheetSetup, sheetPartName } from '../xlsxPost';
+import { applySheetSetup, injectLineChart, sheetPartName } from '../xlsxPost';
 
 /** İki sayfalı küçük bir kitap: ikincisi düzenlenecek olan. */
 function sampleBook(): Buffer {
@@ -56,5 +56,58 @@ describe('xlsx son işlem', () => {
   it('bilinmeyen sayfa adı sessizce atlanır', () => {
     const out = applySheetSetup(sampleBook(), [{ sheet: 'YOK', a4FitToWidth: true }]);
     expect(XLSX.read(out, { type: 'buffer' }).SheetNames).toEqual(['BIRINCI', 'AYRINTI']);
+  });
+});
+
+function chartSpec() {
+  return {
+    sheet: 'AYRINTI',
+    title: 'HAFTA',
+    catRef: 'AYRINTI!$A$2:$A$5',
+    series: [{ nameRef: 'AYRINTI!$D$1', valRef: 'AYRINTI!$D$2:$D$5', colorRGB: 'ED7D31' }],
+    anchor: { fromCol: 6, fromRow: 2, toCol: 18, toRow: 27 },
+  };
+}
+
+describe('grafik enjeksiyonu', () => {
+  it('chart ve drawing parçalarını ekler', () => {
+    const zip = new PizZip(injectLineChart(sampleBook(), chartSpec()));
+    expect(zip.file('xl/charts/chart1.xml')).toBeTruthy();
+    expect(zip.file('xl/drawings/drawing1.xml')).toBeTruthy();
+    expect(zip.file('xl/drawings/_rels/drawing1.xml.rels')).toBeTruthy();
+    expect(zip.file('xl/worksheets/_rels/sheet2.xml.rels')).toBeTruthy();
+  });
+
+  it('seri hücrelere bağlıdır — değerler gömülü değil', () => {
+    const xml = new PizZip(injectLineChart(sampleBook(), chartSpec()))
+      .file('xl/charts/chart1.xml')!.asText();
+    expect(xml).toContain('<c:f>AYRINTI!$D$2:$D$5</c:f>');
+    expect(xml).toContain('<c:f>AYRINTI!$A$2:$A$5</c:f>');
+    expect(xml).toContain('ED7D31');
+  });
+
+  it('sayfaya <drawing> düğümü, kapanış etiketinden hemen önce eklenir', () => {
+    const xml = new PizZip(injectLineChart(sampleBook(), chartSpec()))
+      .file('xl/worksheets/sheet2.xml')!.asText();
+    expect(xml).toMatch(/<drawing r:id="[^"]+"\/><\/worksheet>$/);
+  });
+
+  it('içerik tipleri chart ve drawing için Override taşır', () => {
+    const types = new PizZip(injectLineChart(sampleBook(), chartSpec()))
+      .file('[Content_Types].xml')!.asText();
+    expect(types).toContain('/xl/charts/chart1.xml');
+    expect(types).toContain('drawingml.chart+xml');
+    expect(types).toContain('/xl/drawings/drawing1.xml');
+  });
+
+  it('sonuç SheetJS ile geri okunabilir', () => {
+    const out = injectLineChart(sampleBook(), chartSpec());
+    expect(XLSX.read(out, { type: 'buffer' }).SheetNames).toEqual(['BIRINCI', 'AYRINTI']);
+  });
+
+  it('bilinmeyen sayfada dosyayı olduğu gibi döndürür', () => {
+    const before = sampleBook();
+    const out = injectLineChart(before, { ...chartSpec(), sheet: 'YOK' });
+    expect(new PizZip(out).file('xl/charts/chart1.xml')).toBeNull();
   });
 });

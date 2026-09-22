@@ -167,3 +167,4 @@ export { buildSheetSnapshot } from './snapshot';
 export { precalcFileName } from './fileName';
 export { quoteEquipmentNumbers, type StockRow } from './listSheets';
 export { DETAILED_SHEET } from './detailedSheet';
+export { CASHFLOW_SHEET, type CashflowLayout } from './cashflowSheet';
