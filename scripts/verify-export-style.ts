@@ -47,7 +47,7 @@ const check = (ok: boolean, what: string) => {
 const entries = sampleEntries();
 console.log(`Girdi: ${Object.keys(entries).length} kalem\n`);
 
-const book = buildPrecalcWorkbook(wb, entries, { onlyEntered: true });
+const { book } = buildPrecalcWorkbook(wb, entries, { onlyEntered: true });
 const buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 console.log(`Dosya: ${(buffer.length / 1024).toFixed(0)} KB`);
 console.log(`Sayfalar: ${book.SheetNames.join(' · ')}\n`);

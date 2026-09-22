@@ -61,6 +61,22 @@ export interface ExportOptions {
   revisions?: { code: string; note: string; author: string; date: string }[];
 }
 
+/** `buildPrecalcWorkbook`'un döndürdüğü kitap ve onunla birlikte hesaplanmış yan bilgiler. */
+export interface PrecalcWorkbookResult {
+  book: XLSX.WorkBook;
+  /**
+   * CASHFLOW sayfasının satır yerleşimi — grafik enjeksiyonu (export route'u)
+   * bunu kullanır. Kitap zaten bu sayfayı bu yerleşimle yazdığı için burada
+   * ikinci bir motor kurup yeniden hesaplamaya gerek yok.
+   */
+  cashflowLayout: CashflowLayout;
+  /**
+   * Kitabın başlık bloğuna yazılan precalculation numarası — dosya adı da
+   * bununla üretilir, ayrı bir motorla yeniden hesaplanmaz.
+   */
+  precalcNo: string;
+}
+
 /**
  * PRECALCULATION sayfasını hesaplanmış hâliyle bir çalışma kitabına yazar.
  */
@@ -68,7 +84,7 @@ export function buildPrecalcWorkbook(
   wb: PrecalcWorkbook,
   entries: PrecalcEntries,
   options: ExportOptions,
-): XLSX.WorkBook {
+): PrecalcWorkbookResult {
   const engine = new PrecalcEngine(wb);
   engine.setEntries(entries);
   /*
@@ -120,7 +136,10 @@ export function buildPrecalcWorkbook(
   }), 'ÖZET');
 
   // 2 — CASHFLOW: ödeme planı + haftalık nakit akışı (grafik Task 11'de enjekte edilir)
-  XLSX.utils.book_append_sheet(book, buildCashflowSheet(engine).sheet, CASHFLOW_SHEET);
+  // Yerleşim aşağıda döndürülür — export route'u grafiği buradan okur, kendi
+  // motorunu kurup sayfayı ikinci kez üretmez (bkz. PrecalcWorkbookResult).
+  const cashflow = buildCashflowSheet(engine);
+  XLSX.utils.book_append_sheet(book, cashflow.sheet, CASHFLOW_SHEET);
 
   // 3 — Teklifin kendisi
   XLSX.utils.book_append_sheet(book, sheet, 'PRECALCULATION');
@@ -156,16 +175,7 @@ export function buildPrecalcWorkbook(
   XLSX.utils.book_append_sheet(
     book, buildShippingSheet(lines, stock, listMeta), 'Sevk Listesi');
 
-  return book;
-}
-
-/**
- * Son üretilen kitabın CASHFLOW yerleşimi — grafik enjeksiyonu (Task 11) bunu
- * okur. Sayfayı ikinci kez kurar; 52 satırlık bir tablo için maliyeti ihmal
- * edilebilir ve `buildPrecalcWorkbook`'un imzasını kirletmekten iyidir.
- */
-export function cashflowLayoutFor(engine: PrecalcEngine): CashflowLayout {
-  return buildCashflowSheet(engine).layout;
+  return { book, cashflowLayout: cashflow.layout, precalcNo: header.precalcNo };
 }
 
 export { EXPORT_COLUMNS } from './precalcSheet';

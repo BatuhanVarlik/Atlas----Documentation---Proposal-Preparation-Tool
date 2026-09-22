@@ -6,13 +6,11 @@ import { prisma } from '@/lib/prisma';
 import {
   buildPrecalcWorkbook,
   CASHFLOW_SHEET,
-  cashflowLayoutFor,
   DETAILED_SHEET,
   precalcFileName,
   quoteEquipmentNumbers,
 } from '@/lib/precalc/export';
-import { PrecalcEngine } from '@/lib/precalc/engine';
-import { summarizePrecalc } from '@/lib/precalc/savedSummary';
+import { readRevisionChain } from '@/lib/precalc/revisionChain';
 import { lookupStock, isStockConfigured } from '@/lib/stock/sqlServer';
 import { applySheetSetup, injectLineChart } from '@/lib/precalc/xlsxPost';
 import type { PrecalcWorkbook } from '@/lib/precalc/types';
@@ -81,55 +79,34 @@ export async function POST(req: Request) {
       }
     }
 
-    /**
-     * Revizyon geçmişi: verilen kayıttan köke kadar ebeveyn zinciri,
-     * eskiden yeniye. Döngüye karşı sayaçla korunur — bozuk veri sunucuyu
-     * kilitlemesin (bkz. /api/precalc/saved/[id] GET).
+    /*
+     * Revizyon geçmişi: verilen kayıttan köke kadar zincir, eskiden yeniye.
+     * Ekrandaki revizyon şeridiyle (GET /api/precalc/saved/[id]) AYNI
+     * fonksiyondan okunur — ikisi ayrı ayrı yazıldığında sessizce
+     * ayrışıyordu (final inceleme, bulgu I4).
      */
-    let revisions: { code: string; note: string; author: string; date: string }[] = [];
-    if (parsed.data.docId) {
-      type RevisionChainRow = {
-        precalcNo: string; revisionCode: string; revisionNote: string; createdAt: Date;
-        parentId: string | null; createdBy: { name: string | null } | null;
-      };
-      const chain: RevisionChainRow[] = [];
-      let cursor: string | null = parsed.data.docId;
-      for (let guard = 0; cursor && guard < 50; guard++) {
-        const found: RevisionChainRow | null = await prisma.savedPrecalculation.findUnique({
-          where: { id: cursor },
-          select: {
-            precalcNo: true, revisionCode: true, revisionNote: true, createdAt: true,
-            parentId: true, createdBy: { select: { name: true } },
-          },
-        });
-        if (!found) break;
-        chain.unshift(found);
-        cursor = found.parentId;
-      }
-      revisions = chain
-        .filter((row) => row.revisionCode || row.revisionNote)
-        .map((row) => ({
-          code: row.revisionCode || row.precalcNo,
-          note: row.revisionNote || 'açıklama girilmedi',
-          author: row.createdBy?.name ?? '',
-          date: row.createdAt.toLocaleDateString('tr-TR'),
-        }));
-    }
+    const revisions = parsed.data.docId
+      ? (await readRevisionChain(prisma, parsed.data.docId)).map((row) => ({
+        code: row.revisionCode || row.precalcNo,
+        note: row.revisionNote || 'açıklama girilmedi',
+        author: row.createdBy?.name ?? '',
+        date: row.createdAt.toLocaleDateString('tr-TR'),
+      }))
+      : [];
 
-    const book = buildPrecalcWorkbook(workbook, parsed.data.entries, {
-      onlyEntered: parsed.data.onlyEntered,
-      header: parsed.data.header,
-      stock,
-      revisions,
-    });
-
-    // CASHFLOW grafiğinin hangi satırlara bağlanacağını belirlemek için motor
-    // burada ayrıca kurulur — buildPrecalcWorkbook kendi motorunu döndürmüyor,
-    // 52 satırlık bir tablo için bunu yeniden hesaplamanın maliyeti önemsiz.
-    const cashflowEngine = new PrecalcEngine(workbook);
-    cashflowEngine.setEntries(parsed.data.entries);
-    cashflowEngine.settle();
-    const layout = cashflowLayoutFor(cashflowEngine);
+    /*
+     * Kitap tek bir motorla üretilir; CASHFLOW yerleşimi ve dosya adının
+     * precalculation numarası da aynı üretimden döner — üç ayrı motor kurup
+     * aynı hesabı üç kez yeniden çalıştırmaya gerek yok (bkz. PrecalcWorkbookResult).
+     */
+    const { book, cashflowLayout: layout, precalcNo } = buildPrecalcWorkbook(
+      workbook, parsed.data.entries, {
+        onlyEntered: parsed.data.onlyEntered,
+        header: parsed.data.header,
+        stock,
+        revisions,
+      },
+    );
 
     const raw: Buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' });
     // AYRINTILI FIYATLANDIRMA sayfası A4'e sığdırılır — SheetJS sayfa
@@ -154,7 +131,7 @@ export async function POST(req: Request) {
         toRow: layout.netHeaderRow + 24,
       },
     });
-    const filename = precalcFileName(summarizePrecalc(parsed.data.entries).precalcNo);
+    const filename = precalcFileName(precalcNo);
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {

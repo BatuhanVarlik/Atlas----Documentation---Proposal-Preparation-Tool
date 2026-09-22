@@ -19,7 +19,7 @@ function quoteEntries(): PrecalcEntries {
 
 describe('precalculation dışa aktarımı', () => {
   it('ÖZET ilk sırada, EQUIPMENT LIST ve limitler dışarıda', () => {
-    const book = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
+    const { book } = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
 
     expect(book.SheetNames[0]).toBe('ÖZET');
     expect(book.SheetNames[1]).toBe('CASHFLOW');
@@ -29,7 +29,7 @@ describe('precalculation dışa aktarımı', () => {
   });
 
   it('kitabın kalan sayfalarını da taşır', () => {
-    const book = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
+    const { book } = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
     for (const name of ['KABLO', 'SMS PASLANMAZ', 'DIN PASLANMAZ MALZEME',
       'INTEGRATOR PANOSU', 'KONTROL ODASI OLUSTURMA']) {
       expect(book.SheetNames).toContain(name);
@@ -37,12 +37,12 @@ describe('precalculation dışa aktarımı', () => {
   });
 
   it('Excel’in 31 karakter sınırını aşan sayfa adı kısaltılır', () => {
-    const book = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
+    const { book } = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
     for (const name of book.SheetNames) expect(name.length).toBeLessThanOrEqual(31);
   });
 
   it('PRECALCULATION sayfası başlık bloğu ve sütun şeridiyle başlar', () => {
-    const book = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
+    const { book } = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
     const sheet = book.Sheets['PRECALCULATION'];
     expect(sheet['A2']?.v).toBe('CUSTOMER:');
     expect(sheet['D3']?.v).toBe('PRECALCULATION NO:');
@@ -50,7 +50,7 @@ describe('precalculation dışa aktarımı', () => {
   });
 
   it('yazılıp geri okunabilir bir kitap üretir', () => {
-    const book = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
+    const { book } = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
     const buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
     expect(buffer.length).toBeGreaterThan(1000);
     expect(XLSX.read(buffer, { type: 'buffer' }).SheetNames).toContain('ÖZET');
@@ -64,7 +64,7 @@ describe('precalculation dışa aktarımı', () => {
   });
 
   it('ÖZET sayfasına revizyon geçmişi yazar', () => {
-    const book = buildPrecalcWorkbook(workbook, quoteEntries(), {
+    const { book } = buildPrecalcWorkbook(workbook, quoteEntries(), {
       onlyEntered: true,
       revisions: [
         { code: 'RE-00', note: 'İlk sürüm.', author: 'A', date: '30.08.2026' },
@@ -84,7 +84,7 @@ describe('precalculation dışa aktarımı', () => {
   });
 
   it('revizyon yoksa ÖZET blok başlığını hiç yazmaz', () => {
-    const book = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
+    const { book } = buildPrecalcWorkbook(workbook, quoteEntries(), { onlyEntered: true });
     const cells = Object.values(book.Sheets['ÖZET'])
       .filter((c): c is { v: unknown } => !!c && typeof c === 'object' && 'v' in c)
       .map((c) => String(c.v));

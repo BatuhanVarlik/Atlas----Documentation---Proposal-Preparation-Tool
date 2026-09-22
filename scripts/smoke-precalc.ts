@@ -111,7 +111,7 @@ check('I1847 kaynak değerine döndü', engine.num('I1847'), before);
 /* ------------------------------------------------------------------ */
 console.log('\n=== 7) Excel dışa aktarma ===');
 const entries = { 'PRECALCULATION!F15': 10, 'PRECALCULATION!F24': 5, 'PRECALCULATION!F3748': 2 };
-const book = buildPrecalcWorkbook(wb, entries, { onlyEntered: true });
+const { book } = buildPrecalcWorkbook(wb, entries, { onlyEntered: true });
 const buf = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' });
 fs.writeFileSync('.smoke-precalc.xlsx', buf);
 

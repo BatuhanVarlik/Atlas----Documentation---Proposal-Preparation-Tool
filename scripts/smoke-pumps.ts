@@ -87,7 +87,7 @@ else console.log('  ✓ Girilen pompa ara toplama giriyor');
 /* ------------------------------------------------------------------ */
 console.log('\n=== 5) Excel çıktısı ===');
 const entries = engine.getEntries();
-const book = buildPrecalcWorkbook(wb, entries, { onlyEntered: true });
+const { book } = buildPrecalcWorkbook(wb, entries, { onlyEntered: true });
 const buf = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' });
 const rows = XLSX.utils.sheet_to_json(
   XLSX.read(buf, { type: 'buffer' }).Sheets['PRECALCULATION'],

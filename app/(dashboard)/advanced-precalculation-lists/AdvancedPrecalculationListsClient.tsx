@@ -98,7 +98,12 @@ export default function AdvancedPrecalculationListsClient({ items }: Props) {
     setNotice(null);
     try {
       const res = await fetch(`/api/precalc/saved/${row.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Silinemedi (' + res.status + ')');
+      if (!res.ok) {
+        // 409 "has-revisions": bu kayda bağlı revizyonlar var — sunucunun
+        // Türkçe açıklamasını göster (bkz. final inceleme, bulgu I3).
+        const payload = await res.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error ?? 'Silinemedi (' + res.status + ')');
+      }
       setNotice({ kind: 'ok', text: `${row.precalcNo} silindi.` });
       router.refresh();
     } catch (e) {

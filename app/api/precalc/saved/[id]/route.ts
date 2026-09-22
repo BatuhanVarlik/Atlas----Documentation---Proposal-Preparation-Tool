@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth-middleware';
 import { prisma } from '@/lib/prisma';
 import { summarizePrecalc } from '@/lib/precalc/savedSummary';
 import { parseRevisionCode } from '@/lib/precalc/precalcNo';
+import { readRevisionChain } from '@/lib/precalc/revisionChain';
 
 const updateSchema = z.object({
   entries: z.record(
@@ -35,38 +36,14 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ success: false, error: 'Kayıt bulunamadı' }, { status: 404 });
   }
 
-  /**
-   * Revizyon geçmişi: bu kayıttan köke kadar ebeveyn zinciri, eskiden yeniye.
-   * Döngüye karşı sayaçla korunur — bozuk veri sunucuyu kilitlemesin.
+  /*
+   * Revizyon geçmişi: bu kayıttan köke kadar zincir, eskiden yeniye. Excel'e
+   * yazılan "REVİZYON GEÇMİŞİ" bloğuyla (POST /api/precalc/export) AYNI
+   * fonksiyondan, aynı süzgeçle okunur (bkz. final inceleme, bulgu I4).
    */
-  const chain: unknown[] = [];
-  let cursor: string | null = row.parentId;
-  for (let guard = 0; cursor && guard < 50; guard++) {
-    const parent = await prisma.savedPrecalculation.findUnique({
-      where: { id: cursor },
-      select: {
-        id: true, precalcNo: true, revisionCode: true, revisionNote: true,
-        createdAt: true, parentId: true,
-        createdBy: { select: { name: true } },
-      },
-    });
-    if (!parent) break;
-    chain.unshift(parent);
-    cursor = parent.parentId;
-  }
+  const revisions = await readRevisionChain(prisma, id);
 
-  return NextResponse.json({
-    success: true,
-    data: row,
-    revisions: [...chain, {
-      id: row.id,
-      precalcNo: row.precalcNo,
-      revisionCode: row.revisionCode,
-      revisionNote: row.revisionNote,
-      createdAt: row.createdAt,
-      createdBy: row.createdBy,
-    }],
-  });
+  return NextResponse.json({ success: true, data: row, revisions });
 }
 
 /**
@@ -132,6 +109,25 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     );
   }
 
+  /*
+   * PATCH yalnızca henüz revizyonu olmayan ilk kayıt için korunur — bir kayıt
+   * revize edildiyse (bir çocuğu varsa) artık geçmiş bir sürümdür, içeriği
+   * PATCH ile değiştirilemez; yeni bir revizyon POST+parentId ile açılır.
+   */
+  const childCount = await prisma.savedPrecalculation.count({ where: { parentId: id } });
+  if (childCount > 0) {
+    return NextResponse.json(
+      {
+        success: false,
+        reason: 'needs-revision',
+        error: `"${current.precalcNo}" kaydının zaten revizyonları var; içeriği artık `
+          + 'değiştirilemez. Yeni bir revizyon açmak için Precalculation No\'yu ilerletip kaydedin.',
+        existing: { id: current.id, precalcNo: current.precalcNo },
+      },
+      { status: 409 },
+    );
+  }
+
   const summary = summarizePrecalc(parsed.data.entries);
   if (!summary.precalcNo) {
     return NextResponse.json(
@@ -141,9 +137,34 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
 
   /*
-   * Üzerine yazma yok: bir kaydı güncellemek numarayı değiştirmeyi gerektirir.
-   * Versiyon denetimi kullanıcının elinde — RE-00'ı RE-01 yapan kişi neyin
-   * değiştiğini bilerek yapar ve eski sürüm listede durmaya devam eder.
+   * Numara değiştiyse bu artık bir revizyondur: PATCH bunu ASLA sessizce
+   * yeniden adlandırıp üzerine yazmaz — istemcinin POST /api/precalc/saved
+   * ile parentId göndererek yeni bir kayıt açması gerekir (eski sürüm
+   * listede kalır). Normal akışta istemci (lib/precalc/savedClient.ts) bu
+   * durumu zaten kendi tespit edip POST'a yönlendirir; burası yalnızca
+   * araya başka bir sekme/kullanıcı girdiği ya da eski bir istemcinin hâlâ
+   * PATCH gönderdiği durumlar için son çare güvenliktir.
+   */
+  if (summary.precalcNo !== current.precalcNo) {
+    return NextResponse.json(
+      {
+        success: false,
+        reason: 'needs-revision',
+        error: `Precalculation No değişti ("${current.precalcNo}" → "${summary.precalcNo}"). `
+          + 'Numara değişikliği her zaman yeni bir revizyon kaydı açar — bu ekrandan tekrar '
+          + 'kaydedin, sistem otomatik olarak yeni revizyonu oluşturacaktır.',
+        existing: { id: current.id, precalcNo: current.precalcNo },
+      },
+      { status: 409 },
+    );
+  }
+
+  /*
+   * Üzerine yazma yok: numara AYNI kalan bir güncelleme yalnızca bu kaydın
+   * kendi içeriğini düzeltir (revizyon değildir). Numara değişmemişse ve
+   * yukarıdaki kontrolden geçtiyse burası artık her zaman true olur; eski
+   * "aynı numara reddedilir" davranışı POST /api/precalc/saved üzerinden
+   * ilk kayıt açılışında hâlâ geçerlidir (bkz. o route'taki duplicate kontrolü).
    */
   if (summary.precalcNo === current.precalcNo) {
     return NextResponse.json(
@@ -222,6 +243,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   return NextResponse.json({ success: true, data: saved });
 }
 
+/**
+ * Bir kaydı siler.
+ *
+ * Şemada `parentId` `onDelete: SetNull` ile tanımlı: çocuğu olan bir kaydı
+ * silmek, çocukların `parentId`'sini sessizce NULL'a çeker ve zincir kopar —
+ * ekrandaki revizyon şeridi tek satıra düşer, kimse hata görmez. Bu yüzden
+ * silmeden önce çocuk sayısı denetlenir; varsa silme reddedilir (final
+ * inceleme, bulgu I3).
+ */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     await requireAuth();
@@ -230,6 +260,20 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   }
 
   const { id } = await ctx.params;
+
+  const childCount = await prisma.savedPrecalculation.count({ where: { parentId: id } });
+  if (childCount > 0) {
+    return NextResponse.json(
+      {
+        success: false,
+        reason: 'has-revisions',
+        error: `Bu kayda bağlı ${childCount} revizyon var; önce onları silin ya da bu `
+          + 'revizyonu koruyun.',
+      },
+      { status: 409 },
+    );
+  }
+
   try {
     await prisma.savedPrecalculation.delete({ where: { id } });
   } catch {
