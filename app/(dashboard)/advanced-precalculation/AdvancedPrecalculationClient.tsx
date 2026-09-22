@@ -199,6 +199,12 @@ export default function AdvancedPrecalculationClient({
   // dikeyde görünür satır aralığı çizilir. Yatay kaydırma hâlâ bu kutunun
   // kendi ekseninde — bkz. Task 5 (HScrollControl).
   const scrollRef = useRef<HTMLDivElement>(null);
+  /** Başlık şeridinin kendi (yatayda gövdeyle eşlenen) kutusu. */
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  /** Başlık + gövde kutularını saran dış kutu — sticky başlığın sınırı budur. */
+  const tableWrapRef = useRef<HTMLDivElement>(null);
+  /** Filtre sıfırlama effect'i ilk çizimde çalışmasın diye. */
+  const filterResetArmed = useRef(false);
   const [viewport, setViewport] = useState({ top: 0, height: 600 });
 
   useEffect(() => {
@@ -216,13 +222,20 @@ export default function AdvancedPrecalculationClient({
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
     measure();
-    window.addEventListener('scroll', schedule, { passive: true });
+    // DİKKAT — `capture: true` şart: sayfanın gerçek kaydırma kutusu belge
+    // değil, dashboard layout'undaki `<main class="overflow-y-auto">`. `scroll`
+    // olayları kabarcıklanmaz (bubble etmez), bu yüzden window üzerindeki
+    // normal (bubble fazı) dinleyici <main> kaydırılınca hiç tetiklenmez ve
+    // viewport.top sonsuza dek 0'da kalırdı. Yakalama (capture) fazındaki
+    // dinleyici ise olay hedefine inerken window'dan geçtiği için çalışır.
+    // Aynı kalıp: components/ui/ContextMenu.tsx.
+    window.addEventListener('scroll', schedule, { passive: true, capture: true });
     window.addEventListener('resize', schedule);
     const ro = new ResizeObserver(schedule);
     ro.observe(el);
     return () => {
       if (frame) cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('scroll', schedule, { capture: true });
       window.removeEventListener('resize', schedule);
       ro.disconnect();
     };
@@ -287,6 +300,40 @@ export default function AdvancedPrecalculationClient({
   const totalWidth = useMemo(
     () => cols.reduce((sum, c) => sum + (colWidths[c.key] ?? c.width), 0),
     [colWidths, cols],
+  );
+
+  /**
+   * Başlık şeridi gövdeden ayrı bir kutuda durduğu için (bkz. tablo JSX'i)
+   * yatay konumu JS ile eşlenir. HScrollControl'ün programatik `scrollLeft`
+   * ataması ve `scrollBy()` çağrıları da gövdede native `scroll` olayı
+   * ürettiğinden bu dinleyiciden geçer — o bileşende değişiklik gerekmez.
+   */
+  useEffect(() => {
+    const body = scrollRef.current;
+    if (!body) return;
+    const sync = () => {
+      const head = headerScrollRef.current;
+      if (head && head.scrollLeft !== body.scrollLeft) head.scrollLeft = body.scrollLeft;
+    };
+    sync();
+    body.addEventListener('scroll', sync, { passive: true });
+    return () => body.removeEventListener('scroll', sync);
+  }, [activeSheet, totalWidth]);
+
+  /*
+    Başlık ve gövde iki ayrı <table> olarak çizilir (bkz. tablo JSX'i). Sütun
+    genişlikleri tek kaynaktan gelsin diye colgroup ve tablo stili burada bir
+    kez kurulup ikisine de verilir — iki ayrı hesap yapılırsa başlık ile gövde
+    birbirinden kayar. İki kutu aynı ebeveynde kardeş olduğu için `width: 100%`
+    ve `minWidth` her ikisinde de aynı piksel değerine çözülür.
+  */
+  const tableClass = 'text-xs table-fixed border-separate';
+  const tableStyle = { borderSpacing: 0, width: '100%', minWidth: totalWidth };
+  const colGroup = (
+    <colgroup>
+      {cols.map((c) => <col key={c.key} style={{ width: widthOf(c) }} />)}
+      <col />
+    </colgroup>
   );
 
   function resizeColumn(key: string, width: number) {
@@ -778,8 +825,18 @@ export default function AdvancedPrecalculationClient({
   // dizi döndürdüğü için onu izlemek, adet girişinden sonra listeyi başa
   // atardı.
   useEffect(() => {
-    if (scrollRef.current) {
-      window.scrollTo({ top: window.scrollY + scrollRef.current.getBoundingClientRect().top });
+    // İlk çizimde çalışmaz: sayfa yeni açılmışken tabloyu ekranın tepesine
+    // çekmek, üstündeki başlık/filtre şeridini görünmez yapardı.
+    if (!filterResetArmed.current) { filterResetArmed.current = true; return; }
+    const el = tableWrapRef.current;
+    if (!el) return;
+    // Yalnızca tablo görüntü alanının üstünden yukarı kaymışsa geri getir.
+    // Arama kutusu debounce'suz olduğu için bu koşul olmadan her tuş
+    // vuruşunda sayfa yukarı zıplardı.
+    if (el.getBoundingClientRect().top < 0) {
+      // scrollIntoView doğru kaydırma kutusunu (burada <main>) kendisi bulur;
+      // belge hiç kaymadığı için window.scrollTo burada işe yaramaz.
+      el.scrollIntoView({ block: 'start' });
     }
   }, [search, topCategory, subCategory, productType, standard, supplier, label,
     group, priced, minPrice, maxPrice, onlyEntered, sortKey, sortDir]);
@@ -1139,32 +1196,39 @@ export default function AdvancedPrecalculationClient({
 
           {/*
             Tablo artık ayrı bir kart değil — sayfa akışının doğal bir parçası.
-            Dikey kaydırma pencereye ait (bkz. yukarıdaki viewport effect'i);
-            bu kutu yalnızca yatay eksende taşar (overflow-x). CSS overflow
-            normalizasyonu gereği overflow-y burada "visible" yazılsa da
-            tarayıcı bunu "auto"ya çevirir (bkz. CSS Overflow spec) — zararsız,
-            çünkü kutuya sabit yükseklik verilmediği için hiçbir zaman taşmaz.
+            Dikey kaydırma sayfanın gerçek kaydırma kutusuna, yani dashboard
+            layout'undaki `<main class="overflow-y-auto">`e ait (bkz. yukarıdaki
+            viewport effect'i).
+
+            Başlık ile gövde neden iki ayrı kutu/tablo: gövde kutusu yatayda
+            taştığı için `overflow-x: auto` almak zorunda. CSS Overflow şartnamesi
+            gereği bir eksen `visible` dışında bir değer alınca tarayıcı öteki
+            ekseni de `auto`ya normalize eder — yani o kutu, CSSOM açısından
+            kaçınılmaz olarak bir "kaydırma kutusu"dur. İçindeki `position: sticky`
+            başlık da en yakın kaydırma kutusuna, yani <main>'e değil BU kutuya
+            göre çözülürdü; kutunun kendi yüksekliği sınırsız (bütün satırlar
+            kadar) ve kendi dikey kaydırma konumu hep 0 olduğu için başlık
+            kutunun tepesinde kalıp sayfayla birlikte kayıp gidiyordu.
+            `overflow-y: hidden/visible` yazmak bunu çözmez (hidden da kaydırma
+            kutusudur, visible ise normalize edilir). Çözüm: başlığı bu kutunun
+            DIŞINA, kardeş bir kutuya almak. Böylece başlık kutusunun <main>'e
+            kadarki ataları arasında `visible` dışında overflow'lu kutu kalmaz
+            ve sticky doğru scrollport'a çözülür. Yatay konum JS ile eşlenir
+            (bkz. yukarıdaki sync effect'i).
           */}
-          <div ref={scrollRef} className="overflow-x-auto hscroll-hidden">
-              {/*
-                Sabit yerleşim + colgroup: sütun genişliğini yalnızca buradaki
-                değerler belirler. Otomatik yerleşimde tarayıcı sütunları başlık
-                metnine ve artan boşluğa göre kendi büyütüyor, bu yüzden
-                başlıklarla gövde hücreleri birbirinden kayıyordu.
-                Sondaki genişliksiz sütun, tablo ekrandan darsa artan boşluğu
-                tek başına yutar; gerçek sütunlar bozulmaz.
-                Ayrık kenarlık (border-separate) gerekli: çökertilmiş kenarlıklar
-                tabloya ait olduğu için başlık dikeyde sabitlenince kaymaz ve
-                başlık şeridinde boşluk/çizgi artığı bırakır.
-              */}
-              <table
-                className="text-xs table-fixed border-separate"
-                style={{ borderSpacing: 0, width: '100%', minWidth: totalWidth }}
-              >
-                <colgroup>
-                  {cols.map((c) => <col key={c.key} style={{ width: widthOf(c) }} />)}
-                  <col />
-                </colgroup>
+          <div ref={tableWrapRef}>
+            {/*
+              Başlık şeridi. `overflow-x: hidden` — kendi genişliğinden taşan
+              içeriği kırpar ama kullanıcı burayı kaydıramaz; konumu gövdeden
+              JS ile yazılır. Sticky sınırı dıştaki sarmalayıcıdır: tablo bitince
+              başlık da ekrandan çıkar.
+            */}
+            <div
+              ref={headerScrollRef}
+              className="sticky top-0 z-30 overflow-x-hidden bg-slate-50"
+            >
+              <table className={tableClass} style={tableStyle}>
+                {colGroup}
                 <thead>
                   <HeadRow
                     cols={cols}
@@ -1176,6 +1240,29 @@ export default function AdvancedPrecalculationClient({
                     onMove={moveColumn}
                   />
                 </thead>
+              </table>
+            </div>
+
+            {/*
+              Gövde kutusu. `bg-white`: sayfanın arka planı ve filigranı
+              hücrelerin içinden görünmesin, satır vurgusu (hover:bg-slate-50)
+              fark edilsin diye opak bir zemin gerekir — eski kart sarmalayıcısı
+              kaldırılınca bu zemin de gitmişti. Karanlık temada globals.css'teki
+              `.dark :where(.bg-white)` kuralı devralır.
+
+              Sabit yerleşim + colgroup: sütun genişliğini yalnızca colGroup'taki
+              değerler belirler. Otomatik yerleşimde tarayıcı sütunları başlık
+              metnine ve artan boşluğa göre kendi büyütüyor, bu yüzden
+              başlıklarla gövde hücreleri birbirinden kayıyordu.
+              Sondaki genişliksiz sütun, tablo ekrandan darsa artan boşluğu
+              tek başına yutar; gerçek sütunlar bozulmaz.
+              Ayrık kenarlık (border-separate) gerekli: çökertilmiş kenarlıklar
+              tabloya ait olduğu için başlık ayrı tabloya alınınca kenarlık
+              hesabı ikiye bölünür ve şeritte çizgi artığı bırakır.
+            */}
+            <div ref={scrollRef} className="overflow-x-auto hscroll-hidden bg-white">
+              <table className={tableClass} style={tableStyle}>
+                {colGroup}
                 <tbody>
                   {visibleRows.length === 0 ? (
                     <tr>
@@ -1237,6 +1324,7 @@ export default function AdvancedPrecalculationClient({
                 </tbody>
               </table>
             </div>
+          </div>
 
           <HScrollControl targetRef={scrollRef} watch={cols.length} />
 
@@ -1717,7 +1805,7 @@ function Select({
   );
 }
 
-/** Tablo başlık satırı — hem gerçek tabloda hem ekrana çakılan kopyada kullanılır. */
+/** Tablo başlık satırı — gövdeden ayrı, ekrana çakılan kendi tablosunda çizilir. */
 function HeadRow({
   cols, widthOf, sortKey, sortDir, onSort, onResize, onMove,
 }: {
@@ -1797,10 +1885,12 @@ function Th({
         onMove ? 'Sürükleyerek taşı · kenardan çekerek genişlet' : 'Kenardan çekerek genişlet',
       ].filter(Boolean).join('\n\n')}
       className={cn(
-        // Yalnızca dikeyde sabit: başlık şeridi ekranda kalır, yatay kaydırmada
-        // gövdeyle birlikte kayar. DİKKAT: buraya `relative` eklenmemeli —
-        // ikisi de position yazar, hangisinin kazanacağı CSS sırasına kalır.
-        // Genişletme tutamacının konumlandırma bağlamını `sticky` zaten kuruyor.
+        // Başlığın ekranda kalmasını artık saran kutu sağlıyor (bkz. tablo
+        // JSX'indeki headerScrollRef kutusu); buradaki `sticky` yalnızca
+        // genişletme tutamacına konumlandırma bağlamı kurmak için duruyor —
+        // başlık tablosu kendi kutusunda dikeyde hiç kaymadığı için görsel
+        // etkisi yok. DİKKAT: buraya `relative` eklenmemeli — ikisi de position
+        // yazar, hangisinin kazanacağı CSS sırasına kalır.
         'sticky top-0 z-20 px-3 py-2.5 text-left text-[11px] font-semibold',
         'bg-slate-50 whitespace-nowrap overflow-hidden',
         'border-b-2 border-slate-300 border-r border-r-slate-200',
