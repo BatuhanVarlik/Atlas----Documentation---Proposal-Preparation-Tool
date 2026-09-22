@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth-middleware';
 import { canEditCatalog } from '@/lib/precalc/catalogPermission';
 import { prisma } from '@/lib/prisma';
 import AdvancedPrecalculationClient from './AdvancedPrecalculationClient';
+import StartGate from './StartGate';
 
 /**
  * @param searchParams `?id=` listeden açılan precalculation kaydıdır.
@@ -26,21 +27,40 @@ export default async function AdvancedPrecalculationPage(
   // Katalog düzeltmeleri burada, okuma anında bindirilir — üretilen catalog.json
   // hiçbir zaman değişmez (bkz. lib/precalc/catalogOverrides.ts).
   const items = applyCatalogOverridesToItems(dataset.items, overrides).items;
+  const docId = id?.trim() || null;
+  const canEdit = user ? await canEditCatalog(user) : false;
+  // Yalnızca revizyon diyaloğunun önizleme metninde kullanılır — kaydedilen
+  // asıl revizyon notunu sunucu kendi bildiği kullanıcı adıyla yazar.
+  const userName = user?.name ?? 'bilinmiyor';
+
+  // "Katalog Düzelt" paneli kendi düzeltme birleştirmesini ŞABLON (henüz
+  // düzeltme uygulanmamış) kalemlerden yapmalı — üstteki `items` (zaten
+  // bindirilmiş) üzerinden tekrar birleştirmek, techSpec gibi bileşik-anahtar
+  // alanları düzeltilmişken anahtarı kaydırır.
+  const rawCatalogItems = dataset.items;
+
+  // `?id=` ile belirli bir kayıt açılıyorsa direkt o kayıt açılır — 2 butonlu
+  // karşılama ekranı yalnızca çıplak URL'de (StartGate) gösterilir.
+  if (docId) {
+    return (
+      <AdvancedPrecalculationClient
+        items={items}
+        rawCatalogItems={rawCatalogItems}
+        meta={dataset.meta}
+        docId={docId}
+        canEditCatalog={canEdit}
+        userName={userName}
+      />
+    );
+  }
 
   return (
-    <AdvancedPrecalculationClient
+    <StartGate
       items={items}
-      // "Katalog Düzelt" paneli kendi düzeltme birleştirmesini ŞABLON
-      // (henüz düzeltme uygulanmamış) kalemlerden yapmalı — üstteki `items`
-      // (zaten bindirilmiş) üzerinden tekrar birleştirmek, techSpec gibi
-      // bileşik-anahtar alanları düzeltilmişken anahtarı kaydırır.
-      rawCatalogItems={dataset.items}
+      rawCatalogItems={rawCatalogItems}
       meta={dataset.meta}
-      docId={id?.trim() || null}
-      canEditCatalog={user ? await canEditCatalog(user) : false}
-      // Yalnızca revizyon diyaloğunun önizleme metninde kullanılır — kaydedilen
-      // asıl revizyon notunu sunucu kendi bildiği kullanıcı adıyla yazar.
-      userName={user?.name ?? 'bilinmiyor'}
+      canEditCatalog={canEdit}
+      userName={userName}
     />
   );
 }
