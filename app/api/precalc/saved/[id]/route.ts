@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth-middleware';
 import { prisma } from '@/lib/prisma';
 import { summarizePrecalc } from '@/lib/precalc/savedSummary';
+import { parseRevisionCode } from '@/lib/precalc/precalcNo';
 
 const updateSchema = z.object({
   entries: z.record(
@@ -33,7 +34,39 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!row) {
     return NextResponse.json({ success: false, error: 'Kayıt bulunamadı' }, { status: 404 });
   }
-  return NextResponse.json({ success: true, data: row });
+
+  /**
+   * Revizyon geçmişi: bu kayıttan köke kadar ebeveyn zinciri, eskiden yeniye.
+   * Döngüye karşı sayaçla korunur — bozuk veri sunucuyu kilitlemesin.
+   */
+  const chain: unknown[] = [];
+  let cursor: string | null = row.parentId;
+  for (let guard = 0; cursor && guard < 50; guard++) {
+    const parent = await prisma.savedPrecalculation.findUnique({
+      where: { id: cursor },
+      select: {
+        id: true, precalcNo: true, revisionCode: true, revisionNote: true,
+        createdAt: true, parentId: true,
+        createdBy: { select: { name: true } },
+      },
+    });
+    if (!parent) break;
+    chain.unshift(parent);
+    cursor = parent.parentId;
+  }
+
+  return NextResponse.json({
+    success: true,
+    data: row,
+    revisions: [...chain, {
+      id: row.id,
+      precalcNo: row.precalcNo,
+      revisionCode: row.revisionCode,
+      revisionNote: row.revisionNote,
+      createdAt: row.createdAt,
+      createdBy: row.createdBy,
+    }],
+  });
 }
 
 /**
@@ -107,23 +140,38 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     );
   }
 
-  // Numara değiştiyse başka bir kayda çakışmamalı.
-  if (summary.precalcNo !== current.precalcNo) {
-    const clash = await prisma.savedPrecalculation.findUnique({
-      where: { precalcNo: summary.precalcNo },
-      select: { id: true, precalcNo: true },
-    });
-    if (clash && clash.id !== id) {
-      return NextResponse.json(
-        {
-          success: false,
-          reason: 'duplicate',
-          error: `"${summary.precalcNo}" numarası başka bir kayıtta kullanılıyor.`,
-          existing: clash,
-        },
-        { status: 409 },
-      );
-    }
+  /*
+   * Üzerine yazma yok: bir kaydı güncellemek numarayı değiştirmeyi gerektirir.
+   * Versiyon denetimi kullanıcının elinde — RE-00'ı RE-01 yapan kişi neyin
+   * değiştiğini bilerek yapar ve eski sürüm listede durmaya devam eder.
+   */
+  if (summary.precalcNo === current.precalcNo) {
+    return NextResponse.json(
+      {
+        success: false,
+        reason: 'same-number',
+        error: `"${current.precalcNo}" numarası zaten kayıtlı. Revizyon için `
+          + 'Precalculation No\'yu değiştirin (ör. RE-00 → RE-01).',
+        existing: { id: current.id, precalcNo: current.precalcNo },
+      },
+      { status: 409 },
+    );
+  }
+
+  const clash = await prisma.savedPrecalculation.findUnique({
+    where: { precalcNo: summary.precalcNo },
+    select: { id: true, precalcNo: true },
+  });
+  if (clash && clash.id !== id) {
+    return NextResponse.json(
+      {
+        success: false,
+        reason: 'duplicate',
+        error: `"${summary.precalcNo}" numarası başka bir kayıtta kullanılıyor.`,
+        existing: clash,
+      },
+      { status: 409 },
+    );
   }
 
   /*
@@ -136,6 +184,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       ...summary,
       entries: parsed.data.entries,
       updatedById: user.id,
+      revisionCode: parseRevisionCode(summary.precalcNo)?.full ?? '',
       version: { increment: 1 },
     },
   });

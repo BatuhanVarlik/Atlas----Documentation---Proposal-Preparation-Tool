@@ -3,12 +3,19 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth-middleware';
 import { prisma } from '@/lib/prisma';
 import { summarizePrecalc } from '@/lib/precalc/savedSummary';
+import { diffEntries, formatRevision } from '@/lib/precalc/revisionDiff';
+import { parseRevisionCode } from '@/lib/precalc/precalcNo';
+import type { PrecalcEntries } from '@/lib/precalc/types';
 
 const saveSchema = z.object({
   entries: z.record(
     z.string(),
     z.union([z.number(), z.string(), z.boolean(), z.null()]),
   ),
+  /** Bu kayıt hangi revizyondan türedi. */
+  parentId: z.string().cuid().optional(),
+  /** Kullanıcının düzenlediği revizyon açıklaması; boşsa otomatik metin yazılır. */
+  revisionNote: z.string().max(4000).optional(),
 });
 
 /** Oluşturulan precalculation'ları listeler (en yenisi başta). */
@@ -102,8 +109,53 @@ export async function POST(req: Request) {
     );
   }
 
+  /*
+   * Revizyon kaydı: ebeveynin girdileriyle fark alınır ve okunabilir bir
+   * cümleye çevrilir. Fark sunucuda hesaplanır — istemcinin gönderdiği
+   * açıklamaya güvenmek, kimin neyi değiştirdiğini kaydın kendisinden
+   * doğrulanamaz hâle getirirdi.
+   */
+  let revisionChanges: unknown = null;
+  let revisionNote = parsed.data.revisionNote?.trim() ?? '';
+  const revisionCode = parseRevisionCode(summary.precalcNo)?.full ?? '';
+
+  if (parsed.data.parentId) {
+    const parent = await prisma.savedPrecalculation.findUnique({
+      where: { id: parsed.data.parentId },
+      select: { id: true, entries: true },
+    });
+    if (!parent) {
+      return NextResponse.json(
+        { success: false, error: 'Revizyonun türetileceği kayıt bulunamadı.' },
+        { status: 400 },
+      );
+    }
+
+    const changes = diffEntries(
+      (parent.entries ?? {}) as PrecalcEntries,
+      parsed.data.entries,
+    );
+    revisionChanges = changes;
+    if (!revisionNote) {
+      revisionNote = formatRevision(changes, {
+        code: revisionCode || summary.precalcNo,
+        author: user.name ?? 'bilinmiyor',
+        date: new Date(),
+      });
+    }
+  }
+
   const saved = await prisma.savedPrecalculation.create({
-    data: { ...summary, entries: parsed.data.entries, createdById: user.id, updatedById: user.id },
+    data: {
+      ...summary,
+      entries: parsed.data.entries,
+      createdById: user.id,
+      updatedById: user.id,
+      parentId: parsed.data.parentId ?? null,
+      revisionCode,
+      revisionNote,
+      revisionChanges: revisionChanges as never,
+    },
     select: { id: true, precalcNo: true, version: true, updatedAt: true },
   });
 

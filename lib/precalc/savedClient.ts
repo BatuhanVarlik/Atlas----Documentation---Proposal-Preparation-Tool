@@ -17,12 +17,24 @@ export interface SavedSummary {
   updatedAt: string;
 }
 
+/** Kaydın revizyon zincirindeki tek bir satır — köktekinden bu kayda kadar. */
+export interface RevisionRow {
+  id: string;
+  precalcNo: string;
+  revisionCode: string;
+  revisionNote: string;
+  createdAt: string;
+  createdBy?: { name: string | null } | null;
+}
+
 export type SaveResult =
   | { kind: 'ok'; saved: SavedSummary; created: boolean }
   /** Araya başka biri girdi — sunucudaki sürüm ilerlemiş. */
   | { kind: 'conflict'; current: SavedSummary; by: string }
   /** Aynı precalculation numarası başka bir kayıtta kullanılıyor. */
   | { kind: 'duplicate'; existing: { id: string; precalcNo: string } }
+  /** Numara değişmedi — revizyon için kullanıcının onu ilerletmesi gerekiyor. */
+  | { kind: 'same-number'; existing: { id: string; precalcNo: string } }
   | { kind: 'error'; message: string };
 
 async function body(res: Response): Promise<Record<string, unknown> | null> {
@@ -36,16 +48,22 @@ async function body(res: Response): Promise<Record<string, unknown> | null> {
 export async function savePrecalculation(
   doc: DraftDoc,
   entries: PrecalcEntries,
+  opts: { asRevisionOf?: string; revisionNote?: string } = {},
 ): Promise<SaveResult> {
-  const creating = !doc.docId;
+  // Revizyon her zaman YENİ kayıttır: eski sürüm listede durmalı.
+  const creating = !doc.docId || !!opts.asRevisionOf;
   const url = creating ? '/api/precalc/saved' : `/api/precalc/saved/${doc.docId}`;
+
+  const payloadBody = creating
+    ? { entries, parentId: opts.asRevisionOf, revisionNote: opts.revisionNote }
+    : { entries, expectedVersion: doc.version };
 
   let res: Response;
   try {
     res = await fetch(url, {
       method: creating ? 'POST' : 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(creating ? { entries } : { entries, expectedVersion: doc.version }),
+      body: JSON.stringify(payloadBody),
     });
   } catch {
     return { kind: 'error', message: 'Sunucuya ulaşılamadı.' };
@@ -62,6 +80,12 @@ export async function savePrecalculation(
     if (reason === 'duplicate') {
       return {
         kind: 'duplicate',
+        existing: payload?.existing as { id: string; precalcNo: string },
+      };
+    }
+    if (reason === 'same-number') {
+      return {
+        kind: 'same-number',
         existing: payload?.existing as { id: string; precalcNo: string },
       };
     }
@@ -82,6 +106,7 @@ export async function savePrecalculation(
 export async function fetchSaved(id: string): Promise<{
   doc: DraftDoc;
   entries: PrecalcEntries;
+  revisions: RevisionRow[];
 } | null> {
   const res = await fetch(`/api/precalc/saved/${id}`);
   if (!res.ok) return null;
@@ -93,5 +118,6 @@ export async function fetchSaved(id: string): Promise<{
   return {
     doc: { docId: row.id, precalcNo: row.precalcNo, version: row.version },
     entries: row.entries ?? {},
+    revisions: (payload?.revisions ?? []) as RevisionRow[],
   };
 }

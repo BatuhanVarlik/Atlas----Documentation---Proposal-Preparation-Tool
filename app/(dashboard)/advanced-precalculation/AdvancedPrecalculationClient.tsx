@@ -610,6 +610,15 @@ export default function AdvancedPrecalculationClient({ items: allItems, meta, do
       return;
     }
 
+    if (result.kind === 'same-number') {
+      setSaveNotice({
+        kind: 'err',
+        text: `"${result.existing.precalcNo}" numarası zaten kayıtlı. Revizyon için `
+          + 'Precalculation No\'yu değiştirin (ör. RE-00 → RE-01).',
+      });
+      return;
+    }
+
     setSaveNotice({ kind: 'err', text: result.message });
   }
 

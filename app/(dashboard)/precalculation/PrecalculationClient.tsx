@@ -135,6 +135,9 @@ export default function PrecalculationClient() {
     if (result.kind === 'duplicate') {
       return { ok: false, why: 'bu Precalculation No başka bir kayıtta kullanılıyor' };
     }
+    if (result.kind === 'same-number') {
+      return { ok: false, why: 'numara değişmedi; revizyon için Precalculation No\'yu ilerletin' };
+    }
     return { ok: false, why: result.message };
   };
 
