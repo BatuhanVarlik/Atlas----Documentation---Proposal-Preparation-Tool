@@ -138,6 +138,8 @@ export default function PrecalculationClient() {
     if (result.kind === 'same-number') {
       return { ok: false, why: 'numara değişmedi; revizyon için Precalculation No\'yu ilerletin' };
     }
+    // 'needs-revision' (sunucu tarafı ek güvenlik) ile 'error' burada aynı
+    // şekilde ele alınır — ikisinde de kullanıcıya gösterilecek bir mesaj var.
     return { ok: false, why: result.message };
   };
 

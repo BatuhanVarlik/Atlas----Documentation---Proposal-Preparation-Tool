@@ -689,6 +689,15 @@ export default function AdvancedPrecalculationClient({
       return;
     }
 
+    // 'needs-revision': sunucunun son çare güvenliği (ör. araya giren başka
+    // bir sekme/kullanıcı) devreye girdi — normal akışta buraya düşülmez,
+    // çünkü numara değiştiğinde savePrecalculation zaten POST+parentId'ye
+    // yönlendirir. Yine de çökmek yerine anlaşılır bir hata gösterilir.
+    if (result.kind === 'needs-revision') {
+      setSaveNotice({ kind: 'err', text: result.message });
+      return;
+    }
+
     setSaveNotice({ kind: 'err', text: result.message });
   }
 

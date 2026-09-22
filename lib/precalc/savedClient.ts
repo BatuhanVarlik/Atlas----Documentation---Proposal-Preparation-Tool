@@ -1,5 +1,6 @@
 import type { DraftDoc } from '@/components/precalc/precalcDraft';
 import type { PrecalcEntries } from './types';
+import { summarizePrecalc } from './savedSummary';
 
 /**
  * Precalculation'ı listeye kaydeden istemci tarafı.
@@ -35,6 +36,13 @@ export type SaveResult =
   | { kind: 'duplicate'; existing: { id: string; precalcNo: string } }
   /** Numara değişmedi — revizyon için kullanıcının onu ilerletmesi gerekiyor. */
   | { kind: 'same-number'; existing: { id: string; precalcNo: string } }
+  /**
+   * Sunucu, numarası değişmiş (ya da zaten revizyonu olan) bir kaydın
+   * PATCH ile güncellenmesini reddetti — bu istemcinin POST+parentId'ye
+   * yönlendirmesi gerektiği hâlde (ör. araya giren başka bir sekme/kullanıcı
+   * yüzünden) sunucuya PATCH gitmiş olabileceği durumlar için son çare.
+   */
+  | { kind: 'needs-revision'; message: string }
   | { kind: 'error'; message: string };
 
 async function body(res: Response): Promise<Record<string, unknown> | null> {
@@ -50,12 +58,32 @@ export async function savePrecalculation(
   entries: PrecalcEntries,
   opts: { asRevisionOf?: string; revisionNote?: string } = {},
 ): Promise<SaveResult> {
+  /*
+   * Numara değiştiyse bu bir revizyondur — PATCH numarası değişen bir
+   * güncellemeyi zaten reddeder (bkz. app/api/precalc/saved/[id]/route.ts),
+   * o yüzden burada da önceden POST+parentId'ye yönlendirilir. Böylece açık
+   * bir kayıt üzerinde numara ilerletilip kaydedildiğinde — çağıran ekran
+   * (ör. Precalculation) kendi revizyon kontrolünü yapmamış olsa bile —
+   * eski sürüm listede kalır, üzerine sessizce yazılmaz.
+   *
+   * `opts.asRevisionOf` zaten verilmişse (Advanced Precalculation'ın kendi
+   * revizyon diyaloğu gibi) burası devre dışı kalır — o akış zaten POST'a
+   * gidiyor ve kendi notunu taşıyor.
+   */
+  let asRevisionOf = opts.asRevisionOf;
+  if (doc.docId && !asRevisionOf) {
+    const currentNo = summarizePrecalc(entries).precalcNo;
+    if (currentNo && currentNo !== doc.precalcNo) {
+      asRevisionOf = doc.docId;
+    }
+  }
+
   // Revizyon her zaman YENİ kayıttır: eski sürüm listede durmalı.
-  const creating = !doc.docId || !!opts.asRevisionOf;
+  const creating = !doc.docId || !!asRevisionOf;
   const url = creating ? '/api/precalc/saved' : `/api/precalc/saved/${doc.docId}`;
 
   const payloadBody = creating
-    ? { entries, parentId: opts.asRevisionOf, revisionNote: opts.revisionNote }
+    ? { entries, parentId: asRevisionOf, revisionNote: opts.revisionNote }
     : { entries, expectedVersion: doc.version };
 
   let res: Response;
@@ -87,6 +115,14 @@ export async function savePrecalculation(
       return {
         kind: 'same-number',
         existing: payload?.existing as { id: string; precalcNo: string },
+      };
+    }
+    if (reason === 'needs-revision') {
+      return {
+        kind: 'needs-revision',
+        message: typeof payload?.error === 'string'
+          ? payload.error
+          : 'Bu kayıt artık doğrudan güncellenemiyor — yeni bir revizyon olarak kaydedin.',
       };
     }
     return {
