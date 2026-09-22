@@ -421,6 +421,20 @@ model SavedPrecalculation {
    * kayıt reddedilir — sessizce üzerine yazılmaz.
    */
   version     Int      @default(1)
+  /**
+   * Bu kaydın türediği revizyon. Zincir buradan okunur: RE-01'in ebeveyni
+   * RE-00'dır. Kayıt silinirse çocukları köksüz kalır (SetNull), zincir
+   * kopar ama kayıtlar durur.
+   */
+  parentId        String?
+  parent          SavedPrecalculation?  @relation("PrecalcRevision", fields: [parentId], references: [id], onDelete: SetNull)
+  revisions       SavedPrecalculation[] @relation("PrecalcRevision")
+  /** precalcNo'dan ayrıştırılan revizyon kodu ("RE-01"); yoksa boş. */
+  revisionCode    String   @default("")
+  /** Kaydeden kişinin onayladığı revizyon açıklaması (tek satır). */
+  revisionNote    String   @default("")
+  /** Otomatik üretilen fark listesi — RevisionChange[]. */
+  revisionChanges Json?
   createdById String
   createdBy   User     @relation("SavedPrecalculationCreator", fields: [createdById], references: [id])
   updatedById String?
@@ -429,6 +443,7 @@ model SavedPrecalculation {
   updatedAt   DateTime @updatedAt
 
   @@index([createdAt])
+  @@index([parentId])
 }
 
 /**
