@@ -33,6 +33,13 @@ export interface RevisionChange {
   text: string;
 }
 
+/** "PRECALCULATION!F1234" → { addr: "F1234", col: "F", row: 1234 } */
+function split(key: string) {
+  const addr = key.includes('!') ? key.slice(key.indexOf('!') + 1) : key;
+  const m = /^([A-Z]+)(\d+)$/.exec(addr);
+  return m ? { addr, col: m[1], row: Number(m[2]) } : { addr, col: '', row: 0 };
+}
+
 /* ---- adres → insan dili sözlükleri ---- */
 
 const IDENTITY_LABELS: Record<string, string> = {
@@ -88,6 +95,29 @@ const itemNameByRow = new Map<number, string>(
 
 const itemName = (row: number) => itemNameByRow.get(row) ?? `EQ ${row}`;
 
+/**
+ * F sütununda oturan ama gerçek bir kalem adedi OLMAYAN parametre adresleri
+ * (örn. "siteDelivery" F4853, "crating" F4854 — YES/NO anahtarları).
+ *
+ * `workbook.outline`'da bu satırlar diğer kalemlerle birebir aynı görünür
+ * (`kind: 'item'`, `inputs` içinde "F" var) — outline'dan ayırt edilemezler.
+ * Aradaki fark yalnızca `workbook.params`'ta tanımlı olmaları: gerçek kalem
+ * adetleri hiçbir zaman params listesine girmez, yalnızca kitabın hesabını
+ * yöneten anahtar/oran hücreleri girer. Genel gider bloğu (ara toplamın
+ * altındaki F hücreleri) zaten yukarıda ayrı ele alındığı için buraya
+ * dahil edilmez — geriye kalan "F sütunundaki, genel gider olmayan"
+ * params girdileri kalem adedi değil, yapısal bir ayardır.
+ */
+const NON_ITEM_F_PARAM_ADDRS = new Set(
+  workbook.params
+    .map((p) => split(p.addr))
+    .filter(
+      ({ col, row }) =>
+        col === 'F' && !(row > anchors.subtotalRow && row <= anchors.grandTotalRow),
+    )
+    .map(({ addr }) => addr),
+);
+
 /* ---- biçimlendirme ---- */
 
 const num = (v: RawValue): number => (typeof v === 'number' ? v : Number(v ?? 0) || 0);
@@ -107,13 +137,6 @@ const factor = (v: RawValue) =>
   num(v).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
 /* ---- fark ---- */
-
-/** "PRECALCULATION!F1234" → { addr: "F1234", col: "F", row: 1234 } */
-function split(key: string) {
-  const addr = key.includes('!') ? key.slice(key.indexOf('!') + 1) : key;
-  const m = /^([A-Z]+)(\d+)$/.exec(addr);
-  return m ? { addr, col: m[1], row: Number(m[2]) } : { addr, col: '', row: 0 };
-}
 
 const same = (a: RawValue, b: RawValue) =>
   (a ?? '') === (b ?? '') || (typeof a === 'number' && typeof b === 'number' && a === b);
@@ -155,6 +178,10 @@ function describe1(
       };
     }
   }
+
+  // Kalem adedi gibi görünen ama aslında YES/NO anahtarı olan yapısal
+  // parametreler (site delivery, crating vb.) — sessizce yok say.
+  if (col === 'F' && NON_ITEM_F_PARAM_ADDRS.has(addr)) return null;
 
   const name = itemName(row);
 

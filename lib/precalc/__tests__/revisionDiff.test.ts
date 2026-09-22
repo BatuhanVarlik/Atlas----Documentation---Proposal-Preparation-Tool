@@ -61,6 +61,12 @@ describe('girdi farkı', () => {
     expect(c.text).toBe('Müşteri "X A.Ş." → "Y A.Ş." olarak güncellendi');
   });
 
+  it('kalem olmayan F sütunu parametrelerini (site delivery) yanlış etiketlemez', () => {
+    const addr = workbook.params.find((p) => p.key === 'siteDelivery')!.addr;
+    const changes = diffEntries({ [K(addr)]: 'NO' }, { [K(addr)]: 'YES' });
+    expect(changes).toEqual([]);
+  });
+
   it('değişiklikleri kitaptaki satır sırasına göre verir', () => {
     const a = workbook.outline.filter((r) => r.kind === 'item').slice(0, 3).map((r) => r.r);
     const after = Object.fromEntries(a.map((r) => [K('F' + r), 1]));
