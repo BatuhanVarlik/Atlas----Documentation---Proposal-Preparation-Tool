@@ -180,7 +180,7 @@ export default function AdvancedPrecalculationClient({
    */
   const [colWidths, setColWidths] = useState<Record<string, number>>({});
   const [colOrder, setColOrder] = useState<string[]>([]);
-  const [colView, setColView] = useState('quote');
+  const [colView, setColView] = useState(DEFAULT_COLUMN_VIEW);
   /** Ayrıntılı filtre paneli açık mı — kapalıyken tabloya daha çok yer kalır. */
   const [filtersOpen, setFiltersOpen] = useState(false);
   /** Yalnızca adet girilmiş kalemleri göster. */
@@ -316,11 +316,11 @@ export default function AdvancedPrecalculationClient({
   function resetLayout() {
     setColWidths({});
     setColOrder([]);
-    setColView('quote');
+    setColView(DEFAULT_COLUMN_VIEW);
     try { window.localStorage.removeItem(COLUMN_LAYOUT_KEY); } catch { /* yok say */ }
   }
 
-  const layoutChanged = Object.keys(colWidths).length > 0 || colOrder.length > 0 || colView !== 'quote';
+  const layoutChanged = Object.keys(colWidths).length > 0 || colOrder.length > 0 || colView !== DEFAULT_COLUMN_VIEW;
 
   /* ---- PRECALCULATION hesap motoru ---- */
   // Girdiler doğrudan çalışma kitabının hücrelerine yazılır; böylece adet
