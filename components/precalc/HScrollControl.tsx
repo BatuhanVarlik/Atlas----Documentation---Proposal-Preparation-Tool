@@ -9,8 +9,10 @@ export function computeThumbRect(state: { scrollLeft: number; scrollWidth: numbe
   if (scrollWidth <= clientWidth) return { left: 0, width: 1 };
   const width = Math.max(0.08, clientWidth / scrollWidth);
   const maxLeft = 1 - width;
+  // Yukarıdaki erken dönüş scrollWidth > clientWidth'i garantiler, o yüzden
+  // range burada her zaman pozitiftir.
   const range = scrollWidth - clientWidth;
-  const left = range > 0 ? maxLeft * (scrollLeft / range) : 0;
+  const left = maxLeft * (scrollLeft / range);
   return { left, width };
 }
 

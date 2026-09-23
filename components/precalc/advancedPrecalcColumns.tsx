@@ -5,7 +5,7 @@ import type { CellValue } from '@/lib/precalc/formula';
 import type { RawValue } from '@/lib/precalc/types';
 import { cn, formatNumberTR } from '@/lib/utils';
 import { formatCell } from './cellFormat';
-import { FACTOR_DECIMALS, type CellFormat } from './columns';
+import { type CellFormat } from './columns';
 import { EditableCell } from './EditableCell';
 
 /** Tabloda bir satıra erişim — hücre okuma/yazma, formül/düzenleme durumu. */

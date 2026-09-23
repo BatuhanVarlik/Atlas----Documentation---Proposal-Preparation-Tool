@@ -132,9 +132,9 @@ body {
 .dark :where(.border-slate-300) { border-color: #475569; }
 
 .dark :where(.hover\:bg-slate-50:hover) { background-color: #0a2147; }
+.dark :where(.hover\:bg-slate-100:hover) { background-color: #0a2147; }
 
 /* Yatay scroll kutularında native scrollbar'ı gizler; scroll işlevi kalır —
    HScrollControl.tsx bunun üstüne kompakt bir kontrol biner. */
 .hscroll-hidden { scrollbar-width: none; -ms-overflow-style: none; }
 .hscroll-hidden::-webkit-scrollbar { display: none; }
-.dark :where(.hover\:bg-slate-100:hover) { background-color: #0a2147; }
