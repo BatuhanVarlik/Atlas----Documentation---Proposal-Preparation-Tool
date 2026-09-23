@@ -1308,6 +1308,10 @@ export default function AdvancedPrecalculationClient({
                               c.align === 'right' && 'text-right',
                             )}
                             style={{ width: widthOf(c), minWidth: widthOf(c), maxWidth: widthOf(c) }}
+                            // Header artık ayrı bir <table>'da (sticky için, bkz. yukarısı) — tarayıcı
+                            // hücreyi otomatik sütun başlığıyla eşleyemiyor. "Sütun: değer" burada
+                            // açıkça veriliyor ki ekran okuyucu hangi sütunda olduğunu duyabilsin.
+                            aria-label={`${c.label}: ${ariaValueText(it, c, ctx)}`}
                           >
                             <Cell it={it} column={c} ctx={ctx} />
                           </td>
@@ -1786,6 +1790,21 @@ function plainText(it: CatalogItem, c: Column): string | undefined {
   return String(v);
 }
 
+/**
+ * Hücrenin `aria-label`'ında kullanılan ham metin. `formatCell`'in yaptığı
+ * gibi para/yüzde biçimlendirmesi yapmaz — ekran okuyucu için okunabilir
+ * bir ham değer yeterli, biçim burada önemli değil. Motor hücresine bağlı
+ * sütunlarda (`engineCol`) canlı değeri, kalanlarda `plainText`'i kullanır.
+ */
+function ariaValueText(it: CatalogItem, c: Column, ctx: RowCtx): string {
+  if (c.engineCol) {
+    const v = ctx.value(c.engineCol);
+    if (v === null || v === undefined || v === '') return '—';
+    return String(v);
+  }
+  return plainText(it, c) ?? '—';
+}
+
 function uniqueSorted(values: string[]): string[] {
   const set = new Set<string>();
   for (const v of values) if (v) set.add(v);
@@ -1874,6 +1893,7 @@ function Th({
 
   return (
     <th
+      scope="col"
       draggable={!!onMove}
       onDragStart={onMove ? (e) => e.dataTransfer.setData('text/plain', column.key) : undefined}
       onDragOver={onMove ? (e) => { e.preventDefault(); setDropTarget(true); } : undefined}
