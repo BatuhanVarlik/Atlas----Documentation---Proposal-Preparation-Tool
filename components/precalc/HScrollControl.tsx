@@ -109,10 +109,31 @@ export default function HScrollControl({ targetRef, watch }: Props) {
     draggingRef.current = false;
   }
 
+  /** Ok tuşları küçük adım, Home/End başa/sona atlar — fare/dokunma olmadan da kullanılabilir. */
+  function onTrackKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    const el = targetRef.current;
+    if (!el) return;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      el.scrollBy({ left: -STEP, behavior: 'smooth' });
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      el.scrollBy({ left: STEP, behavior: 'smooth' });
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      el.scrollTo({ left: 0, behavior: 'smooth' });
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' });
+    }
+  }
+
   const canScroll = state.scrollWidth > state.clientWidth + 1;
   if (!canScroll || !visible) return null;
 
   const thumb = computeThumbRect(state);
+  const scrollRange = state.scrollWidth - state.clientWidth;
+  const scrollPercent = scrollRange > 0 ? Math.round((state.scrollLeft / scrollRange) * 100) : 0;
 
   return (
     <div
@@ -131,12 +152,20 @@ export default function HScrollControl({ targetRef, watch }: Props) {
       </button>
       <div
         ref={trackRef}
+        role="scrollbar"
+        aria-orientation="horizontal"
+        aria-label="Tabloyu yatay kaydır"
+        aria-valuenow={scrollPercent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        tabIndex={0}
         onPointerDown={onTrackPointerDown}
         onPointerMove={onTrackPointerMove}
         onPointerUp={onTrackPointerUp}
         onPointerCancel={onTrackPointerCancel}
         onLostPointerCapture={onTrackPointerCancel}
-        className="relative w-28 h-2 rounded-full bg-slate-200 cursor-pointer"
+        onKeyDown={onTrackKeyDown}
+        className="relative w-28 h-2 rounded-full bg-slate-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
       >
         <div
           className="absolute top-0 h-2 rounded-full bg-slate-500"
