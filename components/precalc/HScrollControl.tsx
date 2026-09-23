@@ -33,6 +33,8 @@ interface Props {
  */
 export default function HScrollControl({ targetRef, watch }: Props) {
   const [state, setState] = useState({ scrollLeft: 0, scrollWidth: 0, clientWidth: 0 });
+  /** Hedef (tablo) ekranda hiç görünmüyorsa (ör. sayfanın çok altına inildiyse) kontrol gizlenir. */
+  const [visible, setVisible] = useState(true);
   const trackRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
 
@@ -46,15 +48,31 @@ export default function HScrollControl({ targetRef, watch }: Props) {
   useEffect(() => {
     const el = targetRef.current;
     if (!el) return;
+    // Dikey scroll ölçümüyle aynı desen: hızlı ardışık scroll/resize
+    // olaylarında tek bir animasyon karesine sıkıştırılır.
+    let frame = 0;
+    const schedule = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => { frame = 0; measure(); });
+    };
     measure();
-    el.addEventListener('scroll', measure, { passive: true });
-    const ro = new ResizeObserver(measure);
+    el.addEventListener('scroll', schedule, { passive: true });
+    const ro = new ResizeObserver(schedule);
     ro.observe(el);
     return () => {
-      el.removeEventListener('scroll', measure);
+      if (frame) cancelAnimationFrame(frame);
+      el.removeEventListener('scroll', schedule);
       ro.disconnect();
     };
   }, [targetRef, measure, watch]);
+
+  useEffect(() => {
+    const el = targetRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [targetRef]);
 
   function scrollByStep(dir: 1 | -1) {
     targetRef.current?.scrollBy({ left: dir * STEP, behavior: 'smooth' });
@@ -82,9 +100,17 @@ export default function HScrollControl({ targetRef, watch }: Props) {
     draggingRef.current = false;
     trackRef.current?.releasePointerCapture(e.pointerId);
   }
+  /**
+   * Sürükleme tarayıcı tarafından yarıda kesilirse (ör. sekme değişimi,
+   * dokunmatik iptali) `pointerup` hiç gelmeyebilir — draggingRef takılı
+   * kalmasın diye burada da sıfırlanır.
+   */
+  function onTrackPointerCancel() {
+    draggingRef.current = false;
+  }
 
   const canScroll = state.scrollWidth > state.clientWidth + 1;
-  if (!canScroll) return null;
+  if (!canScroll || !visible) return null;
 
   const thumb = computeThumbRect(state);
 
@@ -108,6 +134,8 @@ export default function HScrollControl({ targetRef, watch }: Props) {
         onPointerDown={onTrackPointerDown}
         onPointerMove={onTrackPointerMove}
         onPointerUp={onTrackPointerUp}
+        onPointerCancel={onTrackPointerCancel}
+        onLostPointerCapture={onTrackPointerCancel}
         className="relative w-28 h-2 rounded-full bg-slate-200 cursor-pointer"
       >
         <div

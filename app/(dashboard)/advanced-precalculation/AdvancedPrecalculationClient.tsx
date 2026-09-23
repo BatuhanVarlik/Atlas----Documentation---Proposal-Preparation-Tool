@@ -1326,7 +1326,12 @@ export default function AdvancedPrecalculationClient({
             </div>
           </div>
 
-          <HScrollControl targetRef={scrollRef} watch={cols.length} />
+          {/*
+            watch=totalWidth (sadece cols.length değil): sütun sayısı aynı
+            kalsa bile sürükleyerek genişlik değiştirmek scrollWidth'i
+            değiştirir — thumb genişliği o anda yeniden ölçülmezse eskir.
+          */}
+          <HScrollControl targetRef={scrollRef} watch={totalWidth} />
 
           {/* Hücre renklerinin ne anlama geldiği — araç çubuğunu sıkıştırmasın */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 px-1 text-[11px] text-slate-400">
