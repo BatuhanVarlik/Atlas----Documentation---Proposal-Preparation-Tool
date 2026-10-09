@@ -1,7 +1,8 @@
-import type { NextAuthOptions } from 'next-auth';
+import type { NextAuthOptions, Session } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { verifySharedCredentials } from '@/lib/shared-users';
 import { syncLocalUser } from '@/lib/user-sync';
+import { getFreshSessionUser } from '@/lib/auth/sessionUserRefresh';
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -60,6 +61,18 @@ export const authOptions: NextAuthOptions = {
         token.departmentName = u.departmentName;
         token.mustChangePassword = u.mustChangePassword;
       }
+      // Girişten sonraki her oturum okumasında (sayfa + API) güncel durum — en fazla dakikada bir
+      // ortak DB'den tazelenir (lib/auth/sessionUserRefresh.ts). Böylece Portal'dan yapılan rol /
+      // departman değişikliği yeniden giriş gerektirmez, pasife alınan kişinin oturumu düşer.
+      else if (token.id) {
+        const fresh = await getFreshSessionUser(token.id);
+        if (fresh) {
+          token.inactive = !fresh.isActive;
+          token.role = fresh.role;
+          token.departmentId = fresh.departmentId;
+          token.departmentName = fresh.departmentName;
+        }
+      }
       // Şifre değiştikten sonra client update({ mustChangePassword: false }) çağırır.
       if (trigger === 'update' && session?.mustChangePassword === false) {
         token.mustChangePassword = false;
@@ -67,6 +80,9 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      // Pasif kullanıcı: boş oturum → getServerSession null döner (sayfalar /api/session/end'e,
+      // API'ler 401'e düşer); istemci tarafı useSession da "unauthenticated" görür.
+      if (token?.inactive) return {} as Session;
       if (token) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;

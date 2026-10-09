@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function ChangePasswordPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) redirect('/login');
+  if (!session?.user?.email) redirect('/api/session/end');
 
   return <ChangePasswordForm email={session.user.email} forced={session.user.mustChangePassword} />;
 }

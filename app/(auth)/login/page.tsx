@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -60,6 +60,14 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // /api/session/end'den gelindiyse (ör. hesap Portal'dan pasife alındı) açıklama göster.
+  // useSearchParams yerine window — sayfayı Suspense'e sarmaya gerek kalmasın.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('oturum') === 'sonlandi') {
+      setError('Oturumunuz sonlandırıldı. Hesabınız pasife alınmış olabilir; sorun devam ederse sistem yöneticinize başvurun.');
+    }
+  }, []);
 
   // Şifremi Unuttum modali
   const [showForgot, setShowForgot] = useState(false);

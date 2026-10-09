@@ -19,5 +19,7 @@ declare module 'next-auth/jwt' {
     departmentId: string;
     departmentName: string;
     mustChangePassword: boolean;
+    /** Ortak DB'de pasife alındı → oturum geçersiz (lib/auth.ts jwt callback). */
+    inactive?: boolean;
   }
 }

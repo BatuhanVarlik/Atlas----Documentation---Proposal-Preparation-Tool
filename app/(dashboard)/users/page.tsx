@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function UsersPage() {
   const session = await getServerSession(authOptions);
-  if (!session) redirect('/login');
+  if (!session) redirect('/api/session/end');
 
   const isAdmin = ['ADMIN', 'CEO'].includes(session.user.role);
 

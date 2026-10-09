@@ -6,7 +6,7 @@ import SettingsClient from './SettingsClient';
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
-  if (!session) redirect('/login');
+  if (!session) redirect('/api/session/end');
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
@@ -20,7 +20,7 @@ export default async function SettingsPage() {
     },
   });
 
-  if (!user) redirect('/login');
+  if (!user) redirect('/api/session/end');
 
   return <SettingsClient user={user} />;
 }
