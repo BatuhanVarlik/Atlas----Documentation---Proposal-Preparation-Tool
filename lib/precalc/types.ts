@@ -109,6 +109,25 @@ export interface PrecalcWorkbook {
   externalCells: { sheet: string; addr: string; formula: string; cached: RawValue }[];
   /** Hesaplamayı yöneten parametre hücreleri. */
   params: { key: string; sheet: string; addr: string; label: string; value: RawValue }[];
+  /**
+   * Şablondaki hücre yazı biçimi (renk / kalın / italik) — yalnızca
+   * varsayılandan farklı hücreler. build-precalc-styles.js üretir; eski
+   * workbook.json'larda yoktur.
+   */
+  fontStyles?: FontStyles;
+}
+
+/** Bir hücrenin şablondaki yazı biçimi. `c`: 6 haneli hex renk. */
+export interface FontStyle {
+  c?: string;
+  b?: 1;
+  i?: 1;
+}
+
+export interface FontStyles {
+  palette: FontStyle[];
+  /** Sayfa adı → hücre adresi → palette indeksi. */
+  cells: Record<string, Record<string, number>>;
 }
 
 /** Kullanıcının girdiği değerler: "SHEET!ADDR" -> değer */

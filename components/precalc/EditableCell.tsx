@@ -5,6 +5,7 @@ import type { CellValue } from '@/lib/precalc/formula';
 import type { RawValue } from '@/lib/precalc/types';
 import { cn } from '@/lib/utils';
 import { computeAutoWidthCh } from './autoWidth';
+import { focusVerticalNeighbor } from './cellNav';
 import { formatCell, parseEditText, toEditText } from './cellFormat';
 import type { CellFormat } from './columns';
 
@@ -24,7 +25,8 @@ interface Props {
 /**
  * Düzenlenebilir hücre. Yazarken yerel durumda tutulur, yalnızca odak
  * kaybında ya da Enter'da motora yazılır — böylece her tuş vuruşunda
- * tüm tablo yeniden hesaplanmaz.
+ * tüm tablo yeniden hesaplanmaz. Enter aynı sütunda bir alt satıra geçer
+ * (bkz. cellNav.ts).
  */
 function EditableCellBase({ value, format, align = 'left', edited, placeholder, autoWidth, onCommit }: Props) {
   const [focused, setFocused] = useState(false);
@@ -57,7 +59,14 @@ function EditableCellBase({ value, format, align = 'left', edited, placeholder, 
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') { commit(); inputRef.current?.blur(); }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit();
+          // Excel gibi: Enter bir alt satırdaki kutuya, Shift+Enter bir üstüne
+          // geçer. Geçilecek kutu yoksa (tablonun sonu) yalnızca odak bırakılır.
+          const el = inputRef.current;
+          if (!el || !focusVerticalNeighbor(el, e.shiftKey ? -1 : 1)) el?.blur();
+        }
         if (e.key === 'Escape') { setDraft(toEditText(value, format)); setFocused(false); inputRef.current?.blur(); }
       }}
       style={widthCh ? { width: `${widthCh}ch` } : undefined}

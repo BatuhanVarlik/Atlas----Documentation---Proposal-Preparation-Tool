@@ -1,12 +1,15 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import type { PrecalcEngine } from '@/lib/precalc/engine';
+import { fontStyleOf, xlFontProps } from '@/lib/precalc/fontStyle';
 import type { RawValue, RowMeta } from '@/lib/precalc/types';
 import { cn } from '@/lib/utils';
 import { EditableCell } from './EditableCell';
 import { formatCell } from './cellFormat';
 import type { CellFormat } from './columns';
+import HScrollControl from './HScrollControl';
+import { useSyncHeaderScroll, useWindowVirtualRows } from './useWindowVirtualRows';
 
 interface Props {
   engine: PrecalcEngine;
@@ -14,6 +17,12 @@ interface Props {
   version: number;
   currency: string;
   onSetCell: (addr: string, value: RawValue) => void;
+  /**
+   * Açık başlık satırları. Üst bileşende tutulur: sekme değişince
+   * kaybolmasın ve tarayıcı hafızasına yazılabilsin (bkz. precalcDraft).
+   */
+  expanded: Set<number>;
+  onExpandedChange: (next: Set<number>) => void;
 }
 
 /**
@@ -49,6 +58,9 @@ const OTHERS_COLUMNS: {
 /** Ağaç sütununun (satır no + katlama düğmesi) genişliği. */
 const TREE_WIDTH = 138;
 
+/** Sabit satır yüksekliği — sanallaştırma konumu bununla hesaplar. */
+const ROW_HEIGHT = 33;
+
 /** Bir OTHERS satırı ve Excel gruplamasından gelen çocukları. */
 interface OthersNode {
   row: RowMeta;
@@ -57,8 +69,13 @@ interface OthersNode {
   children: OthersNode[];
 }
 
-export default function OthersTable({ engine, version, currency, onSetCell }: Props) {
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+export default function OthersTable({
+  engine, version, currency, onSetCell, expanded, onExpandedChange: setExpanded,
+}: Props) {
+  /* Kalemler sekmesiyle aynı düzen: başlık ayrı (sticky) kutuda, gövde
+     sayfayla akar ve yalnızca ekrandaki satırlar çizilir. */
+  const headRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   /* ---- Excel'in satır gruplamasından ağaç ---- */
   const { tree, parents } = useMemo(() => {
@@ -115,13 +132,25 @@ export default function OthersTable({ engine, version, currency, onSetCell }: Pr
   const openGates = gateRows.filter((r) => engine.num('F' + r) === 1);
 
   function toggle(row: number) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(row)) next.delete(row);
-      else next.add(row);
-      return next;
-    });
+    const next = new Set(expanded);
+    if (next.has(row)) next.delete(row);
+    else next.add(row);
+    setExpanded(next);
   }
+
+  const rowHeights = useMemo(() => visible.map(() => ROW_HEIGHT), [visible]);
+  const { start, end, padTop, padBottom } = useWindowVirtualRows(bodyRef, rowHeights);
+  useSyncHeaderScroll(bodyRef, headRef, totalWidth);
+  const colSpan = OTHERS_COLUMNS.length + 2;
+  const tableClass = 'text-xs table-fixed border-separate';
+  const tableStyle = { borderSpacing: 0, width: '100%', minWidth: totalWidth };
+  const colGroup = (
+    <colgroup>
+      <col style={{ width: TREE_WIDTH }} />
+      {OTHERS_COLUMNS.map((c) => <col key={c.col} style={{ width: c.width }} />)}
+      <col />
+    </colgroup>
+  );
 
   return (
     <div className="space-y-2">
@@ -163,28 +192,21 @@ export default function OthersTable({ engine, version, currency, onSetCell }: Pr
         </span>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        {/* Yatayda hiçbir sütun sabitlenmez: blok bir bütün olarak kayar. */}
-        <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 22rem)' }}>
-          <table
-            className="text-xs table-fixed border-separate"
-            style={{ borderSpacing: 0, width: '100%', minWidth: totalWidth }}
-          >
-            <colgroup>
-              <col style={{ width: TREE_WIDTH }} />
-              {OTHERS_COLUMNS.map((c) => <col key={c.col} style={{ width: c.width }} />)}
-              <col />
-            </colgroup>
+      {/* Yatayda hiçbir sütun sabitlenmez: blok bir bütün olarak kayar. */}
+      <div>
+        <div ref={headRef} className="sticky top-0 z-30 overflow-x-hidden bg-slate-50">
+          <table className={tableClass} style={tableStyle}>
+            {colGroup}
             <thead>
               <tr>
-                <th className="sticky top-0 z-10 bg-slate-50 border-b-2 border-slate-300 border-r border-r-slate-200 px-3 py-2.5 text-left text-[11px] font-semibold text-slate-600">
+                <th className="bg-slate-50 border-b-2 border-slate-300 border-r border-r-slate-200 px-3 py-2.5 text-left text-[11px] font-semibold text-slate-600">
                   Satır
                 </th>
                 {OTHERS_COLUMNS.map((c) => (
                   <th
                     key={c.col}
                     className={cn(
-                      'sticky top-0 z-10 bg-slate-50 border-b-2 border-slate-300 border-r border-r-slate-200',
+                      'bg-slate-50 border-b-2 border-slate-300 border-r border-r-slate-200',
                       'px-3 py-2.5 text-left text-[11px] font-semibold text-slate-600 whitespace-nowrap',
                       c.align === 'right' && 'text-right',
                     )}
@@ -192,11 +214,19 @@ export default function OthersTable({ engine, version, currency, onSetCell }: Pr
                     {c.label}
                   </th>
                 ))}
-                <th className="sticky top-0 z-10 bg-slate-50 border-b-2 border-slate-300" />
+                <th className="bg-slate-50 border-b-2 border-slate-300" />
               </tr>
             </thead>
+          </table>
+        </div>
+        <div ref={bodyRef} className="overflow-x-auto hscroll-hidden bg-white">
+          <table className={tableClass} style={tableStyle}>
+            {colGroup}
             <tbody>
-              {visible.map((node) => (
+              {padTop > 0 && (
+                <tr aria-hidden style={{ height: padTop }}><td colSpan={colSpan} className="p-0" /></tr>
+              )}
+              {visible.slice(start, end).map((node) => (
                 <OthersRow
                   key={node.row.r}
                   node={node}
@@ -210,10 +240,14 @@ export default function OthersTable({ engine, version, currency, onSetCell }: Pr
                   onSetCell={onSetCell}
                 />
               ))}
+              {padBottom > 0 && (
+                <tr aria-hidden style={{ height: padBottom }}><td colSpan={colSpan} className="p-0" /></tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
+      <HScrollControl targetRef={bodyRef} watch={totalWidth} />
 
       <p className="text-[11px] text-slate-400 px-1 leading-relaxed">
         OTHERS bölümü nakliye, sigorta, pano, lisans ve mühendislik / montaj kalemlerini
@@ -234,9 +268,10 @@ export default function OthersTable({ engine, version, currency, onSetCell }: Pr
 
 /** Derinliğe göre satır görünümü — Excel'deki koyu başlık kırılımı. */
 const DEPTH_TONE = [
-  { row: 'bg-blue-50/70', text: 'font-semibold text-blue-900' },
-  { row: 'bg-slate-50', text: 'font-semibold text-slate-800' },
-  { row: 'bg-white', text: 'text-slate-700' },
+  { row: 'bg-blue-100/70', text: 'font-extrabold text-blue-950 text-[12.5px] uppercase tracking-wide' },
+  { row: 'bg-slate-50', text: 'font-bold text-slate-900 text-[12px]' },
+  { row: 'bg-white', text: 'font-medium text-slate-700' },
+  { row: 'bg-white', text: 'font-normal text-slate-500' },
 ];
 
 function OthersRow({
@@ -259,7 +294,7 @@ function OthersRow({
   const manual = r >= manualStart && r <= manualEnd;
 
   return (
-    <tr className={cn('group', tone.row, 'hover:bg-slate-100/70')}>
+    <tr className={cn('group', tone.row, 'hover:bg-slate-100/70')} style={{ height: ROW_HEIGHT }}>
       <td className="px-2 py-1 border-r border-b border-slate-100 align-middle">
         <div className="flex items-center gap-1" style={{ paddingLeft: (node.depth - 1) * 12 }}>
           {hasChildren ? (
@@ -285,7 +320,10 @@ function OthersRow({
         </div>
       </td>
 
-      {OTHERS_COLUMNS.map((c) => (
+      {OTHERS_COLUMNS.map((c) => {
+        // Şablondaki yazı rengi / kalınlığı (ör. SUB-TOTAL kırmızı-kalın)
+        const xf = xlFontProps(fontStyleOf(engine.workbook, 'PRECALCULATION', c.col + r));
+        return (
         <td
           key={c.col}
           className={cn(
@@ -293,7 +331,9 @@ function OthersRow({
             c.align === 'right' && 'text-right',
             // Kalem adı satırın başlığıdır: gruplama kalınlığını o taşır.
             c.col === 'H' && tone.text,
+            xf.className,
           )}
+          style={xf.style}
         >
           <OthersCell
             engine={engine}
@@ -306,7 +346,8 @@ function OthersRow({
             onSetCell={onSetCell}
           />
         </td>
-      ))}
+        );
+      })}
       <td className="border-b border-slate-100" />
     </tr>
   );

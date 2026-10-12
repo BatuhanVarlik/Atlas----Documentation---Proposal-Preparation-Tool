@@ -138,3 +138,13 @@ body {
    HScrollControl.tsx bunun üstüne kompakt bir kontrol biner. */
 .hscroll-hidden { scrollbar-width: none; -ms-overflow-style: none; }
 .hscroll-hidden::-webkit-scrollbar { display: none; }
+
+/* Şablondaki (Excel) hücre yazı biçimi — bkz. lib/precalc/fontStyle.ts.
+   Hücrenin içindeki öğeler (giriş kutusu, formül kutusu) kendi yazı rengini
+   taşıdığı için kural alt öğelere de !important ile iner; zemin/kenarlık
+   (formül = mor, elle girildi = sarı) dokunulmadan kalır. */
+.xl-c, .xl-c * { color: var(--xl-c) !important; }
+.xl-b, .xl-b * { font-weight: 700 !important; }
+.xl-i, .xl-i * { font-style: italic !important; }
+/* Koyu temada Excel'in koyu renkleri (lacivert vb.) zemine gömülmesin */
+.dark .xl-c, .dark .xl-c * { color: color-mix(in srgb, var(--xl-c) 65%, white) !important; }

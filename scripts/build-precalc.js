@@ -1173,3 +1173,10 @@ console.log('  Üst kategoriye göre dağılım:');
 for (const [k, v] of Object.entries(tally).sort((a, b) => b[1] - a[1])) {
   console.log('    ' + String(v).padStart(5) + '  ' + k);
 }
+
+/* ------------------------------------------------------------------ */
+/* Yazı biçimi (renk / kalın) — SheetJS okumadığı için ayrı çözülür     */
+/* ------------------------------------------------------------------ */
+
+console.log('');
+require('./build-precalc-styles').run(SOURCE, OUT_WORKBOOK);

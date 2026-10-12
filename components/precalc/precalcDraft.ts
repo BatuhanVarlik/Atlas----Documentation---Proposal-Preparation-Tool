@@ -91,6 +91,54 @@ export function writeDraft(draft: Draft) {
 
 export function clearDraft(docId: string | null) {
   storage()?.removeItem(keyFor(docId));
+  storage()?.removeItem(uiKeyFor(docId));
+}
+
+/* ------------------------------------------------------------------ */
+/* Ekran durumu — hangi ağaç dalları açık, hangi sekme seçili           */
+/* ------------------------------------------------------------------ */
+
+const UI_PREFIX = 'atlas.precalc.ui.v1:';
+const uiKeyFor = (docId: string | null) => UI_PREFIX + (docId ?? NEW_DOC);
+
+/**
+ * "Kaldığın yerden devam et" ile dönüldüğünde ekranın da aynı açılması için
+ * saklanan görünüm durumu. Taslak gibi KAYIT BAŞINA tutulur; hesaba hiçbir
+ * etkisi yoktur, bozuk ya da eksikse sessizce yok sayılır.
+ */
+export interface PrecalcUiState {
+  /** Kalemler ağacında açık düğümlerin tam yolları. */
+  tree: string[];
+  /** OTHERS ağacında açık başlık satırları. */
+  others: number[];
+  /** Son seçili sekme. */
+  sheet: string | null;
+}
+
+export function readUiState(docId: string | null): PrecalcUiState | null {
+  const s = storage();
+  if (!s) return null;
+  try {
+    const raw = s.getItem(uiKeyFor(docId));
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Partial<PrecalcUiState> | null;
+    if (!p || typeof p !== 'object') return null;
+    return {
+      tree: Array.isArray(p.tree) ? p.tree.filter((k): k is string => typeof k === 'string') : [],
+      others: Array.isArray(p.others) ? p.others.filter((r): r is number => typeof r === 'number') : [],
+      sheet: typeof p.sheet === 'string' ? p.sheet : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function writeUiState(docId: string | null, state: PrecalcUiState) {
+  try {
+    storage()?.setItem(uiKeyFor(docId), JSON.stringify(state));
+  } catch {
+    // kota dolmuşsa sessizce geç — yalnızca görünüm kaybolur
+  }
 }
 
 /**

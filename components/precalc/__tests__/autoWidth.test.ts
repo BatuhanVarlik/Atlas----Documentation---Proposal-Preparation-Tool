@@ -7,9 +7,9 @@ describe('computeAutoWidthCh', () => {
     expect(computeAutoWidthCh('PRE-01')).toBe(AUTO_WIDTH_MIN_CH);
   });
 
-  it('asgariyi aşan metinde uzunluk + boşluk payı kadar büyür', () => {
-    // 20 karakter + 2 pay = 22 (asgari 18'i aşıyor)
-    expect(computeAutoWidthCh('PRE-2026-114 RE-01AB')).toBe(22);
+  it('asgariyi aşan metinde büyük harf payıyla büyür', () => {
+    // 35 karakter × 1,15 = 40,25 → 41 + 2 pay = 43 (asgari 30'u aşıyor)
+    expect(computeAutoWidthCh('HEM-550202-2608-RS03 P1 PASTEURISER')).toBe(43);
   });
 
   it('azami genişliği aşmaz', () => {

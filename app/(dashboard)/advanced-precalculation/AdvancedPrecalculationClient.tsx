@@ -11,6 +11,7 @@ import { cn, formatNumberTR } from '@/lib/utils';
 import { usePrecalc } from '@/components/precalc/usePrecalc';
 import ContextMenu, { MENU_WIDTH, type ContextMenuEntry } from '@/components/ui/ContextMenu';
 import type { DraftDoc } from '@/components/precalc/precalcDraft';
+import { readUiState, writeUiState } from '@/components/precalc/precalcDraft';
 import { fetchSaved, savePrecalculation, type RevisionRow } from '@/lib/precalc/savedClient';
 import { diffEntries, formatRevision } from '@/lib/precalc/revisionDiff';
 import { nextRevisionNo, parseRevisionCode } from '@/lib/precalc/precalcNo';
@@ -27,6 +28,8 @@ import CatalogEditorModal from '@/components/precalc/CatalogEditorModal';
 import RevisionBar from '@/components/precalc/RevisionBar';
 import RevisionDialog from '@/components/precalc/RevisionDialog';
 import HScrollControl from '@/components/precalc/HScrollControl';
+import ScrollToTop from '@/components/precalc/ScrollToTop';
+import { fontStyleOf, xlFontProps } from '@/lib/precalc/fontStyle';
 import {
   COLUMNS, LEAD, OPTIONAL, COLUMN_VIEWS, DEFAULT_COLUMN_VIEW,
   TextSheetCell, SheetCell,
@@ -91,6 +94,8 @@ interface TreeNode {
   key: string;
   title: string;
   depth: number;
+  /** Başlığın PRECALCULATION'daki satırı (yazı rengi buradan okunur). */
+  row?: number;
   /** Alt gruplar ve doğrudan kalemler — Excel'deki sırayla. */
   entries: TreeEntry[];
   /** Alt ağaçtaki toplam kalem sayısı. */
@@ -136,6 +141,8 @@ const CASHFLOW_TAB = '__cashflow__';
 
 /** Sütun genişliği/sırası tercihinin saklandığı anahtar. */
 const COLUMN_LAYOUT_KEY = 'atlas.pricing.columns.v1';
+/** Toplamlar / Cashflow panellerinin en dar hali — altında yatay kaydırılır. */
+const PANEL_MIN_WIDTH = 900;
 
 /** Bir sütunun küçültülebileceği en dar genişlik (px). */
 const MIN_COL_WIDTH = 48;
@@ -172,6 +179,8 @@ export default function AdvancedPrecalculationClient({
   const [activeSheet, setActiveSheet] = useState(MAIN_SHEET);
   /** Açık olan ağaç düğümlerinin tam yolları. */
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  /** OTHERS ağacında açık başlık satırları — sekme değişince kaybolmasın diye burada. */
+  const [othersExpanded, setOthersExpanded] = useState<Set<number>>(new Set());
   /**
    * Sütun düzeni yalnızca görünümdür — hesaplar Excel sütun harflerine bağlı
    * olduğu için sıralama/genişlik değişikliği hiçbir formülü etkilemez.
@@ -199,6 +208,8 @@ export default function AdvancedPrecalculationClient({
   // dikeyde görünür satır aralığı çizilir. Yatay kaydırma hâlâ bu kutunun
   // kendi ekseninde — bkz. Task 5 (HScrollControl).
   const scrollRef = useRef<HTMLDivElement>(null);
+  /** Toplamlar / Cashflow sekmelerinin yatay kaydırma kutusu. */
+  const panelScrollRef = useRef<HTMLDivElement>(null);
   /** Başlık şeridinin kendi (yatayda gövdeyle eşlenen) kutusu. */
   const headerScrollRef = useRef<HTMLDivElement>(null);
   /** Başlık + gövde kutularını saran dış kutu — sticky başlığın sınırı budur. */
@@ -391,6 +402,36 @@ export default function AdvancedPrecalculationClient({
 
   useEffect(() => { void loadRevisions(doc.docId); }, [doc.docId, loadRevisions]);
 
+  /*
+   * Görünüm hafızası: açık ağaç dalları ve seçili sekme, taslak gibi kayıt
+   * başına tarayıcıda saklanır. "Kaldığın yerden devam et" ile dönen kişi
+   * ekranı bıraktığı gibi açık bulur.
+   *
+   * `uiRestoredFor` geri yükleme bitmeden yazma yapılmasın diye var: aksi
+   * halde ilk (boş) durum kayıtlı olanın üzerine yazılırdı. Kayıt numarası
+   * değiştiğinde (ör. ilk kaydetmede null → id) yeni anahtarda bir şey yoksa
+   * mevcut açık dallar korunur, ekran kapanmaz.
+   */
+  const uiRestoredFor = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const saved = readUiState(doc.docId);
+    if (saved) {
+      setExpanded(new Set(saved.tree));
+      setOthersExpanded(new Set(saved.others));
+      if (saved.sheet) setActiveSheet(saved.sheet);
+    }
+    uiRestoredFor.current = doc.docId;
+  }, [doc.docId]);
+
+  useEffect(() => {
+    if (uiRestoredFor.current !== doc.docId) return;
+    writeUiState(doc.docId, {
+      tree: [...expanded],
+      others: [...othersExpanded],
+      sheet: activeSheet,
+    });
+  }, [doc.docId, expanded, othersExpanded, activeSheet]);
+
   /** Kitaptaki güncel precalculation numarası — kullanıcı henüz kaydetmemiş olabilir. */
   function currentPrecalcNo(): string {
     const addr = engine?.paramAddr('precalcNo');
@@ -527,6 +568,9 @@ export default function AdvancedPrecalculationClient({
   function beginNew() {
     startNew();
     setSaveNotice(null);
+    // Yeni teklif temiz ekranla başlar; startNew görünüm hafızasını da siler.
+    setExpanded(new Set());
+    setOthersExpanded(new Set());
     if (typeof window !== 'undefined') {
       window.history.replaceState(null, '', '/advanced-precalculation');
     }
@@ -688,12 +732,21 @@ export default function AdvancedPrecalculationClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, sortKey, sortDir, version, ready]);
 
+  /** Ağaç düğümü (tam yol) → Excel'deki başlık satırı. */
+  const sectionRows = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of workbook?.outline ?? []) {
+      if (r.kind === 'section' && r.path) map.set(r.path.join(' / '), r.r);
+    }
+    return map;
+  }, [workbook]);
+
   /* ---- ağaç ---- */
   // Kalemler Excel'in satır gruplamasına göre iç içe gruplanır. Sıra
   // `sorted` dizisinden gelir; böylece sıralama seçimi ağaçta da geçerlidir.
   const { root, allKeys } = useMemo(() => {
     const makeNode = (key: string, title: string, depth: number): TreeNode =>
-      ({ key, title, depth, entries: [], count: 0, qty: 0, cost: 0 });
+      ({ key, title, depth, row: sectionRows.get(key), entries: [], count: 0, qty: 0, cost: 0 });
 
     const rootNode = makeNode('', '', -1);
     const index = new Map<string, TreeNode>();
@@ -735,7 +788,7 @@ export default function AdvancedPrecalculationClient({
 
     return { root: rootNode, allKeys: [...index.keys()] };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sorted, settledVersion, ready]);
+  }, [sorted, settledVersion, ready, sectionRows]);
 
   /** Filtre varken eşleşenleri görmek için ağaç kendiliğinden açılır. */
   /** Aramanın dışında kaç filtre etkin — katlanmış paneldeki rozet için. */
@@ -1286,6 +1339,9 @@ export default function AdvancedPrecalculationClient({
                           open={filtering || expanded.has(row.node.key)}
                           locked={filtering}
                           currency={meta.currency}
+                          titleColor={row.node.row
+                            ? fontStyleOf(workbook, MAIN_SHEET, 'A' + row.node.row)?.c
+                            : undefined}
                           onToggle={() => toggleNode(row.node.key)}
                         />
                       );
@@ -1298,7 +1354,12 @@ export default function AdvancedPrecalculationClient({
                         className="hover:bg-slate-50 group"
                         style={{ height: ITEM_ROW_HEIGHT }}
                       >
-                        {cols.map((c) => (
+                        {cols.map((c) => {
+                          // Şablondaki yazı rengi / kalınlığı (ör. tarih sütunları kırmızı)
+                          const xf = xlFontProps(c.engineCol
+                            ? fontStyleOf(workbook, MAIN_SHEET, c.engineCol + it.row)
+                            : null);
+                          return (
                           <td
                             key={c.key}
                             className={cn(
@@ -1306,8 +1367,9 @@ export default function AdvancedPrecalculationClient({
                               // Satır alt çizgisi hücrede: ayrık kenarlıkta <tr> kenarlığı çizilmez.
                               'border-r border-b border-slate-100',
                               c.align === 'right' && 'text-right',
+                              xf.className,
                             )}
-                            style={{ width: widthOf(c), minWidth: widthOf(c), maxWidth: widthOf(c) }}
+                            style={{ width: widthOf(c), minWidth: widthOf(c), maxWidth: widthOf(c), ...xf.style }}
                             // Header artık ayrı bir <table>'da (sticky için, bkz. yukarısı) — tarayıcı
                             // hücreyi otomatik sütun başlığıyla eşleyemiyor. "Sütun: değer" burada
                             // açıkça veriliyor ki ekran okuyucu hangi sütunda olduğunu duyabilsin.
@@ -1315,7 +1377,8 @@ export default function AdvancedPrecalculationClient({
                           >
                             <Cell it={it} column={c} ctx={ctx} />
                           </td>
-                        ))}
+                          );
+                        })}
                         <td className="border-b border-slate-100" />
                       </tr>
                     );
@@ -1375,12 +1438,17 @@ export default function AdvancedPrecalculationClient({
       ) : engine && activeSheet === OTHERS_TAB ? (
         <OthersTable
           engine={engine}
+          expanded={othersExpanded}
+          onExpandedChange={setOthersExpanded}
           version={settledVersion}
           currency={meta.currency}
           onSetCell={setMainCell}
         />
       ) : engine && activeSheet === TOTALS_TAB ? (
-        <div className="space-y-3">
+        <>
+        {/* Kalemlerdeki gibi: dar ekranda yatay kaydırma alttaki sabit kontrolle */}
+        <div ref={panelScrollRef} className="overflow-x-auto hscroll-hidden">
+        <div className="space-y-3" style={{ minWidth: PANEL_MIN_WIDTH }}>
           <TotalsPanel
             engine={engine}
             settledVersion={settledVersion}
@@ -1395,14 +1463,24 @@ export default function AdvancedPrecalculationClient({
             değeri doğrudan değiştirir; Matrah (I) sütunu formülle hesaplanır.
           </p>
         </div>
+        </div>
+        <HScrollControl targetRef={panelScrollRef} watch={activeSheet} />
+        </>
       ) : engine && activeSheet === CASHFLOW_TAB ? (
-        <CashflowPanel
-          engine={engine}
-          settledVersion={settledVersion}
-          calculating={calculating}
-          currency={meta.currency}
-          onSetCell={setMainCell}
-        />
+        <>
+        <div ref={panelScrollRef} className="overflow-x-auto hscroll-hidden">
+          <div style={{ minWidth: PANEL_MIN_WIDTH }}>
+            <CashflowPanel
+              engine={engine}
+              settledVersion={settledVersion}
+              calculating={calculating}
+              currency={meta.currency}
+              onSetCell={setMainCell}
+            />
+          </div>
+        </div>
+        <HScrollControl targetRef={panelScrollRef} watch={activeSheet} />
+        </>
       ) : engine ? (
         <SheetGrid
           engine={engine}
@@ -1416,6 +1494,9 @@ export default function AdvancedPrecalculationClient({
           Hesap motoru yükleniyor…
         </div>
       )}
+
+      {/* Sanal tablo uzun: en üste tek tıkla dönüş */}
+      <ScrollToTop />
 
       {pendingRevision && (
         <RevisionDialog
@@ -1431,13 +1512,19 @@ export default function AdvancedPrecalculationClient({
 
 /* ------------------------------------------------------------------ */
 
-/** Derinliğe göre grup başlığı görünümü (Excel'deki kategori kırılımı). */
+/**
+ * Derinliğe göre grup başlığı görünümü (Excel'deki kategori kırılımı).
+ * Hiyerarşi yazı kalınlığı + boyutu + soldaki şerit kalınlığıyla kurulur:
+ * üst kategori en kalın/büyük, her alt seviye bir kademe incelir. Renk
+ * şablondan gelirse (ör. ürün tipi başlıkları kırmızı) yalnızca renk alınır,
+ * kalınlık bu tablodan kalır — yoksa seviyeler yine birbirine karışırdı.
+ */
 const DEPTH_STYLE = [
-  { row: 'bg-blue-50 border-blue-200', text: 'text-blue-900 font-semibold text-[11px] uppercase tracking-wide' },
-  { row: 'bg-slate-100 border-slate-200', text: 'text-slate-800 font-semibold text-[11px]' },
-  { row: 'bg-slate-50 border-slate-200', text: 'text-slate-700 font-medium text-[11px]' },
-  { row: 'bg-white border-slate-100', text: 'text-slate-600 font-medium text-[11px]' },
-  { row: 'bg-white border-slate-100', text: 'text-slate-500 text-[11px]' },
+  { row: 'bg-blue-100 border-blue-300', bar: '#1e40af', barW: 5, text: 'text-blue-950 font-extrabold text-[13px] uppercase tracking-wide' },
+  { row: 'bg-blue-50 border-blue-200', bar: '#3b82f6', barW: 4, text: 'text-slate-900 font-bold text-[12.5px]' },
+  { row: 'bg-slate-50 border-slate-200', bar: '#94a3b8', barW: 3, text: 'text-slate-800 font-semibold text-[12px]' },
+  { row: 'bg-white border-slate-100', bar: '#cbd5e1', barW: 2, text: 'text-slate-700 font-medium text-[11.5px]' },
+  { row: 'bg-white border-slate-100', bar: '#e2e8f0', barW: 1, text: 'text-slate-500 font-normal text-[11px]' },
 ];
 
 /**
@@ -1712,9 +1799,11 @@ const PARAM_FIELDS: {
 
 /** Grup başlığı satırı — Excel'in satır gruplamasındaki bir düğüm. */
 function TreeRow({
-  node, colSpan, open, locked, currency, onToggle,
+  node, colSpan, open, locked, currency, onToggle, titleColor,
 }: {
   node: TreeNode;
+  /** Şablondaki başlık yazı rengi (6 haneli hex) — yoksa seviye rengi. */
+  titleColor?: string;
   colSpan: number;
   open: boolean;
   /** Filtre açıkken ağaç kilitli (hep açık) gösterilir. */
@@ -1726,7 +1815,11 @@ function TreeRow({
   return (
     <tr className={tone.row} style={{ height: NODE_ROW_HEIGHT }}>
       {/* Alt çizgi hücrede: ayrık kenarlıkta <tr> kenarlığı çizilmez. */}
-      <td colSpan={colSpan} className={cn('p-0 border-b', tone.row)}>
+      <td
+        colSpan={colSpan}
+        className={cn('p-0 border-b', tone.row)}
+        style={{ boxShadow: `inset ${tone.barW}px 0 0 ${tone.bar}` }}
+      >
         {/* Yatay kaydırmada başlık ekranda kalsın diye sticky */}
         <div
           className="sticky left-0 inline-flex items-center gap-2 py-1.5 pr-4"
@@ -1743,7 +1836,14 @@ function TreeRow({
           >
             {open ? '▼' : '▶'}
           </button>
-          <span className={cn('truncate', tone.text)}>{node.title}</span>
+          {(() => {
+            const xf = xlFontProps(titleColor ? { c: titleColor } : null);
+            return (
+              <span className={cn('truncate', tone.text, xf.className)} style={xf.style}>
+                {node.title}
+              </span>
+            );
+          })()}
           {node.qty > 0 && (
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 shrink-0">
               {formatNumberTR(node.qty, { decimals: 0 })} adet · {formatNumberTR(node.cost, { decimals: 2 })} {currency}
